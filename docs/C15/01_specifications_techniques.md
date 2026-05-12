@@ -1,491 +1,359 @@
-# Spécifications techniques détaillées
+# Livrable 1 — Spécifications techniques
+## SmartTicket — Gestionnaire de tickets avec assistant IA (RAG)
 
-**Projet :** SmartTicket — Gestionnaire de tickets intelligent avec assistant virtuel  
-**Stack :** Next.js 14+ / FastAPI (Python 3.11+) / PostgreSQL 15.5+ + pgvector / Mistral API / Redis 7.2+ / Docker / Kubernetes  
-**Compétence :** C15 — Cadre technique d'une application intégrant un service d'IA
+> **Note méthodologique** : ce document décrit l'implémentation **réelle** telle qu'elle existe dans le code source au 2026-05-08. Toutes les informations sont tirées de l'exploration directe du dépôt, pas d'un document de conception théorique.
 
 ---
 
-## 1.1 Architecture applicative
+## 1.1 Architecture applicative effective
 
-### Style architectural retenu : microservices
+### Style architectural constaté
 
-**Justification :** Le périmètre fonctionnel (chat RAG, ingestion documentaire, gestion de tickets, analytics) regroupe des domaines métier aux profils de charge radicalement différents — la génération LLM est CPU/réseau intensif, l'ingestion documentaire est I/O intensif, les analytics sont read-heavy. Un découpage en services permet de scaler chaque composant indépendamment, d'isoler les pannes (la défaillance du LLM Service n'impacte pas la liste des tickets), et de déployer les évolutions du pipeline RAG sans couper l'interface utilisateur.
+L'architecture est un **backend-for-frontend (BFF) à deux niveaux** :
 
-La mise en œuvre suit une progression en deux temps : phase 1 (MVP) — monolithe modulaire FastAPI avec séparation logique en routers/modules ; phase 2 — extraction progressive des services à fort différentiel de charge (RAG Service, Embedding Service, Document Ingestion Service) vers des conteneurs autonomes.
+- Un **backend monolithe modulaire** (FastAPI) exposant une API REST, organisé en 7 routers thématiques.
+- Un **frontend Next.js** jouant à la fois le rôle d'interface utilisateur et de proxy BFF (les routes `/api/*` de Next redirigent vers le backend via des `rewrites` et un handler SSR pour le streaming).
 
-### Découpage en services
+> **Écart vs architecture initiale** : le cahier d'architecture initial décrivait potentiellement une architecture microservices multi-services. L'implémentation effective est un monolithe modulaire à 2 services déployés + 1 base de données managée. Ce choix est cohérent avec les contraintes de coût (plan gratuit Render.com).
 
-#### API Gateway
+---
 
-| Attribut | Valeur |
-|---|---|
-| **Rôle** | Point d'entrée unique, reverse proxy, routage, rate limiting, terminaison TLS |
-| **Responsabilités** | Routage des requêtes vers les services en aval, validation du JWT à la périphérie, rate limiting par IP et par user_id, journalisation des accès (access log structuré JSON) |
-| **Interface** | Expose `HTTPS :443`, routes vers les services internes via HTTP |
-| **Technologie** | Nginx 1.25+ (phase 1) → Kong Gateway 3.5+ (phase 2) |
-| **Dépendances** | Auth Service (validation JWT), tous les services métier |
+### Services effectivement présents
 
-#### Auth Service
+#### Service 1 — Backend API (`backend/`)
 
 | Attribut | Valeur |
 |---|---|
-| **Rôle** | Authentification, délivrance et renouvellement de tokens JWT |
-| **Responsabilités** | `POST /auth/login` (vérification bcrypt, délivrance access token 15 min + refresh token 7 j), `POST /auth/refresh` (rotation du refresh token), `POST /auth/logout` (invalidation en Redis), introspection JWT pour les autres services |
-| **Interface** | `GET /auth/introspect` → `{ user_id, role, exp }` |
-| **Dépendances** | PostgreSQL (table `utilisateur`), Redis (blacklist des tokens révoqués) |
+| **Rôle** | API REST, pipeline RAG, gestion des sessions/messages/utilisateurs, analytics |
+| **Framework** | FastAPI (Python 3.11) |
+| **Port** | 8000 |
+| **Localisation** | `backend/` |
 
-#### User Service
+**Routers et endpoints exposés** (tous préfixés `/v1`) :
 
-| Attribut | Valeur |
-|---|---|
-| **Rôle** | CRUD utilisateurs, gestion des rôles |
-| **Responsabilités** | `GET /users/me`, `PUT /users/me`, `DELETE /users/{id}` (RGPD — cascade), `PATCH /users/{id}/role` (admin seulement), liste paginée des utilisateurs |
-| **Interface** | REST JSON, rôle vérifié via JWT |
-| **Dépendances** | PostgreSQL (tables `utilisateur`, `roles`) |
+| Router | Fichier | Endpoints |
+|---|---|---|
+| Authentification | `routers/auth.py` | POST /register, POST /login, POST /logout, GET /me, PUT /me, PUT /me/password |
+| Sessions | `routers/sessions.py` | POST /sessions, GET /sessions, DELETE /sessions/{id}, POST /sessions/{id}/close, POST /sessions/{id}/transfer, POST /sessions/{id}/resolve, GET /sessions/transferred |
+| Messages | `routers/messages.py` | GET /messages, POST /messages, PATCH /messages/{id}/feedback |
+| IA/RAG | `routers/ai.py` | POST /ask/stream |
+| Base de connaissances | `routers/knowledge.py` | POST /knowledge-base/ingest-url, GET /knowledge-base/ingest-status, GET /knowledge-base/robots-check, GET /knowledge-base/sources, DELETE /knowledge-base/sources, POST /knowledge-base/ingest-file |
+| Utilisateurs | `routers/users.py` | GET /users, PUT /users/{id}/role, PUT /users/{id}, DELETE /users/{id} |
+| Analytics | `routers/analytics.py` | GET /analytics/stats |
 
-#### Ticket Service
+**Dépendances externes** : Mistral AI API (`https://api.mistral.ai/v1`)
 
-| Attribut | Valeur |
-|---|---|
-| **Rôle** | Cycle de vie des tickets de support |
-| **Responsabilités** | Création de ticket (`POST /tickets`), consultation (`GET /tickets`, `GET /tickets/{id}`), transitions de statut (`PATCH /tickets/{id}/status`) : `open → transferred → resolved → closed` |
-| **Interface** | REST JSON ; filtre `?statut=`, `?id_utilisateur=` côté serveur uniquement |
-| **Dépendances** | PostgreSQL (table `ticket`) |
-
-#### Conversation Service
+#### Service 2 — Frontend (`frontend/`)
 
 | Attribut | Valeur |
 |---|---|
-| **Rôle** | Orchestration de la session de chat, persistence des messages |
-| **Responsabilités** | Réception de la question client, déclenchement du pipeline RAG, streaming de la réponse via SSE, persistance des messages (`user`, `ai`, `sav`), enregistrement du feedback opérateur |
-| **Interface** | `POST /conversations/ask` → SSE stream ; `GET /conversations/{ticket_id}/messages` ; `PATCH /messages/{id}/feedback` |
-| **Dépendances** | RAG Service, Ticket Service, PostgreSQL (tables `message`, `feedback`) |
+| **Rôle** | Interface utilisateur, proxy BFF pour le streaming SSE |
+| **Framework** | Next.js 16.1.6 (App Router) |
+| **Port** | 3005 |
+| **Localisation** | `frontend/` |
 
-#### Document Ingestion Service
+**Routes applicatives** :
+
+| Route | Rôle |
+|---|---|
+| `/` | Dashboard (liste des sessions de chat) |
+| `/ai-assistant/[id]` | Interface de chat avec l'assistant IA |
+| `/analytics` | Dashboard analytique (admin/SAV uniquement) |
+| `/knowledge-base` | Gestion de la base de connaissances |
+| `/settings` | Paramètres de profil utilisateur |
+| `/login`, `/sign-up`, `/forgot-password` | Authentification |
+
+**Proxy API** : `next.config.ts` redirige `/api/*` → `backend:8000/v1/*` via `rewrites()`. Le handler `app/api/ask/route.ts` proxifie spécifiquement le streaming de l'endpoint `/v1/ask/stream`.
+
+#### Service 3 — PostgreSQL + pgvector
 
 | Attribut | Valeur |
 |---|---|
-| **Rôle** | Ingestion asynchrone de documents, chunking, déclenchement de l'embedding |
-| **Responsabilités** | Parsing PDF/DOCX/TXT (pypdf, python-docx), chunking (500 caractères, chevauchement 50), dispatch vers Embedding Service, persistance des chunks en base, suivi des jobs d'ingestion |
-| **Interface** | `POST /knowledge/ingest` → 202 + `{ job_id }` ; `GET /knowledge/jobs/{job_id}` → statut + progression |
-| **Dépendances** | Embedding Service, PostgreSQL (tables `article`, `chunk`), Redis (file de jobs Celery) |
+| **Image** | `pgvector/pgvector:pg16` (local) / PostgreSQL managé Render (pré-prod) |
+| **Port** | 5432 |
+| **Base** | `ticketdb` |
+| **Extensions** | `vector` (pgvector), `pgcrypto` |
+| **Index** | HNSW sur `knowledge_base.embedding` (cosine_ops) |
 
-#### RAG Service
-
-| Attribut | Valeur |
-|---|---|
-| **Rôle** | Orchestration du pipeline Retrieval-Augmented Generation |
-| **Responsabilités** | Encode la question via Embedding Service → recherche cosinus HNSW dans pgvector (top K=4) → vérifie le cache Redis → construit le prompt RAG côté serveur → appelle LLM Service en streaming → met en cache la réponse si score de confiance élevé |
-| **Interface** | `POST /rag/query` → `{ answer, sources[], confidence }` |
-| **Dépendances** | Embedding Service, LLM Service, PostgreSQL (table `chunk` + index HNSW), Redis (cache réponses) |
-
-#### Embedding Service
+#### Service 4 — Redis (local uniquement)
 
 | Attribut | Valeur |
 |---|---|
-| **Rôle** | Wrapper Mistral Embed API |
-| **Responsabilités** | Reçoit du texte brut, appelle `mistral-embed`, retourne le vecteur 1024-d. Gère le retry (3 tentatives, backoff exponentiel) et le batch (jusqu'à 32 textes par appel) |
-| **Interface** | `POST /embed` `{ texts: string[] }` → `{ embeddings: float[1024][] }` |
-| **Dépendances** | Mistral API (externe) |
+| **Image** | `redis:7-alpine` |
+| **Port** | 6379 |
+| **Usage en prod** | Non déployé — prévu pour la mise en cache, non connecté dans le code backend actuel |
 
-#### LLM Service
+---
 
-| Attribut | Valeur |
-|---|---|
-| **Rôle** | Wrapper Mistral Chat Completion API |
-| **Responsabilités** | Reçoit le prompt RAG complet, appelle `mistral-large-latest` (requêtes complexes) ou `mistral-small-latest` (requêtes simples détectées par heuristique de longueur), retourne la réponse en streaming (SSE) |
-| **Interface** | `POST /llm/chat` `{ prompt, stream: bool, model_hint }` → SSE tokens |
-| **Dépendances** | Mistral API (externe) |
-
-#### Notification Service
-
-| Attribut | Valeur |
-|---|---|
-| **Rôle** | Envoi de notifications aux opérateurs lors des transferts de sessions |
-| **Responsabilités** | Notification email (SMTP) et WebSocket push lors du passage d'un ticket en statut `transferred`, notification de résolution |
-| **Interface** | `POST /notifications/send` `{ recipients[], event_type, payload }` (appelé en interne) |
-| **Dépendances** | PostgreSQL (table `utilisateur` pour les emails SAV), SMTP externe |
-
-#### Analytics Service
-
-| Attribut | Valeur |
-|---|---|
-| **Rôle** | Calcul et mise en cache des métriques de performance |
-| **Responsabilités** | `GET /analytics?periode=30d` → agrégats : taux de résolution IA, score de satisfaction, ventilation des transferts par motif, évolution temporelle sur 7/30/90 jours |
-| **Interface** | `GET /analytics` (admin seulement, 403 sinon) |
-| **Dépendances** | PostgreSQL (tables `ticket`, `message`, `feedback`), Redis (cache des agrégats, TTL 1 h) |
-
-### Diagramme C4 — niveau Container
+### Diagramme C4 — Niveau Container (basé sur le code réel)
 
 ```mermaid
-graph TD
-    subgraph EXT["Utilisateurs"]
-        CLIENT["Client\n[Navigateur Web]"]
-        OPERATEUR["Opérateur SAV\n[Navigateur Web]"]
-        ADMIN["Administrateur\n[Navigateur Web]"]
-    end
+C4Container
+    title SmartTicket — Architecture Container (réelle)
 
-    subgraph SVC_EXT["Services tiers"]
-        MISTRAL_API["Mistral AI API\n[HTTPS / europe-west]"]
-        SMTP_EXT["Serveur SMTP\n[Email]"]
-    end
+    Person(client, "Client", "Utilisateur final posant des questions SAV")
+    Person(sav, "Agent SAV", "Traite les tickets transférés depuis l'IA")
+    Person(admin, "Administrateur", "Gère les utilisateurs et la base de connaissances")
 
-    subgraph K8S["Cluster Kubernetes — Namespace smartticket"]
-        FRONTEND["Frontend\nNext.js 14+\n:3000"]
-        GATEWAY["API Gateway\nNginx 1.25+\n:443"]
+    System_Ext(mistral, "Mistral AI API", "api.mistral.ai/v1 — Génération et embeddings")
 
-        subgraph SERVICES["Services métier"]
-            AUTH["Auth Service\nFastAPI\n:8001"]
-            USER_SVC["User Service\nFastAPI\n:8002"]
-            TICKET_SVC["Ticket Service\nFastAPI\n:8003"]
-            CONV_SVC["Conversation Service\nFastAPI\n:8004"]
-            RAG_SVC["RAG Service\nFastAPI\n:8005"]
-            EMBED_SVC["Embedding Service\nFastAPI\n:8006"]
-            LLM_SVC["LLM Service\nFastAPI\n:8007"]
-            INGEST_SVC["Document Ingestion\nFastAPI + Celery\n:8008"]
-            NOTIF_SVC["Notification Service\nFastAPI\n:8009"]
-            ANALYTICS_SVC["Analytics Service\nFastAPI\n:8010"]
-        end
+    System_Boundary(app, "SmartTicket") {
+        Container(frontend, "Frontend", "Next.js 16 / React 19", "Interface utilisateur, proxy BFF pour le streaming")
+        Container(backend, "Backend API", "FastAPI / Python 3.11", "Logique métier, RAG, gestion des rôles")
+        ContainerDb(postgres, "PostgreSQL + pgvector", "pgvector:pg16", "Données applicatives + vecteurs d'embeddings (1024-d)")
+        ContainerDb(redis, "Redis", "redis:7-alpine", "Cache (local dev uniquement, non connecté)")
+    }
 
-        subgraph STORAGE["Stockage persistant"]
-            POSTGRES[("PostgreSQL 15.5+\npgvector 0.7+\n:5432")]
-            REDIS[("Redis 7.2+\n:6379")]
-        end
-    end
-
-    CLIENT --> FRONTEND
-    OPERATEUR --> FRONTEND
-    ADMIN --> FRONTEND
-    FRONTEND -->|"HTTPS REST / SSE"| GATEWAY
-
-    GATEWAY --> AUTH
-    GATEWAY --> USER_SVC
-    GATEWAY --> TICKET_SVC
-    GATEWAY --> CONV_SVC
-    GATEWAY --> INGEST_SVC
-    GATEWAY --> ANALYTICS_SVC
-
-    CONV_SVC -->|"HTTP"| RAG_SVC
-    CONV_SVC -->|"HTTP"| TICKET_SVC
-    CONV_SVC -->|"HTTP"| NOTIF_SVC
-    TICKET_SVC -->|"HTTP"| NOTIF_SVC
-
-    RAG_SVC -->|"HTTP"| EMBED_SVC
-    RAG_SVC -->|"HTTP"| LLM_SVC
-    INGEST_SVC -->|"HTTP"| EMBED_SVC
-
-    EMBED_SVC -->|"HTTPS"| MISTRAL_API
-    LLM_SVC -->|"HTTPS"| MISTRAL_API
-    NOTIF_SVC -->|"SMTP"| SMTP_EXT
-
-    AUTH --> POSTGRES
-    AUTH --> REDIS
-    USER_SVC --> POSTGRES
-    TICKET_SVC --> POSTGRES
-    CONV_SVC --> POSTGRES
-    RAG_SVC --> POSTGRES
-    RAG_SVC --> REDIS
-    INGEST_SVC --> POSTGRES
-    ANALYTICS_SVC --> POSTGRES
-    ANALYTICS_SVC --> REDIS
+    Rel(client, frontend, "Utilise", "HTTPS")
+    Rel(sav, frontend, "Utilise", "HTTPS")
+    Rel(admin, frontend, "Utilise", "HTTPS")
+    Rel(frontend, backend, "API REST + streaming SSE", "HTTP/HTTPS /v1/*")
+    Rel(backend, postgres, "Lecture/écriture ORM + requêtes vectorielles", "SQL / pgvector")
+    Rel(backend, mistral, "Embeddings (mistral-embed) + génération (mistral-small-latest)", "HTTPS REST")
 ```
 
 ---
 
-## 1.2 Architecture technique
+## 1.2 Stack technique effective
 
-### Stack frontend
+### Frontend (`frontend/package.json`)
 
-| Outil | Version minimale | Justification |
+| Lib | Version | Rôle |
 |---|---|---|
-| **Next.js** (App Router) | 14.2+ | Framework React SSR/SSG, routing file-system, optimisations images intégrées, Server Components pour réduire le JS client |
-| **React** | 18.3+ | Inclus dans Next.js ; Server Components, Concurrent Mode, Suspense |
-| **TypeScript** | 5.4+ | Typage statique, détection des erreurs à la compilation, inférence des types d'API via `zod` |
-| **TailwindCSS** | 3.4+ | Utility-first CSS, tree-shaking automatique, aucun CSS mort en production |
-| **TanStack Query** | 5.28+ | Cache server-state, invalidation, pagination, prefetching |
-| **Zustand** | 4.5+ | État UI local léger (session chat, préférences) — < 1 KB gzippé |
-| **Recharts** | 2.12+ | Graphiques accessibles (SVG avec alternatives textuelles), utilisé dans le dashboard Analytics (US-08) |
-| **Zod** | 3.23+ | Validation des données côté client et génération de schémas TypeScript |
+| next | ^16.1.6 | Framework React (App Router, SSR, API routes) |
+| react | 19.2.3 | Moteur UI |
+| react-dom | 19.2.3 | Rendu DOM |
+| typescript | ^5 | Typage statique |
+| tailwindcss | ^4 | CSS utilitaire |
+| @radix-ui/react-dialog | ^1.1.15 | Modaux accessibles (WCAG 2.1) |
+| @base-ui/react | ^1.0.0 | Composants UI accessibles |
+| radix-ui | ^1.4.3 | Suite de primitives UI |
+| lucide-react | ^0.562.0 | Icônes SVG |
+| recharts | ^3.6.0 | Graphiques SVG (dashboard analytics) |
+| shadcn | ^3.6.3 | Générateur de composants basé Radix |
+| streamdown | ^2.4.0 | Rendu Markdown pour réponses streamées |
+| clsx + tailwind-merge | ^2.1.1 / ^3.4.0 | Gestion conditionnelle des classes CSS |
+| tw-animate-css | ^1.4.0 | Animations CSS déclaratives |
 
-### Stack backend
+**Outils de test frontend** : jest ^29, @testing-library/react ^16, ts-jest ^29
 
-**Langage / framework retenu : Python 3.11+ / FastAPI 0.111+**
+### Backend (`backend/requirements.txt`)
 
-Justification par rapport à Node.js/NestJS :
-- L'écosystème Python (numpy, scikit-learn, pypdf, python-docx, LangChain, sentence-transformers) est natif pour le traitement NLP et le pipeline RAG.
-- FastAPI offre une performance asynchrone comparable à NestJS (basé sur Starlette/uvicorn), avec génération automatique d'OpenAPI.
-- L'Embedding Service et le Document Ingestion Service bénéficient directement des bibliothèques Python de traitement de fichiers.
-- La cohérence de l'écosystème (un seul langage pour tous les services backend) réduit la charge cognitive et simplifie la CI.
-
-| Outil | Version minimale | Rôle |
+| Lib | Version | Rôle |
 |---|---|---|
-| **FastAPI** | 0.111+ | Framework ASGI, routes async, génération OpenAPI automatique |
-| **Uvicorn** | 0.29+ | Serveur ASGI production (workers + Gunicorn) |
-| **SQLAlchemy** | 2.0+ | ORM async (asyncpg), gestion des transactions, migrations via Alembic |
-| **Alembic** | 1.13+ | Migrations de schéma SQL versionnées |
-| **Pydantic v2** | 2.7+ | Validation des données d'entrée/sortie, schémas OpenAPI |
-| **asyncpg** | 0.29+ | Driver PostgreSQL async hautes performances |
-| **redis-py** | 5.0+ | Client Redis async (via `aioredis`) |
-| **Celery** | 5.3+ | File de tâches asynchrones pour le Document Ingestion Service |
-| **pypdf** | 4.2+ | Extraction texte PDF |
-| **python-docx** | 1.1+ | Extraction texte DOCX |
-| **passlib[bcrypt]** | 1.7.4+ | Hachage bcrypt des mots de passe |
-| **python-jose** | 3.3+ | Génération et validation JWT |
-| **httpx** | 0.27+ | Client HTTP async pour les appels inter-services et Mistral API |
+| fastapi | latest | Framework API REST async |
+| uvicorn | latest | Serveur ASGI |
+| sqlalchemy | latest | ORM Python |
+| psycopg2-binary | latest | Driver PostgreSQL |
+| pgvector | latest | Extension pgvector pour SQLAlchemy |
+| passlib[bcrypt] | latest | Hachage de mots de passe |
+| bcrypt | 4.0.1 | Algorithme bcrypt (épinglé pour compatibilité) |
+| python-jose[cryptography] | latest | Génération/validation JWT HS256 |
+| email-validator | >=2.0.0 | Validation format email (Pydantic) |
+| python-dotenv | latest | Chargement des variables d'environnement |
+| requests | latest | Client HTTP synchrone (appels Mistral API) |
+| langchain-community | latest | Scraping web + intégrations LangChain |
+| langchain-text-splitters | latest | Découpage de texte en chunks pour le RAG |
+| beautifulsoup4 | latest | Parsing HTML (ingestion de pages web) |
+| lxml | 6.0.2 | Parser XML/HTML performant |
+| pypdf | 6.9.2 | Lecture et extraction de texte PDF |
+| python-docx | 1.2.0 | Lecture de fichiers DOCX |
+| typing-extensions | 4.15.0 | Compatibilité types Python |
 
-### Bases de données
+**Outils de test backend** : pytest, pytest-cov, httpx
 
-**PostgreSQL 15.5+ avec pgvector 0.7+**
+### Bases de données et services
 
-- Stockage relationnel principal (utilisateurs, tickets, messages, articles, feedbacks).
-- Extension `pgvector` : colonne `embedding vector(1024)` sur la table `chunk`, index HNSW (`m=16`, `ef_construction=64`) pour la recherche par similarité cosinus en O(log n).
-- Extension `pgcrypto` pour le hachage côté base (données sensibles).
-- Configuration production : `max_connections=200`, `shared_buffers=2GB`, `work_mem=64MB`, `effective_cache_size=6GB`.
-
-**Redis 7.2+**
-
-- Cache des réponses RAG (TTL 1 h, clé = hash SHA-256 de la question normalisée).
-- Cache des métriques Analytics (TTL 1 h).
-- Blacklist des refresh tokens révoqués (TTL = durée de vie du token = 7 jours).
-- File de tâches Celery (broker) pour le Document Ingestion Service.
+| Service | Image Docker | Version | Usage |
+|---|---|---|---|
+| PostgreSQL | `pgvector/pgvector:pg16` | PostgreSQL 16 + pgvector | Données applicatives et vectorielles |
+| PostgreSQL (CI) | `pgvector/pgvector:pg15` | PostgreSQL 15 + pgvector | Tests d'intégration CI uniquement |
+| Redis | `redis:7-alpine` | Redis 7 | Prévu pour cache (non connecté en prod) |
+| pgAdmin | `dpage/pgadmin4` | latest | Administration DB (dev uniquement) |
+| Ollama | `ollama/ollama:latest` | latest | LLM local (dev uniquement, non utilisé en prod) |
+| Open WebUI | `ghcr.io/open-webui/open-webui:main` | latest | Interface Ollama (dev uniquement) |
 
 ### Services IA
 
-| Service | Modèle | Usage | Dimension | Notes |
-|---|---|---|---|---|
-| **Mistral Embed** | `mistral-embed` | Encodage de questions et chunks | 1024-d | Cosinus similarity, batch jusqu'à 32 textes |
-| **Mistral Chat (complexe)** | `mistral-large-latest` | Questions nécessitant un raisonnement multi-étapes | — | Température 0.1 pour la reproductibilité |
-| **Mistral Chat (simple)** | `mistral-small-latest` | Questions courtes, FAQ | — | Réduction de coût × 3-5 vs large |
+| Modèle | Fournisseur | Usage | Variable d'env |
+|---|---|---|---|
+| `mistral-small-latest` | Mistral AI | Génération de réponses (streaming SSE) + résumés de sessions à la clôture | `MISTRAL_MODEL` |
+| `mistral-embed` | Mistral AI | Vectorisation des questions et des documents (1024 dimensions) | `EMBED_MODEL` |
 
-Le choix du modèle (`large` vs `small`) est déterminé par une heuristique côté LLM Service : longueur de la question > 100 tokens ou présence de mots-clés complexité (`pourquoi`, `comment fonctionne`, `expliquez`) → `mistral-large-latest`, sinon → `mistral-small-latest`.
-
-### Communication inter-services
-
-**Choix retenu : REST HTTP synchrone (phase 1) + Redis Pub/Sub pour les événements asynchrones (phase 2)**
-
-Justification : les appels critiques (RAG, authentification) sont synchrones et bénéficient de la faible latence du réseau intra-cluster Kubernetes. Les événements asynchrones (notification de transfert, job d'ingestion) transitent par Redis Pub/Sub sans nécessiter un message broker dédié (Kafka serait surdimensionné pour ce volume). Un bus Kafka ne sera introduit que si le volume dépasse 10 000 tickets/jour.
-
-Communication interne : HTTP/1.1 avec keep-alive sur le réseau privé Kubernetes (ClusterIP). Les appels Mistral API : HTTPS/TLS 1.3.
-
-### Authentification
-
-- **Access token** : JWT signé HS256, durée 15 minutes, payload `{ user_id, role, exp }`.
-- **Refresh token** : JWT opaque stocké en cookie `httpOnly; Secure; SameSite=Strict`, durée 7 jours, rotation à chaque refresh.
-- **RBAC** : 4 rôles (`user`, `sav`, `admin`, `ai`). Chaque endpoint FastAPI porte un decorator `@require_role(["sav", "admin"])` qui lit le rôle du JWT — jamais d'un paramètre HTTP.
-- **Invalidation** : les refresh tokens révoqués sont stockés dans Redis avec TTL correspondant à leur expiration.
-
-### Observabilité
-
-| Outil | Version | Usage |
-|---|---|---|
-| **Prometheus** | 2.51+ | Métriques applicatives (latences, taux d'erreur, tokens Mistral/min) |
-| **Grafana** | 10.4+ | Dashboards opérationnels : latence P95 RAG, hit rate cache, erreurs 5xx |
-| **Loki** | 3.0+ | Agrégation des logs structurés JSON de tous les services |
-| **OpenTelemetry SDK (Python)** | 1.24+ | Traces distribuées : traçabilité d'une requête RAG de l'API Gateway au LLM Service |
-| **Sentry** | 1.44+ | Alerting erreurs applicatives en temps réel |
+Code source : `backend/mistral_client.py` (fonctions `stream_text`, `generate_text`, `embed_text`)
 
 ---
 
 ## 1.3 Dépendances et environnement d'exécution
 
-### Tableau récapitulatif par composant
+### Backend (`backend/Dockerfile`)
 
-| Composant | Version minimale | Runtime/OS | Variables d'environnement clés | Port exposé | Volume persistant |
-|---|---|---|---|---|---|
-| **Frontend (Next.js)** | Node.js 20.11 LTS | Alpine Linux 3.19 | `NEXT_PUBLIC_API_URL`, `NEXTAUTH_SECRET` | 3000 | — |
-| **API Gateway (Nginx)** | Nginx 1.25.4 | Alpine Linux 3.19 | — | 80, 443 | `/etc/nginx/certs` (TLS) |
-| **Auth Service** | Python 3.11.9 | Alpine Linux 3.19 | `JWT_SECRET`, `JWT_REFRESH_SECRET`, `DATABASE_URL`, `REDIS_URL`, `BCRYPT_ROUNDS=12` | 8001 | — |
-| **User Service** | Python 3.11.9 | Alpine Linux 3.19 | `DATABASE_URL` | 8002 | — |
-| **Ticket Service** | Python 3.11.9 | Alpine Linux 3.19 | `DATABASE_URL` | 8003 | — |
-| **Conversation Service** | Python 3.11.9 | Alpine Linux 3.19 | `DATABASE_URL`, `REDIS_URL`, `RAG_SERVICE_URL`, `TICKET_SERVICE_URL` | 8004 | — |
-| **RAG Service** | Python 3.11.9 | Alpine Linux 3.19 | `DATABASE_URL`, `REDIS_URL`, `EMBED_SERVICE_URL`, `LLM_SERVICE_URL`, `RAG_TOP_K=4`, `RAG_CACHE_TTL=3600` | 8005 | — |
-| **Embedding Service** | Python 3.11.9 | Alpine Linux 3.19 | `MISTRAL_API_KEY`, `MISTRAL_EMBED_MODEL=mistral-embed`, `EMBED_BATCH_SIZE=32` | 8006 | — |
-| **LLM Service** | Python 3.11.9 | Alpine Linux 3.19 | `MISTRAL_API_KEY`, `MISTRAL_LARGE_MODEL=mistral-large-latest`, `MISTRAL_SMALL_MODEL=mistral-small-latest`, `LLM_TEMPERATURE=0.1`, `LLM_MAX_TOKENS=2048` | 8007 | — |
-| **Document Ingestion Service** | Python 3.11.9 | Alpine Linux 3.19 | `DATABASE_URL`, `EMBED_SERVICE_URL`, `CELERY_BROKER_URL`, `CHUNK_SIZE=500`, `CHUNK_OVERLAP=50`, `MAX_FILE_SIZE_MB=50` | 8008 | `/tmp/uploads` |
-| **Notification Service** | Python 3.11.9 | Alpine Linux 3.19 | `DATABASE_URL`, `SMTP_HOST`, `SMTP_PORT=587`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM` | 8009 | — |
-| **Analytics Service** | Python 3.11.9 | Alpine Linux 3.19 | `DATABASE_URL`, `REDIS_URL`, `ANALYTICS_CACHE_TTL=3600` | 8010 | — |
-| **PostgreSQL** | 15.5 | Alpine Linux 3.19 | `POSTGRES_DB=smartticket`, `POSTGRES_USER`, `POSTGRES_PASSWORD` | 5432 | `/var/lib/postgresql/data` |
-| **Redis** | 7.2.4 | Alpine Linux 3.19 | `REDIS_PASSWORD`, `REDIS_MAXMEMORY=512mb`, `REDIS_MAXMEMORY_POLICY=allkeys-lru` | 6379 | `/data` |
-| **Celery Worker** | Celery 5.3 | Python 3.11.9 / Alpine | identiques à Document Ingestion Service | — | `/tmp/uploads` (partagé) |
+| Paramètre | Valeur |
+|---|---|
+| **Image de base** | `python:3.11-slim` |
+| **Dépendances système** | `libpq-dev`, `gcc` (pour psycopg2-binary) |
+| **Port exposé** | 8000 |
+| **Commande de démarrage** | `uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}` |
+| **Variables d'env requises** | `SECRET_KEY`, `DATABASE_URL`, `MISTRAL_API_KEY`, `CORS_ORIGINS` |
+| **Variables d'env optionnelles** | `ALGORITHM`, `ACCESS_TOKEN_EXPIRE_MINUTES`, `MISTRAL_MODEL`, `EMBED_MODEL`, `KB_TOP_K`, `KB_MAX_CONTEXT_CHARS`, `SUMMARY_MAX_CHARS` |
+| **Volumes** | `./backend:/app` (dev) |
 
-### Contraintes système globales
+### Frontend (`frontend/Dockerfile`)
 
-- **Kubernetes** : 1.29+ avec support Horizontal Pod Autoscaler (HPA).
-- **Docker Engine** : 26.0+ (BuildKit obligatoire pour les builds multi-stage).
-- **Helm** : 3.14+ pour le déploiement sur Kubernetes.
-- **Cert-manager** : 1.14+ pour la gestion automatique des certificats TLS Let's Encrypt.
+| Paramètre | Valeur |
+|---|---|
+| **Image de base** | `node:20-slim` |
+| **Build arg** | `NEXT_PUBLIC_API_URL` (injecté au moment du build) |
+| **Port exposé** | 3005 |
+| **Commande de démarrage** | `npm run start -- -p ${PORT:-3005}` |
+| **Variables d'env requises** | `NEXT_PUBLIC_API_URL` |
+| **Mode** | `NODE_ENV=production` |
+
+### PostgreSQL (`docker-compose.yml`)
+
+| Paramètre | Valeur |
+|---|---|
+| **Image** | `pgvector/pgvector:pg16` |
+| **Port** | 5432 |
+| **Volumes** | `./data/postgres:/var/lib/postgresql/data` |
+| **Init SQL** | `./backend/db/init-db.sql` (extensions, tables, index HNSW, compte admin par défaut) |
+| **Variables d'env** | `POSTGRES_DB=ticketdb`, `POSTGRES_USER=admin`, `POSTGRES_PASSWORD=Password1234` |
 
 ---
 
-## 1.4 Sécurité
+## 1.4 Sécurité implémentée
 
-### OWASP Top 10 2021 — application au projet
+### Authentification
 
-Référence officielle : [https://owasp.org/Top10/](https://owasp.org/Top10/)
+**JWT (HS256) + Cookie httpOnly** — `backend/dependencies.py:38-59` + `backend/routers/auth.py:37-48`
 
-| # | Risque OWASP 2021 | Mesure appliquée dans SmartTicket |
-|---|---|---|
-| **A01** | Broken Access Control | RBAC strict : chaque endpoint vérifie le rôle extrait du JWT. Filtre `id_utilisateur` appliqué côté serveur sur toutes les requêtes de données. Test d'intégration dédié pour chaque route protégée. |
-| **A02** | Cryptographic Failures | Mots de passe hachés bcrypt (coût 12). TLS 1.3 obligatoire (HSTS préchargé). Chiffrement at-rest PostgreSQL via LUKS au niveau disque Kubernetes PVC. Aucune donnée sensible en log. |
-| **A03** | Injection | Paramètres SQL exclusivement via SQLAlchemy ORM (requêtes paramétrées). Sanitisation des entrées utilisateur via Pydantic v2 (rejet des caractères de contrôle). Contenu des messages sanitisé (balises HTML strip) avant stockage. |
-| **A04** | Insecure Design | Architecture microservices avec principe du moindre privilège : chaque service n'accède qu'aux tables PostgreSQL dont il est propriétaire. Le prompt RAG est construit exclusivement côté serveur — le client ne peut injecter aucun contexte documentaire. |
-| **A05** | Security Misconfiguration | Images Docker construites en mode non-root (`USER nonroot`). Kubernetes : `securityContext.runAsNonRoot=true`, `readOnlyRootFilesystem=true`, `allowPrivilegeEscalation=false`. Variables d'environnement via Kubernetes Secrets (chiffrés at-rest via etcd encryption). |
-| **A06** | Vulnerable Components | Dépendances auditées à chaque build CI (`pip-audit` pour Python, `npm audit` pour Node). Mises à jour automatiques via Dependabot. Images base Alpine régénérées mensuellement. |
-| **A07** | Identification & Auth Failures | Access token 15 min + refresh rotation. Refresh token stocké httpOnly cookie. Blacklist Redis pour les tokens révoqués. Limitation des tentatives de login : 5 échecs → blocage 15 min (Redis TTL). |
-| **A08** | Software Integrity Failures | Pipeline CI avec vérification des checksums des images Docker (Docker Content Trust). SBOM généré à chaque release (Syft). Dépendances lockées (`requirements.txt` avec hashes, `package-lock.json`). |
-| **A09** | Logging Failures | Logs structurés JSON (OpenTelemetry), sans données personnelles ni tokens. Rétention 90 jours (Loki). Alertes Sentry sur les erreurs 5xx. |
-| **A10** | SSRF | Le Document Ingestion Service valide les URLs soumises contre une allowlist de domaines et vérifie `robots.txt` avant tout fetch. Les appels HTTP sortants passent par un proxy Kubernetes avec filtrage d'IP privées (protection SSRF interne). |
-
-### OWASP API Security Top 10 2023
-
-Référence : [https://owasp.org/API-Security/](https://owasp.org/API-Security/)
-
-| # | Risque | Mesure |
-|---|---|---|
-| **API1** | Broken Object Level Authorization | Vérification systématique que `id_utilisateur` du JWT correspond à la ressource demandée (tickets, messages). Tests automatisés d'isolation entre comptes. |
-| **API2** | Broken Authentication | Tokens courts (15 min), rotation des refresh tokens, révocation Redis. |
-| **API3** | Broken Object Property Level Authorization | Pydantic ResponseModel explicite pour chaque endpoint : aucun champ `password_hash`, `id_role` interne exposé en réponse JSON. |
-| **API4** | Unrestricted Resource Consumption | Rate limiting Nginx : 100 req/min par IP, 10 req/min sur `/auth/login`. Taille max des fichiers uploadés : 50 Mo. Pagination obligatoire (max 100 éléments par page). |
-| **API5** | Broken Function Level Authorization | Endpoints admin (ingestion, analytics, gestion utilisateurs) testés avec tokens de rôle `user` en CI — doivent retourner 403. |
-| **API6** | Unrestricted Access to Sensitive Business Flows | Le pipeline RAG est protégé en amont par l'authentification JWT. L'endpoint `/conversations/ask` est limité à 20 req/min par `user_id`. |
-| **API7** | Server-Side Request Forgery | Voir A10 ci-dessus. |
-| **API8** | Security Misconfiguration | Voir A05 ci-dessus. Headers de sécurité ci-dessous. |
-| **API9** | Improper Inventory Management | Versioning API (`/api/v1/`). Swagger UI désactivé en production (`app = FastAPI(docs_url=None)` si `ENV=production`). |
-| **API10** | Unsafe Consumption of APIs | Appels Mistral API via HTTPS/TLS 1.3. Timeout strict : 30 s. Retry avec backoff exponentiel (3 tentatives). Validation du schéma de réponse Mistral par Pydantic. |
-
-### Headers de sécurité HTTP
-
-Configurés dans Nginx pour toutes les réponses :
-
-```nginx
-add_header Strict-Transport-Security "max-age=63072000; includeSubDomains; preload" always;
-add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' https://api.mistral.ai" always;
-add_header X-Frame-Options "DENY" always;
-add_header X-Content-Type-Options "nosniff" always;
-add_header Referrer-Policy "strict-origin-when-cross-origin" always;
-add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
+```
+dependencies.py:38   SECRET_KEY = os.getenv("SECRET_KEY")
+dependencies.py:39   ALGORITHM = os.getenv("ALGORITHM", "HS256")
+dependencies.py:40   ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
+auth.py:41           response.set_cookie(key="auth_token", value=access_token, httponly=True,
+auth.py:42               samesite="strict", secure=cookie_secure, max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60)
 ```
 
-Politique CORS : origine autorisée = domaine de production uniquement. Aucun wildcard `*` en production.
+Le token est émis dans un cookie `httpOnly` + `SameSite=strict` (protection CSRF et XSS). Il peut aussi être transmis via header `Authorization: Bearer` (dual mode).
+
+**Validation du token** — `backend/dependencies.py:62-75`
+
+```
+dependencies.py:62   def get_current_user(request: Request, token: str | None = Depends(oauth2_scheme)) -> str:
+dependencies.py:63       if not token:
+dependencies.py:64           token = request.cookies.get("auth_token")
+dependencies.py:67       payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+```
+
+**Hachage des mots de passe** — `backend/dependencies.py:30` + `backend/db/init-db.sql`
+
+```
+dependencies.py:30   pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+init-db.sql:         crypt('admin', gen_salt('bf'))   -- bcrypt via pgcrypto
+```
+
+### RBAC (Contrôle d'accès basé sur les rôles)
+
+4 rôles : `user`, `ai`, `sav`, `admin`
+
+**Vérification des rôles** — `backend/dependencies.py:78-82`
+
+```
+dependencies.py:78   def is_admin_or_sav(user: models.Utilisateur | None) -> bool:
+dependencies.py:79       if not user or not user.role:
+dependencies.py:80           return False
+dependencies.py:81       return user.role.nom_role in ["admin", "sav"]
+```
+
+Utilisé sur : `GET /analytics/stats`, `GET /sessions/transferred`, `POST /knowledge-base/ingest-url`, `POST /knowledge-base/ingest-file`, `DELETE /knowledge-base/sources`, `GET /users`, `PUT /users/{id}/role`, `PUT /users/{id}`, `DELETE /users/{id}`
+
+Vérification admin stricte sur les routes d'administration (`users.py` vérifie `nom_role == "admin"` directement).
+
+### CORS
+
+**Middleware CORS** — `backend/main.py:28-38`
+
+```
+main.py:28   cors_origins = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "...").split(",")]
+main.py:36   app.add_middleware(CORSMiddleware,
+main.py:37       allow_origins=cors_origins, allow_credentials=True,
+main.py:38       allow_methods=["*"], allow_headers=["*"])
+```
+
+Les origines autorisées sont configurées via la variable `CORS_ORIGINS`. En pré-production, Render injecte automatiquement l'URL du frontend.
+
+### Validation des entrées
+
+**Pydantic v2** — `backend/schemas.py` : tous les payloads entrants sont validés par des modèles Pydantic avec `EmailStr`, `HttpUrl`, contraintes de longueur. Exemple : `AskRequest`, `UserCreate`, `TransferRequest`.
+
+**Sanitisation des textes** — `backend/dependencies.py:25`
+
+```
+dependencies.py:25   def sanitize_text(value: str) -> str:
+dependencies.py:26       return value.replace("\x00", "").strip()
+```
+
+Suppression des caractères nuls avant stockage (protection contre l'injection PostgreSQL via NULL bytes).
 
 ### Gestion des secrets
 
-- **Développement local** : fichier `.env` non commité (dans `.gitignore`). Règle pre-commit `detect-secrets` qui bloque tout commit contenant une clé API.
-- **Kubernetes staging / production** : Kubernetes Secrets avec chiffrement etcd (`--encryption-provider-config`). Rotation des secrets via Sealed Secrets (Bitnami) ou HashiCorp Vault 1.16+.
-- **Mistral API key** : stockée en Kubernetes Secret, injectée comme variable d'environnement. Rotation trimestrielle.
+Les secrets sont externalisés via variables d'environnement (`.env` non commité). En pré-prod Render, `SECRET_KEY` est généré automatiquement (`generateValue: true` dans `render.yaml`). `MISTRAL_API_KEY` est injecté manuellement dans les variables d'environnement Render.
 
-### RGPD
+**Vérification au démarrage** — `backend/main.py:19`
 
-- **Données collectées** : email, username, prénom/nom (optionnels), messages de chat, IP de connexion (logs — purge 90 j).
-- **Pseudonymisation** : les logs applicatifs remplacent `user_id` réel par un hash SHA-256 avec sel (`user_id_hash`). Les données d'analytics sont agrégées sans identifiant individuel.
-- **Droit à l'oubli** : `DELETE /users/{id}` → suppression en cascade de tous les tickets, messages et feedbacks (contraintes `ON DELETE CASCADE` PostgreSQL). Suppressions irréversibles confirmées par test d'intégration.
-- **Registre des traitements** : tenu dans Notion (acteur : Administrateur DPO), incluant finalité, base légale, durée de conservation, destinataires.
-- **Transfert Mistral** : les messages envoyés à l'API Mistral sont soumis aux conditions contractuelles de Mistral AI (hébergement EU, pas d'utilisation pour entraînement selon les ToS entreprise). À documenter dans le registre des traitements.
+```
+main.py:19   if not os.getenv("SECRET_KEY"):
+main.py:20       raise RuntimeError("SECRET_KEY manquante.")
+```
+
+### Mesures OWASP non implémentées (lacunes honnêtes)
+
+| Vulnérabilité OWASP API | Statut | Recommandation |
+|---|---|---|
+| **Rate limiting** (API2:2023) | ❌ Absent | Ajouter `slowapi` (limiter sur `/v1/login`, `/v1/ask/stream`) |
+| **Security headers** (Helmet) | ❌ Absent | Ajouter `secure-headers` middleware ou configurer Nginx/Caddy en reverse proxy |
+| **Refresh tokens** | ❌ Absent | Token JWT fixe 60 min. Implémenter rotation via Redis |
+| **Audit log** | ❌ Absent | Les suppressions et changements de rôle ne sont pas journalisés (sauf `DELETE /knowledge-base/sources` — `logger.info` présent dans `knowledge.py:37`) |
+| **Validation de la taille des uploads** | ⚠️ Partiel | `ingest-file` vérifie l'extension mais pas la taille du fichier en bytes |
 
 ---
 
-## 1.5 Méthodologie de développement
+## 1.5 Méthodologie de développement constatée
 
-### Méthode agile retenue : Scrum adapté (solo/binôme)
+### Workflow Git
 
-Les rituels Scrum sont adaptés au contexte PFE solo :
-- **Sprint** : 2 semaines.
-- **Sprint Planning** : sélection des tickets GitHub Issues depuis le backlog produit, estimation en points de complexité (T-shirt sizing : XS/S/M/L/XL).
-- **Daily check-in** : journal de bord quotidien dans Notion (remplace le daily standup).
-- **Sprint Review** : démo de la fonctionnalité livrée, capture des retours encadrant.
-- **Sprint Retrospective** : identification d'un point d'amélioration par sprint (rétrospective seul ou avec l'encadrant).
+Branche principale : `master`. Développement direct sur master (commits récents : `ajout de la fonction c14`, `validation c10`, `correction pour CI`, `amélioration de la structure du main`).
 
-### Outils de gestion
+Convention de commits : messages en français, style descriptif court (ex : `ajout d'analyse des analytics des réponses de l'ia`, `correction pour CI`).
 
-| Outil | Usage |
-|---|---|
-| **Git + GitHub** | Versioning du code, code review, CI/CD |
-| **GitHub Projects** | Backlog produit, board kanban par sprint, suivi des issues |
-| **Notion** | Journal de bord, documentation de décisions d'architecture (ADR), registre RGPD |
+### Pipeline CI/CD
 
-### Workflow Git : GitHub Flow (trunk-based léger)
+Déclenché sur push et pull request vers `master`. Deux jobs :
 
 ```
-main (branche protégée, toujours déployable)
-  └── feature/ticket-42-rag-pipeline
-  └── fix/issue-58-jwt-expiry
-  └── docs/c15-specs-techniques
+Job 1 — backend-tests :
+  Python 3.11 → pip install → pytest tests/ -v --tb=short
+  (service postgres pgvector:pg15 en sidecar)
+
+Job 2 — frontend-tests :
+  Node 20 → npm ci → tsc --noEmit → eslint → jest → npm run build
 ```
 
-- **`main`** : protégée, merge uniquement via Pull Request approuvée.
-- **Branches feature/fix** : nommées `type/description-courte-en-kebab-case`.
-- **Durée de vie** : les branches feature sont mergées en moins de 3 jours pour éviter les conflits de longue durée.
-- **Squash merge** : chaque PR est squashée en un commit principal sur `main` pour maintenir un historique lisible.
+### Tests
 
-### Conventions de commits : Conventional Commits 1.0
+**Backend** (`backend/tests/`) :
+- `test_api.py` : tests d'intégration couvrant auth (register, login, logout, profil), sessions (create, list, accès inter-utilisateurs), messages
+- `test_utils.py` : tests unitaires utilitaires
+- `conftest.py` : fixtures (client HTTP, utilisateur inscrit, client authentifié)
+- Framework : pytest + httpx (`TestClient` FastAPI)
 
-Format : `type(scope): description courte`
+**Frontend** (`frontend/__tests__/`) :
+- `api.test.ts` : tests de l'API proxy
+- `utils.test.ts` : tests utilitaires
+- Framework : jest + @testing-library/react
 
-Types autorisés : `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `chore`, `perf`, `ci`.
-
-Exemples :
-```
-feat(rag): add cosinus similarity cache with Redis TTL=3600
-fix(auth): refresh token not revoked on logout
-test(ticket): add RBAC integration tests for /tickets endpoints
-```
-
-Le hook pre-commit `commitlint` valide le format à chaque commit.
-
-### Code review
-
-- Toute PR sur `main` nécessite au moins 1 approbation (encadrant ou co-développeur).
-- Checklist de review : tests verts, couverture ≥ 80%, pas de `TODO` non trackés, pas de secrets dans le code, OpenAPI mis à jour si l'interface change.
-
-### Pyramide des tests
-
-| Niveau | Outils | Cible de couverture | Scope |
-|---|---|---|---|
-| **Tests unitaires** | pytest (Python), Jest (TypeScript) | ≥ 80% des fonctions métier | Logique pure : chunking, scoring RAG, validation Pydantic, composants React |
-| **Tests d'intégration** | pytest + TestClient FastAPI + PostgreSQL de test | 100% des endpoints critiques | Routes API avec base de données réelle (pas de mock DB) |
-| **Tests e2e** | Playwright 1.44+ | Parcours critiques (US-01, US-03, US-07) | Navigation navigateur complète sur un environnement staging |
-| **Tests de sécurité** | OWASP ZAP 2.14+ (DAST) | 0 vulnérabilité critique/haute | Scans automatisés en CI sur staging |
-| **Tests de performance** | k6 0.50+ | P95 < seuils définis en US | Charge sur `/conversations/ask` et `/analytics` |
-
-### Pipeline CI/CD — GitHub Actions
-
-```
-Déclencheur : push sur branch feature/* ou PR vers main
-
-1. lint          → ruff (Python) + ESLint (TypeScript) + commitlint
-2. type-check    → mypy (Python) + tsc --noEmit (TypeScript)
-3. test-unit     → pytest --cov=80 + Jest
-4. test-integration → pytest (TestClient + DB PostgreSQL ephémère en service Docker)
-5. build         → docker build --no-cache (multi-stage, image Alpine)
-6. scan-image    → Trivy (vulnérabilités CVE dans les images Docker)
-7. scan-sast     → Bandit (Python) + Semgrep
-8. deploy-staging → kubectl apply -f k8s/staging/ (sur merge PR)
-9. test-e2e      → Playwright sur staging
-10. deploy-prod  → kubectl apply -f k8s/production/ (sur tag v*.*.*)
-```
-
-Durée totale cible : < 12 minutes. Les étapes 1-4 sont parallélisées.
-
-### Definition of Ready (DoR)
-
-Une issue est « prête » pour un sprint si :
-- [ ] Le titre est au format `[TYPE] Description concise`.
-- [ ] Les critères d'acceptation sont listés et testables.
-- [ ] Les dépendances à d'autres issues sont identifiées.
-- [ ] L'estimation en points est renseignée.
-- [ ] La maquette Figma correspondante est disponible (pour les issues UI).
-
-### Definition of Done (DoD)
-
-Une issue est « terminée » si :
-- [ ] Le code est mergé sur `main` via PR approuvée.
-- [ ] Les tests unitaires et d'intégration liés à la fonctionnalité passent.
-- [ ] La couverture de code n'a pas régressé sous 80%.
-- [ ] La documentation OpenAPI est à jour.
-- [ ] Aucune vulnérabilité nouvelle critique/haute introduite (Trivy, Bandit).
-- [ ] Le critère d'accessibilité WCAG 2.1 AA pertinent est vérifié (si composant UI).
-- [ ] La fonctionnalité est déployée et vérifiée manuellement sur staging.
+**Couverture** : configurée via `pytest-cov` (rapport non quantifié dans le repo).
 
 ---
 
@@ -493,77 +361,31 @@ Une issue est « terminée » si :
 
 ### Environnement de développement local
 
-**Outil : Docker Compose 2.24+**
+Tous les services orchestrés par `docker-compose.yml` :
 
-Tous les services sont définis dans `docker-compose.yml` à la racine. Le développeur lance l'environnement complet avec `docker compose up -d --build`.
+| Service | URL locale |
+|---|---|
+| Frontend | http://localhost:3005 |
+| Backend API | http://localhost:8000 |
+| Swagger UI | http://localhost:8000/docs |
+| pgAdmin | http://localhost:5050 |
+| Ollama | http://localhost:11434 |
+| Open WebUI | http://localhost:3002 |
 
-Services disponibles localement :
+Commande : `docker compose up -d --build`
 
-| Service | URL locale | Notes |
+### Environnement de pré-production (Render.com)
+
+| Service | Hébergeur | URL |
 |---|---|---|
-| Frontend | http://localhost:3000 | Next.js dev server avec HMR |
-| Backend API | http://localhost:8000 | Uvicorn avec rechargement automatique |
-| Swagger UI | http://localhost:8000/docs | Désactivé en production |
-| PostgreSQL | localhost:5432 | Données persistées dans volume Docker `postgres_data` |
-| Redis | localhost:6379 | Données en mémoire uniquement |
-| pgAdmin | http://localhost:5050 | Interface admin BDD |
+| Backend | Render.com (Free) | `https://pfe-ece-backend.onrender.com` *(à confirmer)* |
+| Frontend | Render.com (Free) | `https://pfe-ece-frontend.onrender.com` *(à confirmer)* |
+| PostgreSQL | Render.com Managed DB (Free) | Interne au réseau Render |
 
-Le fichier `.env` (non commité, template `.env.example` fourni) contient les variables de développement.
+> **Action requise** : confirmer les URLs réelles de pré-production avant livraison finale du livrable 4.
 
-### Environnement de staging / pré-production
-
-**Outil : Kubernetes 1.29+ (cluster OVH Managed Kubernetes ou Scaleway Kapsule)**
-
-- Namespace dédié : `smartticket-staging`.
-- Déploiement déclenché automatiquement par le pipeline CI sur chaque merge sur `main`.
-- Base de données : PostgreSQL en pod Kubernetes avec PVC 20 Gi (données de test, jamais de données réelles).
-- Les tests e2e Playwright s'exécutent contre cet environnement.
-- TLS : certificat Let's Encrypt géré par cert-manager.
-- Monitoring : Prometheus + Grafana + Loki identiques à la production.
+Déploiement déclenché manuellement via `render.yaml` (ou push Git si Render est connecté au dépôt GitHub).
 
 ### Environnement de production
 
-**Outil : Kubernetes 1.29+ avec Horizontal Pod Autoscaler**
-
-- Namespace : `smartticket-production`.
-- Déploiement déclenché uniquement par un tag Git `v*.*.*` (release manuelle).
-- Autoscaling HPA par service :
-  - RAG Service : 2-8 replicas (metric : CPU > 70%).
-  - Conversation Service : 2-6 replicas.
-  - Frontend : 2-4 replicas.
-  - Services faible charge (Notification, Analytics) : 1-2 replicas.
-- PostgreSQL : mode haute disponibilité avec réplication streaming (CloudNativePG 1.23+) ou service managé hébergeur.
-- Redis : Redis Sentinel (3 nœuds) pour la haute disponibilité.
-- Sauvegardes PostgreSQL : pg_dump quotidien vers stockage objet (OVH Object Storage ou Scaleway Object Storage), rétention 30 jours.
-
-### Procédure de déploiement
-
-```bash
-# 1. Créer et pousser le tag de release
-git tag v1.2.0 -m "Release 1.2.0 — RAG cache optimization"
-git push origin v1.2.0
-
-# 2. Le pipeline CI/CD GitHub Actions exécute les étapes 1-9
-# (lint → test → build → scan → deploy-staging → e2e)
-
-# 3. Validation manuelle sur staging (Go/No-Go par le développeur)
-
-# 4. Déploiement production (étape 10 du pipeline)
-kubectl set image deployment/rag-service rag-service=ghcr.io/org/rag-service:v1.2.0 -n smartticket-production
-kubectl rollout status deployment/rag-service -n smartticket-production
-```
-
-### Procédure de rollback
-
-```bash
-# Rollback immédiat vers la revision précédente (< 2 min)
-kubectl rollout undo deployment/rag-service -n smartticket-production
-
-# Vérification du statut après rollback
-kubectl rollout status deployment/rag-service -n smartticket-production
-
-# Si rollback base de données nécessaire (migration Alembic)
-alembic downgrade -1
-```
-
-Le rollback Kubernetes est immédiat (les anciens pods sont conservés le temps du déploiement). Le rollback base de données nécessite une migration manuelle `alembic downgrade` — les migrations sont conçues pour être réversibles (contrainte de conception : toute migration `upgrade` a son inverse `downgrade` testé).
+Pas d'environnement de production distinct de la pré-production à ce stade du projet.
