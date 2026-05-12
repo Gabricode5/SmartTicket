@@ -5,7 +5,9 @@
       "Bash(git commit -m ' *)",
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\gguery\\\\Documents\\\\perso\\\\PFE_ECE\" -Recurse -Directory)",
       "Bash(Select-Object FullName)",
-      "Bash(mkdir -p \"c:\\\\Users\\\\gguery\\\\Documents\\\\perso\\\\PFE_ECE\\\\docs\\\\C15\")"
+      "Bash(mkdir -p \"c:\\\\Users\\\\gguery\\\\Documents\\\\perso\\\\PFE_ECE\\\\docs\\\\C15\")",
+      "Bash(Get-ChildItem -Recurse -Force)",
+      "Bash(dir -Recurse)"
     ],
     "additionalDirectories": [
       "c:\\Users\\gguery\\Documents\\perso\\PFE_ECE\\docs"
