@@ -28,13 +28,10 @@ services:
           type: web
           name: pfe-ece-frontend
           property: host
-      - key: OLLAMA_MODEL
-        value: llama3.2:1b
+      - key: MISTRAL_API_KEY
+        sync: false
       - key: EMBED_MODEL
-        value: nomic-embed-text
-      # Remplace cette URL par ton endpoint Ollama (ou supprime ces variables si non utilisé en prod).
-      - key: OLLAMA_URL
-        value: http://localhost:11434
+        value: mistral-embed
 
   - type: web
     name: pfe-ece-frontend

@@ -7,7 +7,9 @@
       "Bash(Select-Object FullName)",
       "Bash(mkdir -p \"c:\\\\Users\\\\gguery\\\\Documents\\\\perso\\\\PFE_ECE\\\\docs\\\\C15\")",
       "Bash(Get-ChildItem -Recurse -Force)",
-      "Bash(dir -Recurse)"
+      "Bash(dir -Recurse)",
+      "Bash(Get-Content \"c:\\\\Users\\\\gguery\\\\Documents\\\\perso\\\\SmartTicket\\\\frontend\\\\pnpm-lock.yaml\")",
+      "Bash(Select-Object -First 20)"
     ],
     "additionalDirectories": [
       "c:\\Users\\gguery\\Documents\\perso\\PFE_ECE\\docs"
