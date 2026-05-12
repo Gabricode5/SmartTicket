@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ticket-ai-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./data/ollama:/root/.ollama
+      - ./ollama/entrypoint.sh:/entrypoint.sh
+    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    networks:
+      - ticket-ai-network
+    restart: unless-stopped
+  
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ticket-ai-postgres
+    environment:
+      POSTGRES_DB: ticketdb
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: Password1234
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data/postgres:/var/lib/postgresql/data
+      - ./backend/db/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - ticket-ai-network
+    restart: unless-stopped
+  
+  redis:
+    image: redis:7-alpine
+    container_name: ticket-ai-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - ticket-ai-network
+    restart: unless-stopped
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: ticket-ai-pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@admin.com
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "5050:80"
+    networks:
+      - ticket-ai-network
+    restart: unless-stopped
+
+  ollama-webui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: ticket-ai-webui
+    ports:
+      - "3002:8080"
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+    volumes:
+      - open-webui:/app/backend/data
+    networks:
+      - ticket-ai-network
+    restart: unless-stopped
+  
+  backend:
+    build: ./backend
+    container_name: ticket-ai-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - CORS_ORIGINS=http://localhost:3005
+      - DATABASE_URL=postgresql://admin:Password1234@postgres:5432/ticketdb
+    volumes:
+      - ./backend:/app
+    depends_on:
+      - ollama
+      - postgres
+      - redis
+    networks:
+      - ticket-ai-network
+    restart: unless-stopped
+  
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: http://backend:8000
+    container_name: ticket-ai-frontend
+    ports:
+      - "3005:3005" 
+    environment:
+      - NEXT_PUBLIC_API_URL=http://backend:8000
+    networks:
+      - ticket-ai-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  open-webui:
+
+networks:
+  ticket-ai-network:
+    driver: bridge

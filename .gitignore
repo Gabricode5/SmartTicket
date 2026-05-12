@@ -1,0 +1,59 @@
+# Dans ~/ticket-ai-crm/.gitignore
+# Ignorer TOUTES les données
+data/
+*.db
+*.sqlite
+*.log
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Docker
+docker-data/
+volumes/
+*.tar.gz
+
+# Ollama spécifique
+ollama_data/
+models/
+**/.ollama/
+
+# Node/React
+node_modules/
+dist/
+build/
+.next/
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.env/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Docker data & volumes
+data/
+ollama/
+.docker/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environnement virtuel
+venv/
+.env
+
+CLAUDE.md
+postgres
+postgres-docker-instructions.md
+
+back

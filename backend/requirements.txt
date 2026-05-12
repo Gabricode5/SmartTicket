@@ -1,0 +1,29 @@
+fastapi
+uvicorn
+requests
+psycopg2-binary
+sqlalchemy
+pgvector
+python-multipart
+passlib[bcrypt]
+bcrypt==4.0.1
+python-jose[cryptography]
+email-validator>=2.0.0
+python-dotenv
+
+#Communication et IA
+requests
+ollama
+
+#Scraping et Traitement de texte
+langchain-community
+beautifulsoup4
+langchain-text-splitters
+
+#Base de données Vectorielle (RAG)
+chromadb
+
+lxml==6.0.2
+pypdf==6.9.2
+python-docx==1.2.0
+typing-extensions==4.15.0

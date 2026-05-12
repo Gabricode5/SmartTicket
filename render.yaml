@@ -1,0 +1,50 @@
+databases:
+  - name: pfe-ece-postgres
+    plan: free
+    databaseName: ticketdb
+    user: admin
+
+services:
+  - type: web
+    name: pfe-ece-backend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: pfe-ece-postgres
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      - key: CORS_ORIGINS
+        fromService:
+          type: web
+          name: pfe-ece-frontend
+          property: host
+      - key: OLLAMA_MODEL
+        value: llama3.2:1b
+      - key: EMBED_MODEL
+        value: nomic-embed-text
+      # Remplace cette URL par ton endpoint Ollama (ou supprime ces variables si non utilisé en prod).
+      - key: OLLAMA_URL
+        value: http://localhost:11434
+
+  - type: web
+    name: pfe-ece-frontend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        fromService:
+          type: web
+          name: pfe-ece-backend
+          property: host
