@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
@@ -48,34 +49,32 @@ function normalizeRole(role: string | null): UserRole {
 export function AppSidebar() {
     const pathname = usePathname()
 
-    const [user, setUser] = useState<SidebarUser>(DEFAULT_USER)
+    const { user: apiUser } = useCurrentUser()
     const [conversations, setConversations] = useState<Conversation[]>([])
     const [isLoadingConversations, setIsLoadingConversations] = useState(false)
+
+    const user: SidebarUser = apiUser ? {
+        username: apiUser.username,
+        email: apiUser.email,
+        initials: apiUser.username.substring(0, 2).toUpperCase(),
+        role: normalizeRole(apiUser.role),
+    } : {
+        username: localStorage.getItem("username") || DEFAULT_USER.username,
+        email: localStorage.getItem("user_email") || DEFAULT_USER.email,
+        initials: (localStorage.getItem("username") || "U").substring(0, 2).toUpperCase(),
+        role: DEFAULT_USER.role,
+    }
+
     const canManageKnowledgeBase = user.role === "admin" || user.role === "sav"
     const canAccessConversations = user.role !== "admin"
 
-    useEffect(() => {
-        const storedUser = localStorage.getItem("username")
-        const storedEmail = localStorage.getItem("user_email") || "votre@email.com"
-        const storedRole = normalizeRole(localStorage.getItem("user_role"))
-
-        if (storedUser) {
-            setUser({
-                username: storedUser,
-                email: storedEmail,
-                initials: storedUser.substring(0, 2).toUpperCase(),
-                role: storedRole
-            })
-        }
-    }, [])
-
     const fetchConversations = async () => {
-        const userId = localStorage.getItem("user_id")
-        if (!userId) return
+        if (!apiUser) return
+        const userId = apiUser.id
 
         setIsLoadingConversations(true)
         try {
-            const response = await fetch(`/api/sessions?user_id=${userId}`)
+            const response = await fetch(`/api/sessions?user_id=${String(userId)}`)
             if (response.status === 401) {
                 window.location.href = "/login"
                 return
@@ -99,14 +98,13 @@ export function AppSidebar() {
     }, [])
 
     const handleCreateConversation = async () => {
-        const userId = localStorage.getItem("user_id")
-        if (!userId) {
+        if (!apiUser) {
             window.location.href = "/login"
             return
         }
 
         try {
-            const response = await fetch(`/api/sessions?user_id=${userId}`, {
+            const response = await fetch(`/api/sessions?user_id=${apiUser.id}`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -163,8 +161,6 @@ export function AppSidebar() {
         }
         localStorage.removeItem("username")
         localStorage.removeItem("user_email")
-        localStorage.removeItem("user_role")
-        localStorage.removeItem("user_id")
         window.location.href = "/login"
     }
 

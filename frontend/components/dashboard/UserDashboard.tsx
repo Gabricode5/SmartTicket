@@ -10,7 +10,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Search, MessageSquare, Zap, Clock, Star, TrendingUp, Bot } from "lucide-react"
 import type { SessionItem } from "./types"
 
-export default function UserDashboard() {
+export default function UserDashboard({ userId }: { userId: number }) {
     const router = useRouter()
     const [userSessions, setUserSessions] = useState<SessionItem[]>([])
     const [userQuery, setUserQuery] = useState("")
@@ -22,12 +22,6 @@ export default function UserDashboard() {
         async function loadSessions() {
             setIsLoading(true)
             setError(null)
-            const userId = localStorage.getItem("user_id")
-            if (!userId) {
-                setError("Session expirée. Veuillez vous reconnecter.")
-                setIsLoading(false)
-                return
-            }
             try {
                 const res = await fetch(`/api/sessions?user_id=${userId}`)
                 if (res.status === 401) { setError("Session expirée. Veuillez vous reconnecter."); return }
@@ -40,7 +34,7 @@ export default function UserDashboard() {
             }
         }
         loadSessions()
-    }, [])
+    }, [userId])
 
     const handleCloseSession = async (session: SessionItem) => {
         const confirmed = window.confirm(`Clôturer la session #${session.id} ?`)
@@ -53,11 +47,8 @@ export default function UserDashboard() {
                 setError(data?.detail || "Impossible de clôturer la session.")
                 return
             }
-            const userId = localStorage.getItem("user_id")
-            if (userId) {
-                const refresh = await fetch(`/api/sessions?user_id=${userId}`)
-                if (refresh.ok) setUserSessions(await refresh.json())
-            }
+            const refresh = await fetch(`/api/sessions?user_id=${userId}`)
+            if (refresh.ok) setUserSessions(await refresh.json())
         } catch {
             setError("Erreur réseau.")
         } finally {

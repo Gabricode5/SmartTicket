@@ -16,8 +16,7 @@ import {
 import Link from "next/link"
 import { REASON_LABELS, REASON_STYLES, type SessionItem, type TransferredSession, type UserItem } from "./types"
 
-export default function AdminDashboard() {
-    const [currentUserId, setCurrentUserId] = useState<number | null>(null)
+export default function AdminDashboard({ currentUserId }: { currentUserId: number }) {
     const [users, setUsers] = useState<UserItem[]>([])
     const [savUsers, setSavUsers] = useState<UserItem[]>([])
     const [adminUsers, setAdminUsers] = useState<UserItem[]>([])
@@ -37,8 +36,6 @@ export default function AdminDashboard() {
     const [deletingUser, setDeletingUser] = useState<UserItem | null>(null)
 
     useEffect(() => {
-        const storedId = localStorage.getItem("user_id")
-        setCurrentUserId(storedId ? Number(storedId) : null)
         loadAll()
     }, [])
 

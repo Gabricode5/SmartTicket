@@ -1,19 +1,15 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
 import AdminDashboard from "@/components/dashboard/AdminDashboard"
 import SavDashboard from "@/components/dashboard/SavDashboard"
 import UserDashboard from "@/components/dashboard/UserDashboard"
 
 export default function DashboardPage() {
-    const [role, setRole] = useState<string | null>(null)
+    const { user, isLoading } = useCurrentUser()
 
-    useEffect(() => {
-        setRole(localStorage.getItem("user_role") || "user")
-    }, [])
-
-    if (!role) return null
-    if (role === "admin") return <AdminDashboard />
-    if (role === "sav") return <SavDashboard />
-    return <UserDashboard />
+    if (isLoading || !user) return null
+    if (user.role === "admin") return <AdminDashboard currentUserId={user.id} />
+    if (user.role === "sav") return <SavDashboard />
+    return <UserDashboard userId={user.id} />
 }

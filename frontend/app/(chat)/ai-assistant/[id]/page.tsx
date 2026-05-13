@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -85,29 +86,26 @@ export default function AiAssistantPage() {
     const sessionId = Array.isArray(params.id) ? params.id[0] : params.id
     const sessionIdNumber = Number(sessionId)
 
+    const { user: currentUser } = useCurrentUser()
+
     const [messages, setMessages] = useState<ChatMessage[]>([])
     const [input, setInput] = useState("")
     const [isSending, setIsSending] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [aiEnabled, setAiEnabled] = useState(true)
-    const [username, setUsername] = useState("Utilisateur")
     const [isClosed, setIsClosed] = useState(false)
     const [isTransferred, setIsTransferred] = useState(false)
     const [showTransferPanel, setShowTransferPanel] = useState(false)
     const [isTransferring, setIsTransferring] = useState(false)
     const bottomRef = useRef<HTMLDivElement | null>(null)
 
-    useEffect(() => {
-        const role = localStorage.getItem("user_role")
-        if (role === "sav" || role === "admin") {
-            router.replace("/")
-        }
-    }, [router])
+    const username = currentUser?.username ?? localStorage.getItem("username") ?? "Utilisateur"
 
     useEffect(() => {
-        const storedName = localStorage.getItem("username")
-        if (storedName) setUsername(storedName)
-    }, [])
+        if (currentUser && (currentUser.role === "sav" || currentUser.role === "admin")) {
+            router.replace("/")
+        }
+    }, [currentUser, router])
 
     useEffect(() => {
         bottomRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -145,11 +143,9 @@ export default function AiAssistantPage() {
 
     useEffect(() => {
         async function loadSessionStatus() {
-            if (!Number.isFinite(sessionIdNumber)) return
-            const userId = localStorage.getItem("user_id")
-            if (!userId) return
+            if (!Number.isFinite(sessionIdNumber) || !currentUser) return
             try {
-                const response = await fetch(`/api/sessions?user_id=${userId}`)
+                const response = await fetch(`/api/sessions?user_id=${currentUser.id}`)
                 if (!response.ok) return
                 const data = await response.json()
                 if (!Array.isArray(data)) return
@@ -161,7 +157,7 @@ export default function AiAssistantPage() {
             }
         }
         loadSessionStatus()
-    }, [sessionIdNumber])
+    }, [sessionIdNumber, currentUser])
 
     const handleTransfer = async (reason: string) => {
         setIsTransferring(true)
