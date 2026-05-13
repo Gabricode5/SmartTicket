@@ -13,15 +13,11 @@ python-dotenv
 
 #Communication et IA
 requests
-ollama
 
 #Scraping et Traitement de texte
 langchain-community
 beautifulsoup4
 langchain-text-splitters
-
-#Base de données Vectorielle (RAG)
-chromadb
 
 lxml==6.0.2
 pypdf==6.9.2

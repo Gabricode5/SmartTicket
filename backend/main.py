@@ -60,20 +60,25 @@ for _router in [auth.router, sessions.router, messages.router, ai.router, knowle
 
 @app.on_event("startup")
 def run_migrations():
-    from database import Base, SessionLocal as _SessionLocal
-    with _engine.connect() as conn:
-        conn.execute(_text("CREATE EXTENSION IF NOT EXISTS vector"))
-        conn.commit()
-    Base.metadata.create_all(bind=_engine)
-    with _SessionLocal() as session:
-        for role_name in ["user", "ai", "sav", "admin"]:
-            if not session.query(models.Role).filter_by(nom_role=role_name).first():
-                session.add(models.Role(nom_role=role_name))
-        session.commit()
-    with _engine.connect() as conn:
-        conn.execute(_text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS feedback INTEGER"))
-        conn.execute(_text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS transfer_reason VARCHAR(50)"))
-        conn.commit()
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
+    try:
+        from database import Base, SessionLocal as _SessionLocal
+        with _engine.connect() as conn:
+            conn.execute(_text("CREATE EXTENSION IF NOT EXISTS vector"))
+            conn.commit()
+        Base.metadata.create_all(bind=_engine)
+        with _SessionLocal() as session:
+            for role_name in ["user", "ai", "sav", "admin"]:
+                if not session.query(models.Role).filter_by(nom_role=role_name).first():
+                    session.add(models.Role(nom_role=role_name))
+            session.commit()
+        with _engine.connect() as conn:
+            conn.execute(_text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS feedback INTEGER"))
+            conn.execute(_text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS transfer_reason VARCHAR(50)"))
+            conn.commit()
+    except Exception as exc:
+        _log.error("Startup migration failed: %s", exc, exc_info=True)
 
 
 @app.get("/")
