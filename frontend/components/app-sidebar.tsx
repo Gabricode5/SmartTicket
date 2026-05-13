@@ -58,12 +58,7 @@ export function AppSidebar() {
         email: apiUser.email,
         initials: apiUser.username.substring(0, 2).toUpperCase(),
         role: normalizeRole(apiUser.role),
-    } : {
-        username: localStorage.getItem("username") || DEFAULT_USER.username,
-        email: localStorage.getItem("user_email") || DEFAULT_USER.email,
-        initials: (localStorage.getItem("username") || "U").substring(0, 2).toUpperCase(),
-        role: DEFAULT_USER.role,
-    }
+    } : DEFAULT_USER
 
     const canManageKnowledgeBase = user.role === "admin" || user.role === "sav"
     const canAccessConversations = user.role !== "admin"

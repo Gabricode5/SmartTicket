@@ -99,7 +99,7 @@ export default function AiAssistantPage() {
     const [isTransferring, setIsTransferring] = useState(false)
     const bottomRef = useRef<HTMLDivElement | null>(null)
 
-    const username = currentUser?.username ?? localStorage.getItem("username") ?? "Utilisateur"
+    const username = currentUser?.username ?? "Utilisateur"
 
     useEffect(() => {
         if (currentUser && (currentUser.role === "sav" || currentUser.role === "admin")) {
