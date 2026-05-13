@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
+import { Download } from "lucide-react"
 
 type Me = {
     id: number
@@ -20,6 +21,7 @@ export default function SettingsPage() {
     const [loading, setLoading] = useState(true)
     const [savingProfile, setSavingProfile] = useState(false)
     const [savingPassword, setSavingPassword] = useState(false)
+    const [exporting, setExporting] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
 
@@ -109,6 +111,32 @@ export default function SettingsPage() {
             setError("Erreur réseau.")
         } finally {
             setSavingProfile(false)
+        }
+    }
+
+    const handleExportData = async () => {
+        setExporting(true)
+        setError(null)
+        try {
+            const response = await fetch("/api/me/export")
+            if (!response.ok) {
+                setError("Impossible d'exporter vos données.")
+                return
+            }
+            const data = await response.json()
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = `mes-donnees-smartticket-${new Date().toISOString().slice(0, 10)}.json`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+        } catch {
+            setError("Erreur réseau.")
+        } finally {
+            setExporting(false)
         }
     }
 
@@ -254,6 +282,23 @@ export default function SettingsPage() {
                     </div>
                     <Button onClick={handleSavePassword} disabled={savingPassword}>
                         {savingPassword ? "Mise à jour..." : "Mettre à jour le mot de passe"}
+                    </Button>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Mes données personnelles</CardTitle>
+                    <CardDescription>
+                        Conformément au RGPD (Art. 15 et 20), vous pouvez télécharger l&apos;intégralité de vos données.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                        Le fichier JSON contient votre profil, toutes vos conversations et l&apos;ensemble des messages échangés.
+                    </p>
+                    <Button variant="outline" onClick={handleExportData} disabled={exporting}>
+                        <Download className="mr-2 h-4 w-4" />
+                        {exporting ? "Préparation..." : "Télécharger mes données"}
                     </Button>
                 </CardContent>
             </Card>

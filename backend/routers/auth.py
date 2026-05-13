@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import JSONResponse
@@ -99,6 +100,52 @@ def update_me(payload: schemas.MeUpdateRequest, current_user: str = Depends(get_
     role_name = user.role.nom_role if user.role else "user"
     return {"id": user.id, "username": user.username, "email": user.email,
             "prenom": user.prenom, "nom": user.nom, "role": role_name, "date_creation": user.date_creation}
+
+
+@router.get("/me/export", summary="Exporter toutes ses données personnelles (RGPD Art. 15 et 20)")
+def export_my_data(current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    user = get_user_by_email(db, current_user)
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+
+    sessions = db.query(models.ChatSession).filter(
+        models.ChatSession.id_utilisateur == user.id,
+        models.ChatSession.deleted_at.is_(None),
+    ).order_by(models.ChatSession.date_creation.asc()).all()
+
+    sessions_data = []
+    for s in sessions:
+        messages = db.query(models.ChatMessage).filter(
+            models.ChatMessage.id_session == s.id,
+        ).order_by(models.ChatMessage.date_creation.asc()).all()
+        sessions_data.append({
+            "id": s.id,
+            "titre": s.title,
+            "statut": s.status,
+            "date_creation": s.date_creation.isoformat() if s.date_creation else None,
+            "messages": [
+                {
+                    "auteur": m.type_envoyeur,
+                    "contenu": m.contenu,
+                    "date": m.date_creation.isoformat() if m.date_creation else None,
+                }
+                for m in messages
+            ],
+        })
+
+    return {
+        "date_export": datetime.utcnow().isoformat() + "Z",
+        "profil": {
+            "id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "prenom": user.prenom,
+            "nom": user.nom,
+            "role": user.role.nom_role if user.role else "user",
+            "date_creation": user.date_creation.isoformat() if user.date_creation else None,
+        },
+        "conversations": sessions_data,
+    }
 
 
 @router.put("/me/password", summary="Changer son mot de passe")
