@@ -24,10 +24,7 @@ services:
       - key: ACCESS_TOKEN_EXPIRE_MINUTES
         value: "60"
       - key: CORS_ORIGINS
-        fromService:
-          type: web
-          name: smartticket-frontend
-          property: host
+        value: "https://smartticket-frontend.onrender.com"
       - key: MISTRAL_API_KEY
         sync: false
       - key: EMBED_MODEL
@@ -41,7 +38,4 @@ services:
     dockerContext: ./frontend
     envVars:
       - key: NEXT_PUBLIC_API_URL
-        fromService:
-          type: web
-          name: smartticket-backend
-          property: host
+        value: "https://smartticket-backend.onrender.com"
