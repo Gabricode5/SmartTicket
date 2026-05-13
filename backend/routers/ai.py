@@ -1,3 +1,5 @@
+import time
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -56,11 +58,15 @@ def ask_question_stream(payload: schemas.AskRequest, current_user: str = Depends
             db.commit()
 
     context = ""
+    rag_chunks_found = 0
+    rag_context_chars = 0
     try:
         query_embedding = embed_text(question, model=EMBED_MODEL, timeout=REQUEST_TIMEOUT)
         kb_rows = db.query(models.KnowledgeBase).order_by(models.KnowledgeBase.embedding.cosine_distance(query_embedding)).limit(KB_TOP_K).all()
         if kb_rows:
             context = "\n\n".join(r.contenu for r in kb_rows if r.contenu)[:KB_MAX_CONTEXT_CHARS]
+            rag_chunks_found = len(kb_rows)
+            rag_context_chars = len(context)
     except Exception as e:
         print(f"DEBUG: RAG context error -> {e}")
         db.rollback()
@@ -74,6 +80,9 @@ def ask_question_stream(payload: schemas.AskRequest, current_user: str = Depends
         return StreamingResponse(iter([ai_text]), media_type="text/plain")
 
     def stream_tokens():
+        t_start = time.perf_counter()
+        success = True
+        error_type = None
         ai_chunks: list[str] = []
         try:
             for token in stream_text(prompt, model=MISTRAL_MODEL, timeout=REQUEST_TIMEOUT):
@@ -85,9 +94,25 @@ def ask_question_stream(payload: schemas.AskRequest, current_user: str = Depends
             print(f"DEBUG: stream error -> {e}")
             yield error_text
             ai_chunks.append(error_text)
+            success = False
+            error_type = type(e).__name__
         finally:
+            latency_ms = int((time.perf_counter() - t_start) * 1000)
             ai_text = "".join(ai_chunks).strip() or "Réponse IA invalide"
             db.add(models.ChatMessage(id_session=session_id, type_envoyeur="ai", contenu=ai_text))
+            try:
+                db.add(models.AICallLog(
+                    id_session=session_id,
+                    call_type="stream",
+                    model_name=MISTRAL_MODEL,
+                    latency_ms=latency_ms,
+                    rag_chunks_found=rag_chunks_found,
+                    rag_context_chars=rag_context_chars,
+                    success=success,
+                    error_type=error_type,
+                ))
+            except Exception:
+                pass
             db.commit()
 
     return StreamingResponse(stream_tokens(), media_type="text/plain")

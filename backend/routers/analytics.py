@@ -101,3 +101,83 @@ def get_analytics_stats(days: int = 30, current_user: str = Depends(get_current_
     return {"total_sessions": total_sessions, "ai_resolution_rate": ai_resolution_rate, "transferred_count": transferred_count,
             "satisfaction_score": satisfaction_score, "daily_messages": list(day_map.values()),
             "sav_agents": sav_agents, "transfer_reasons": transfer_reasons, "alerts": alerts}
+
+
+@router.get("/analytics/ai-metrics", summary="Métriques de monitoring du modèle IA (latence, erreurs, RAG)")
+def get_ai_metrics(days: int = 30, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    user = get_user_by_email(db, current_user)
+    if not is_admin_or_sav(user):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+
+    from sqlalchemy import func as sqlfunc
+    from_date = datetime.utcnow() - timedelta(days=days)
+
+    total_calls = db.query(sqlfunc.count(models.AICallLog.id)).filter(
+        models.AICallLog.date_creation >= from_date,
+        models.AICallLog.call_type == "stream",
+    ).scalar() or 0
+
+    failed_calls = db.query(sqlfunc.count(models.AICallLog.id)).filter(
+        models.AICallLog.date_creation >= from_date,
+        models.AICallLog.call_type == "stream",
+        models.AICallLog.success == False,
+    ).scalar() or 0
+    error_rate = round(failed_calls / total_calls * 100, 1) if total_calls > 0 else 0.0
+
+    avg_latency = db.query(sqlfunc.avg(models.AICallLog.latency_ms)).filter(
+        models.AICallLog.date_creation >= from_date,
+        models.AICallLog.call_type == "stream",
+        models.AICallLog.success == True,
+    ).scalar()
+    avg_latency_ms = round(float(avg_latency)) if avg_latency else None
+
+    avg_chunks = db.query(sqlfunc.avg(models.AICallLog.rag_chunks_found)).filter(
+        models.AICallLog.date_creation >= from_date,
+        models.AICallLog.call_type == "stream",
+    ).scalar()
+    avg_rag_chunks = round(float(avg_chunks), 1) if avg_chunks else 0.0
+
+    no_context_count = db.query(sqlfunc.count(models.AICallLog.id)).filter(
+        models.AICallLog.date_creation >= from_date,
+        models.AICallLog.call_type == "stream",
+        models.AICallLog.rag_chunks_found == 0,
+    ).scalar() or 0
+    no_context_rate = round(no_context_count / total_calls * 100, 1) if total_calls > 0 else 0.0
+
+    daily_rows = db.query(
+        sqlfunc.date_trunc("day", models.AICallLog.date_creation).label("day"),
+        sqlfunc.avg(models.AICallLog.latency_ms).label("avg_ms"),
+        sqlfunc.count(models.AICallLog.id).label("calls"),
+    ).filter(
+        models.AICallLog.date_creation >= from_date,
+        models.AICallLog.call_type == "stream",
+        models.AICallLog.success == True,
+    ).group_by("day").order_by("day").all()
+
+    latency_trend = [
+        {"name": f"{r.day.day} {r.day.strftime('%b')}", "latence_ms": round(float(r.avg_ms)), "appels": r.calls}
+        for r in daily_rows if r.day and r.avg_ms
+    ]
+
+    alerts = []
+    if avg_latency_ms:
+        if avg_latency_ms > 10000:
+            alerts.append({"level": "critical", "metric": "latency", "message": f"Latence IA critique : {avg_latency_ms}ms en moyenne", "value": avg_latency_ms, "threshold": 10000})
+        elif avg_latency_ms > 5000:
+            alerts.append({"level": "warning", "metric": "latency", "message": f"Latence IA élevée : {avg_latency_ms}ms en moyenne", "value": avg_latency_ms, "threshold": 5000})
+    if error_rate > 15:
+        alerts.append({"level": "critical", "metric": "error_rate", "message": f"Taux d'erreur IA critique : {error_rate}%", "value": error_rate, "threshold": 15})
+    elif error_rate > 5:
+        alerts.append({"level": "warning", "metric": "error_rate", "message": f"Taux d'erreur IA élevé : {error_rate}%", "value": error_rate, "threshold": 5})
+    if no_context_rate > 70 and total_calls >= 5:
+        alerts.append({"level": "warning", "metric": "rag_quality", "message": f"{no_context_rate}% des questions sans contexte base de connaissances", "value": no_context_rate, "threshold": 70})
+
+    return {
+        "total_calls": total_calls,
+        "error_rate": error_rate,
+        "avg_latency_ms": avg_latency_ms,
+        "avg_rag_chunks": avg_rag_chunks,
+        "no_context_rate": no_context_rate,
+        "latency_trend": latency_trend,
+        "alerts": alerts,
+    }

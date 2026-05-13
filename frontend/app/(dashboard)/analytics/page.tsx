@@ -7,6 +7,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import {
     BarChart,
     Bar,
+    LineChart,
+    Line,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -27,6 +29,9 @@ import {
     AlertTriangle,
     AlertCircle,
     CheckCircle2,
+    Activity,
+    ShieldAlert,
+    Database,
 } from "lucide-react"
 
 
@@ -54,6 +59,18 @@ type AnalyticsData = {
     alerts: AlertEntry[]
 }
 
+type LatencyEntry = { name: string; latence_ms: number; appels: number }
+
+type AiMetrics = {
+    total_calls: number
+    error_rate: number
+    avg_latency_ms: number | null
+    avg_rag_chunks: number
+    no_context_rate: number
+    latency_trend: LatencyEntry[]
+    alerts: AlertEntry[]
+}
+
 const PERIODS = [
     { label: "7 Jours", days: 7 },
     { label: "30 Jours", days: 30 },
@@ -61,15 +78,27 @@ const PERIODS = [
     { label: "Année", days: 365 },
 ]
 
+function fmtLatency(ms: number | null): string {
+    if (ms === null) return "–"
+    return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`
+}
+
 export default function AnalyticsPage() {
     const [days, setDays] = useState(30)
     const [data, setData] = useState<AnalyticsData | null>(null)
+    const [aiMetrics, setAiMetrics] = useState<AiMetrics | null>(null)
     const [isLoading, setIsLoading] = useState(true)
 
     useEffect(() => {
-        fetch(`/api/analytics/stats?days=${days}`)
-            .then(r => r.ok ? r.json() : null)
-            .then(json => { if (json) setData(json) })
+        setIsLoading(true)
+        Promise.all([
+            fetch(`/api/analytics/stats?days=${days}`).then(r => r.ok ? r.json() : null),
+            fetch(`/api/analytics/ai-metrics?days=${days}`).then(r => r.ok ? r.json() : null),
+        ])
+            .then(([stats, metrics]) => {
+                if (stats) setData(stats)
+                if (metrics) setAiMetrics(metrics)
+            })
             .catch(() => null)
             .finally(() => setIsLoading(false))
     }, [days])
@@ -112,10 +141,11 @@ export default function AnalyticsPage() {
             <div className="p-8 space-y-8 max-w-7xl mx-auto w-full">
 
                 {/* Alert Banner */}
-                {!isLoading && data && (
-                    data.alerts?.length > 0 ? (
+                {!isLoading && (() => {
+                    const allAlerts = [...(data?.alerts ?? []), ...(aiMetrics?.alerts ?? [])]
+                    return allAlerts.length > 0 ? (
                         <div className="space-y-2">
-                            {data.alerts.map((alert, i) => (
+                            {allAlerts.map((alert, i) => (
                                 <div
                                     key={i}
                                     className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${
@@ -132,7 +162,9 @@ export default function AnalyticsPage() {
                                     <div className="flex-1">
                                         <span className="font-semibold capitalize">{alert.level === "critical" ? "Critique" : "Attention"} — </span>
                                         {alert.message}
-                                        <span className="ml-2 text-xs opacity-70">(seuil : {alert.threshold}{alert.metric === "ai_resolution_rate" || alert.metric === "transfer_rate" ? "%" : "/5"})</span>
+                                        <span className="ml-2 text-xs opacity-70">
+                                            (seuil : {alert.threshold}{["ai_resolution_rate", "transfer_rate", "error_rate", "rag_quality"].includes(alert.metric) ? "%" : alert.metric === "latency" ? "ms" : "/5"})
+                                        </span>
                                     </div>
                                 </div>
                             ))}
@@ -143,7 +175,7 @@ export default function AnalyticsPage() {
                             <span>Toutes les métriques IA sont dans les seuils normaux.</span>
                         </div>
                     )
-                )}
+                })()}
 
                 {/* KPI Metrics Grid */}
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -162,10 +194,10 @@ export default function AnalyticsPage() {
                         icon={<Zap className="h-4 w-4 text-yellow-500" />}
                     />
                     <KpiCard
-                        title="Temps de réponse moyen"
-                        value="1.2s"
-                        trend="-0.3s ce mois"
-                        trendUp={true}
+                        title="Latence IA moyenne"
+                        value={isLoading ? "…" : fmtLatency(aiMetrics?.avg_latency_ms ?? null)}
+                        trend={aiMetrics?.total_calls ? `sur ${aiMetrics.total_calls} appels` : "aucune donnée"}
+                        trendUp={aiMetrics?.avg_latency_ms == null || aiMetrics.avg_latency_ms < 5000}
                         icon={<Clock className="h-4 w-4 text-blue-500" />}
                     />
                     <KpiCard
@@ -278,6 +310,72 @@ export default function AnalyticsPage() {
                             })()}
                         </CardContent>
                     </Card>
+                </div>
+
+                {/* AI Monitoring — C11 */}
+                <div>
+                    <div className="flex items-center gap-2 mb-4">
+                        <Activity className="h-5 w-5 text-indigo-500" />
+                        <h2 className="text-lg font-semibold tracking-tight">Monitoring du modèle IA</h2>
+                        <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">Mistral AI · {days}j</span>
+                    </div>
+                    <div className="grid gap-6 lg:grid-cols-3">
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 gap-4">
+                                <KpiCard
+                                    title="Taux d'erreur IA"
+                                    value={isLoading ? "…" : `${aiMetrics?.error_rate ?? 0}%`}
+                                    trend={aiMetrics?.total_calls ? `${aiMetrics.total_calls} appels analysés` : "aucun appel"}
+                                    trendUp={(aiMetrics?.error_rate ?? 0) <= 5}
+                                    icon={<ShieldAlert className="h-4 w-4 text-red-400" />}
+                                />
+                                <KpiCard
+                                    title="Chunks RAG moyens"
+                                    value={isLoading ? "…" : `${aiMetrics?.avg_rag_chunks ?? 0}`}
+                                    trend="extraits KB par requête"
+                                    trendUp={(aiMetrics?.avg_rag_chunks ?? 0) > 0}
+                                    icon={<Database className="h-4 w-4 text-emerald-500" />}
+                                />
+                                <KpiCard
+                                    title="Requêtes sans contexte"
+                                    value={isLoading ? "…" : `${aiMetrics?.no_context_rate ?? 0}%`}
+                                    trend="base de connaissances vide"
+                                    trendUp={(aiMetrics?.no_context_rate ?? 0) < 50}
+                                    icon={<Database className="h-4 w-4 text-amber-400" />}
+                                />
+                            </div>
+                        </div>
+                        <Card className="lg:col-span-2">
+                            <CardHeader>
+                                <CardTitle>Évolution de la latence Mistral</CardTitle>
+                                <CardDescription>Temps moyen de génération par jour (ms) — du premier token au dernier.</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {!aiMetrics?.latency_trend?.length ? (
+                                    <div className="flex flex-col items-center justify-center h-[260px] text-muted-foreground text-sm gap-2">
+                                        <Activity className="h-8 w-8 text-slate-200" />
+                                        <span>Aucune donnée — les métriques s&apos;accumulent au fil des échanges</span>
+                                    </div>
+                                ) : (
+                                    <div className="h-[260px] w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <LineChart data={aiMetrics.latency_trend} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                                                <XAxis dataKey="name" stroke="#64748B" fontSize={12} tickLine={false} axisLine={false} />
+                                                <YAxis stroke="#64748B" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}ms`} />
+                                                <Tooltip
+                                                    contentStyle={{ backgroundColor: "#fff", borderRadius: "8px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
+                                                    formatter={(value: number) => [`${value}ms`, "Latence"]}
+                                                />
+                                                <Legend wrapperStyle={{ paddingTop: "12px" }} iconType="circle" />
+                                                <Line type="monotone" dataKey="latence_ms" name="Latence (ms)" stroke="#4f46e5" strokeWidth={2} dot={{ r: 3, fill: "#4f46e5" }} activeDot={{ r: 5 }} />
+                                            </LineChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
                 </div>
 
                 {/* Agent Performance Table */}

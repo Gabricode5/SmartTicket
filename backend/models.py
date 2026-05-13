@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
@@ -46,6 +46,21 @@ class ChatMessage(Base):
     contenu = Column(Text, nullable=False)
     feedback = Column(Integer, nullable=True)  # 1=👍, -1=👎, NULL=no feedback
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
+
+class AICallLog(Base):
+    __tablename__ = "ai_call_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    id_session = Column(Integer, ForeignKey("chat_sessions.id", ondelete="SET NULL"), nullable=True)
+    call_type = Column(String(20), nullable=False)
+    model_name = Column(String(100), nullable=False)
+    latency_ms = Column(Integer, nullable=True)
+    rag_chunks_found = Column(Integer, nullable=True)
+    rag_context_chars = Column(Integer, nullable=True)
+    success = Column(Boolean, nullable=False, default=True)
+    error_type = Column(String(100), nullable=True)
+    date_creation = Column(DateTime(timezone=True), server_default=func.now())
+
 
 class KnowledgeBase(Base):
     __tablename__ = "knowledge_base"
