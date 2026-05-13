@@ -19,6 +19,29 @@ from dependencies import (
 router = APIRouter(tags=["Authentification"])
 
 
+@router.post("/setup-admin", summary="Crée le premier compte admin (désactivé si un admin existe déjà)")
+def setup_admin(payload: schemas.UserCreate, db: Session = Depends(get_db)):
+    admin_role = db.query(models.Role).filter_by(nom_role="admin").first()
+    if not admin_role:
+        raise HTTPException(status_code=503, detail="Rôles non initialisés, réessaie dans quelques secondes.")
+    if db.query(models.Utilisateur).filter(models.Utilisateur.id_role == admin_role.id, models.Utilisateur.deleted_at.is_(None)).first():
+        raise HTTPException(status_code=403, detail="Un compte admin existe déjà. Endpoint désactivé.")
+    if db.query(models.Utilisateur).filter_by(email=payload.email).first():
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé.")
+    admin = models.Utilisateur(
+        username=payload.username,
+        email=payload.email,
+        password_hash=pwd_context.hash(payload.password),
+        prenom=payload.prenom,
+        nom=payload.nom,
+        id_role=admin_role.id,
+    )
+    db.add(admin)
+    db.commit()
+    db.refresh(admin)
+    return {"message": f"Compte admin créé : {admin.email}"}
+
+
 @router.post("/register", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED, summary="Créer un compte utilisateur")
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     if db.query(models.Utilisateur).filter(models.Utilisateur.email == user.email, models.Utilisateur.deleted_at.is_(None)).first():
