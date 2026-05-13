@@ -19,9 +19,8 @@ COPY . .
 RUN npm run build
 
 ENV NODE_ENV=production
-ENV HOSTNAME=0.0.0.0
-ENV PORT=3000
+ENV PORT=3005
 
-EXPOSE 3000
+EXPOSE 3005
 
-CMD ["npm", "run", "start"]
+CMD ["sh", "-c", "node_modules/.bin/next start -H 0.0.0.0 -p ${PORT:-3005}"]
