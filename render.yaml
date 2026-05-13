@@ -44,4 +44,4 @@ services:
         fromService:
           type: web
           name: smartticket-backend
-          property: hostWithScheme
+          property: host
