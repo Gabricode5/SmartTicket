@@ -104,21 +104,25 @@ def run_migrations():
                     session.add(models.Role(nom_role=role_name))
             session.commit()
 
-            # Crée un compte admin par défaut si aucun admin n'existe
+            # Crée le compte admin configuré s'il n'existe pas encore
             from dependencies import pwd_context as _pwd
             admin_role = session.query(models.Role).filter_by(nom_role="admin").first()
-            if admin_role and not session.query(models.Utilisateur).filter_by(id_role=admin_role.id).first():
+            if admin_role:
                 admin_email = os.getenv("ADMIN_EMAIL", "admin@smartticket.app")
                 admin_username = os.getenv("ADMIN_USERNAME", "admin")
                 admin_password = os.getenv("ADMIN_PASSWORD", "ChangeMe123!")
-                session.add(models.Utilisateur(
-                    username=admin_username,
-                    email=admin_email,
-                    password_hash=_pwd.hash(admin_password),
-                    id_role=admin_role.id,
-                ))
-                session.commit()
-                _log.info("Compte admin par défaut créé : %s (pensez à changer le mot de passe)", admin_email)
+                if not session.query(models.Utilisateur).filter_by(email=admin_email).first():
+                    # Évite les collisions de username
+                    if session.query(models.Utilisateur).filter_by(username=admin_username).first():
+                        admin_username = admin_username + "_admin"
+                    session.add(models.Utilisateur(
+                        username=admin_username,
+                        email=admin_email,
+                        password_hash=_pwd.hash(admin_password),
+                        id_role=admin_role.id,
+                    ))
+                    session.commit()
+                    _log.info("Compte admin créé : %s", admin_email)
         with _engine.connect() as conn:
             conn.execute(_text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS feedback INTEGER"))
             conn.execute(_text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS transfer_reason VARCHAR(50)"))
