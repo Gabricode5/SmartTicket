@@ -15,7 +15,9 @@ import {
     LogOut,
     Plus,
     MessageSquare,
-    Trash2
+    Trash2,
+    ChevronLeft,
+    ChevronRight,
 } from "lucide-react"
 
 interface Conversation {
@@ -52,6 +54,9 @@ export function AppSidebar() {
     const { user: apiUser } = useCurrentUser()
     const [conversations, setConversations] = useState<Conversation[]>([])
     const [isLoadingConversations, setIsLoadingConversations] = useState(false)
+    const [convoPage, setConvoPage] = useState(1)
+
+    const CONVO_PAGE_SIZE = 15
 
     const user: SidebarUser = apiUser ? {
         username: apiUser.username,
@@ -81,6 +86,7 @@ export function AppSidebar() {
                 title: item.title || "Nouvelle conversation",
             }))
             setConversations(normalized)
+            setConvoPage(1)
         } catch (error) {
             console.error("Erreur réseau :", error)
         } finally {
@@ -235,7 +241,7 @@ export function AppSidebar() {
                         </Button>
 
                         {/* Liste des conversations récentes */}
-                        <div className="max-h-[300px] overflow-y-auto space-y-1 pr-1 custom-scrollbar">
+                        <div className="space-y-1">
                             {isLoadingConversations ? (
                                 <div className="px-3 text-xs text-sidebar-foreground/60">
                                     Chargement des conversations...
@@ -245,7 +251,7 @@ export function AppSidebar() {
                                     Aucune conversation pour le moment.
                                 </div>
                             ) : (
-                                conversations.map((chat) => (
+                                conversations.slice((convoPage - 1) * CONVO_PAGE_SIZE, convoPage * CONVO_PAGE_SIZE).map((chat) => (
                                     <div
                                         key={chat.id}
                                         className={cn(
@@ -274,6 +280,27 @@ export function AppSidebar() {
                                 ))
                             )}
                         </div>
+                        {Math.ceil(conversations.length / CONVO_PAGE_SIZE) > 1 && (
+                            <div className="flex items-center justify-between px-1 pt-1">
+                                <button
+                                    onClick={() => setConvoPage(p => p - 1)}
+                                    disabled={convoPage <= 1}
+                                    className="p-1 rounded text-sidebar-foreground/40 hover:text-sidebar-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                    <ChevronLeft className="h-3.5 w-3.5" />
+                                </button>
+                                <span className="text-[11px] text-sidebar-foreground/40">
+                                    {convoPage} / {Math.ceil(conversations.length / CONVO_PAGE_SIZE)}
+                                </span>
+                                <button
+                                    onClick={() => setConvoPage(p => p + 1)}
+                                    disabled={convoPage >= Math.ceil(conversations.length / CONVO_PAGE_SIZE)}
+                                    className="p-1 rounded text-sidebar-foreground/40 hover:text-sidebar-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                                >
+                                    <ChevronRight className="h-3.5 w-3.5" />
+                                </button>
+                            </div>
+                        )}
                     </div>
                 </div>
                 )}

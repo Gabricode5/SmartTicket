@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Search, MessageSquare, Zap, Clock, Star, TrendingUp, Bot } from "lucide-react"
+import { Search, MessageSquare, Zap, Clock, Star, TrendingUp, Bot, ChevronLeft, ChevronRight } from "lucide-react"
 import type { SessionItem } from "./types"
 
 export default function UserDashboard({ userId }: { userId: number }) {
@@ -17,6 +17,9 @@ export default function UserDashboard({ userId }: { userId: number }) {
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [closingSessionId, setClosingSessionId] = useState<number | null>(null)
+    const [sessionsPage, setSessionsPage] = useState(1)
+
+    const PAGE_SIZE = 10
 
     useEffect(() => {
         async function loadSessions() {
@@ -83,7 +86,7 @@ export default function UserDashboard({ userId }: { userId: number }) {
                         type="search"
                         placeholder="Rechercher des conversations..."
                         value={userQuery}
-                        onChange={(e) => setUserQuery(e.target.value)}
+                        onChange={(e) => { setUserQuery(e.target.value); setSessionsPage(1) }}
                         className="pl-9 bg-muted/20 border-muted-foreground/20 focus-visible:ring-offset-0 focus-visible:bg-background transition-colors"
                     />
                 </div>
@@ -155,7 +158,7 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                 ) : filteredSessions.length === 0 ? (
                                     <div className="text-sm text-muted-foreground">Aucune conversation.</div>
                                 ) : (
-                                    filteredSessions.map((session) => (
+                                    filteredSessions.slice((sessionsPage - 1) * PAGE_SIZE, sessionsPage * PAGE_SIZE).map((session) => (
                                         <div
                                             key={session.id}
                                             role="button"
@@ -208,6 +211,27 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                             </div>
                                         </div>
                                     ))
+                                )}
+                                {Math.ceil(filteredSessions.length / PAGE_SIZE) > 1 && (
+                                    <div className="flex items-center justify-between pt-2 border-t">
+                                        <button
+                                            onClick={() => setSessionsPage(p => p - 1)}
+                                            disabled={sessionsPage <= 1}
+                                            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                                        >
+                                            <ChevronLeft className="h-4 w-4" /> Précédent
+                                        </button>
+                                        <span className="text-sm text-muted-foreground">
+                                            {sessionsPage} / {Math.ceil(filteredSessions.length / PAGE_SIZE)}
+                                        </span>
+                                        <button
+                                            onClick={() => setSessionsPage(p => p + 1)}
+                                            disabled={sessionsPage >= Math.ceil(filteredSessions.length / PAGE_SIZE)}
+                                            className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
+                                        >
+                                            Suivant <ChevronRight className="h-4 w-4" />
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         </CardContent>

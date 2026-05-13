@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
     Users, Shield, Headphones, Crown, MessageCircle, UserCog, TrendingUp,
-    ChevronRight, UserCheck, UserX, Pencil, Trash2, AlertCircle, CircleDot,
+    ChevronRight, ChevronLeft, UserCheck, UserX, Pencil, Trash2, AlertCircle, CircleDot,
     CheckCircle2, BarChart2, BookOpen, ArrowRight,
 } from "lucide-react"
 import Link from "next/link"
@@ -34,6 +34,13 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
     const [editForm, setEditForm] = useState({ username: "", email: "", prenom: "", nom: "", role: "" })
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
     const [deletingUser, setDeletingUser] = useState<UserItem | null>(null)
+
+    const PAGE_SIZE = 8
+    const [usersPage, setUsersPage] = useState(1)
+    const [savPage, setSavPage] = useState(1)
+    const [adminPage, setAdminPage] = useState(1)
+    const [sessionsPage, setSessionsPage] = useState(1)
+    const [transfersPage, setTransfersPage] = useState(1)
 
     useEffect(() => {
         loadAll()
@@ -71,6 +78,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
     const handleSelectUser = async (u: UserItem) => {
         setSelectedUser(u)
         setSelectedSession(null)
+        setSessionsPage(1)
         setError(null)
         try {
             const res = await fetch(`/api/sessions?user_id=${u.id}`)
@@ -236,12 +244,12 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 </div>
                                 <Badge className="bg-blue-50 text-blue-600 border-blue-100 text-xs font-semibold">{users.length}</Badge>
                             </div>
-                            <div className="divide-y divide-slate-50 max-h-[400px] overflow-y-auto">
+                            <div className="divide-y divide-slate-50">
                                 {isLoading ? (
                                     <div className="px-5 py-8 text-center text-sm text-slate-400">Chargement...</div>
                                 ) : users.length === 0 ? (
                                     <div className="px-5 py-8 text-center text-sm text-slate-400">Aucun utilisateur</div>
-                                ) : users.map((u) => (
+                                ) : users.slice((usersPage - 1) * PAGE_SIZE, usersPage * PAGE_SIZE).map((u) => (
                                     <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "blue")}>
                                         <button onClick={() => handleSelectUser(u)} className="w-full text-left flex items-center gap-3 mb-2.5">
                                             <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
@@ -268,6 +276,17 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                     </div>
                                 ))}
                             </div>
+                            {Math.ceil(users.length / PAGE_SIZE) > 1 && (
+                                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
+                                    <button onClick={() => setUsersPage(p => p - 1)} disabled={usersPage <= 1} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                    </button>
+                                    <span className="text-xs text-slate-400">{usersPage} / {Math.ceil(users.length / PAGE_SIZE)}</span>
+                                    <button onClick={() => setUsersPage(p => p + 1)} disabled={usersPage >= Math.ceil(users.length / PAGE_SIZE)} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         {/* Agents SAV */}
@@ -284,12 +303,12 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 </div>
                                 <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 text-xs font-semibold">{savUsers.length}</Badge>
                             </div>
-                            <div className="divide-y divide-slate-50 max-h-[400px] overflow-y-auto">
+                            <div className="divide-y divide-slate-50">
                                 {isLoading ? (
                                     <div className="px-5 py-8 text-center text-sm text-slate-400">Chargement...</div>
                                 ) : savUsers.length === 0 ? (
                                     <div className="px-5 py-8 text-center text-sm text-slate-400">Aucun agent SAV</div>
-                                ) : savUsers.map((u) => (
+                                ) : savUsers.slice((savPage - 1) * PAGE_SIZE, savPage * PAGE_SIZE).map((u) => (
                                     <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "emerald")}>
                                         <button onClick={() => handleSelectUser(u)} className="w-full text-left flex items-center gap-3 mb-2.5">
                                             <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
@@ -316,6 +335,17 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                     </div>
                                 ))}
                             </div>
+                            {Math.ceil(savUsers.length / PAGE_SIZE) > 1 && (
+                                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
+                                    <button onClick={() => setSavPage(p => p - 1)} disabled={savPage <= 1} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                    </button>
+                                    <span className="text-xs text-slate-400">{savPage} / {Math.ceil(savUsers.length / PAGE_SIZE)}</span>
+                                    <button onClick={() => setSavPage(p => p + 1)} disabled={savPage >= Math.ceil(savUsers.length / PAGE_SIZE)} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         {/* Admins */}
@@ -332,12 +362,12 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 </div>
                                 <Badge className="bg-indigo-50 text-indigo-600 border-indigo-100 text-xs font-semibold">{adminUsers.length}</Badge>
                             </div>
-                            <div className="divide-y divide-slate-50 max-h-[400px] overflow-y-auto">
+                            <div className="divide-y divide-slate-50">
                                 {isLoading ? (
                                     <div className="px-5 py-8 text-center text-sm text-slate-400">Chargement...</div>
                                 ) : adminUsers.length === 0 ? (
                                     <div className="px-5 py-8 text-center text-sm text-slate-400">Aucun admin</div>
-                                ) : adminUsers.map((u) => (
+                                ) : adminUsers.slice((adminPage - 1) * PAGE_SIZE, adminPage * PAGE_SIZE).map((u) => (
                                     <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "indigo")}>
                                         <button onClick={() => handleSelectUser(u)} className="w-full text-left flex items-center gap-3 mb-2.5">
                                             <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
@@ -360,6 +390,17 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                     </div>
                                 ))}
                             </div>
+                            {Math.ceil(adminUsers.length / PAGE_SIZE) > 1 && (
+                                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
+                                    <button onClick={() => setAdminPage(p => p - 1)} disabled={adminPage <= 1} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                    </button>
+                                    <span className="text-xs text-slate-400">{adminPage} / {Math.ceil(adminUsers.length / PAGE_SIZE)}</span>
+                                    <button onClick={() => setAdminPage(p => p + 1)} disabled={adminPage >= Math.ceil(adminUsers.length / PAGE_SIZE)} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         {/* Conversations */}
@@ -378,7 +419,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                     <Badge className="bg-violet-50 text-violet-600 border-violet-100 text-xs font-semibold">{sessions.length}</Badge>
                                 )}
                             </div>
-                            <div className="divide-y divide-slate-50 max-h-[400px] overflow-y-auto">
+                            <div className="divide-y divide-slate-50">
                                 {!selectedUser ? (
                                     <div className="px-5 py-10 text-center">
                                         <MessageCircle className="h-8 w-8 text-slate-200 mx-auto mb-2" />
@@ -386,7 +427,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                     </div>
                                 ) : sessions.length === 0 ? (
                                     <div className="px-5 py-8 text-center text-sm text-slate-400">Aucune session</div>
-                                ) : sessions.map((s) => (
+                                ) : sessions.slice((sessionsPage - 1) * PAGE_SIZE, sessionsPage * PAGE_SIZE).map((s) => (
                                     <button
                                         key={s.id}
                                         onClick={() => setSelectedSession(s)}
@@ -417,6 +458,17 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                     </button>
                                 ))}
                             </div>
+                            {Math.ceil(sessions.length / PAGE_SIZE) > 1 && (
+                                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
+                                    <button onClick={() => setSessionsPage(p => p - 1)} disabled={sessionsPage <= 1} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                    </button>
+                                    <span className="text-xs text-slate-400">{sessionsPage} / {Math.ceil(sessions.length / PAGE_SIZE)}</span>
+                                    <button onClick={() => setSessionsPage(p => p + 1)} disabled={sessionsPage >= Math.ceil(sessions.length / PAGE_SIZE)} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -435,14 +487,14 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 </div>
                                 <Badge className="bg-amber-50 text-amber-600 border-amber-100 text-xs font-semibold">{transferredSessions.length}</Badge>
                             </div>
-                            <div className="divide-y divide-slate-50 max-h-[280px] overflow-y-auto">
+                            <div className="divide-y divide-slate-50">
                                 {transferredSessions.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-12 gap-2">
                                         <CheckCircle2 className="h-8 w-8 text-emerald-200" />
                                         <p className="text-sm text-slate-400">Aucun transfert en attente</p>
                                         <p className="text-xs text-slate-300">Tout est sous contrôle</p>
                                     </div>
-                                ) : transferredSessions.map((s) => (
+                                ) : transferredSessions.slice((transfersPage - 1) * PAGE_SIZE, transfersPage * PAGE_SIZE).map((s) => (
                                     <div key={s.id} className="px-5 py-3 flex items-center gap-3">
                                         <div className="w-9 h-9 rounded-full bg-indigo-50 flex items-center justify-center flex-shrink-0 text-xs font-bold text-indigo-600 border-2 border-indigo-100">
                                             {s.username.charAt(0).toUpperCase()}
@@ -460,6 +512,17 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                     </div>
                                 ))}
                             </div>
+                            {Math.ceil(transferredSessions.length / PAGE_SIZE) > 1 && (
+                                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
+                                    <button onClick={() => setTransfersPage(p => p - 1)} disabled={transfersPage <= 1} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                    </button>
+                                    <span className="text-xs text-slate-400">{transfersPage} / {Math.ceil(transferredSessions.length / PAGE_SIZE)}</span>
+                                    <button onClick={() => setTransfersPage(p => p + 1)} disabled={transfersPage >= Math.ceil(transferredSessions.length / PAGE_SIZE)} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            )}
                         </div>
 
                         <div className="space-y-5">
