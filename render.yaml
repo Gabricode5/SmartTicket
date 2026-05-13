@@ -29,6 +29,12 @@ services:
         sync: false
       - key: EMBED_MODEL
         value: mistral-embed
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_USERNAME
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
 
   - type: web
     name: smartticket-frontend
