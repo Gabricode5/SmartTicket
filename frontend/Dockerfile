@@ -19,10 +19,9 @@ COPY . .
 RUN npm run build
 
 ENV NODE_ENV=production
-ENV PORT=3005
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3000
 
-# Le port interne sur lequel Next.js écoute
-EXPOSE 3005
+EXPOSE 3000
 
-# Démarrage production, compatible Render (variable PORT injectée)
-CMD ["sh", "-c", "npm run start -- -p ${PORT:-3005}"]
+CMD ["npm", "run", "start"]
