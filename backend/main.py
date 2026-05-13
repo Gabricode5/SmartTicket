@@ -92,20 +92,42 @@ def purge_soft_deleted(retention_days: int = PURGE_RETENTION_DAYS) -> None:
 
 @app.on_event("startup")
 def run_migrations():
+    # 1. Extension vector
     try:
-        from database import Base, SessionLocal as _SessionLocal
         with _engine.connect() as conn:
             conn.execute(_text("CREATE EXTENSION IF NOT EXISTS vector"))
             conn.commit()
+    except Exception as exc:
+        _log.error("Extension vector: %s", exc, exc_info=True)
+
+    # 2. Crée les tables manquantes (nouvelles installations)
+    try:
+        from database import Base
         Base.metadata.create_all(bind=_engine)
+    except Exception as exc:
+        _log.error("create_all failed: %s", exc, exc_info=True)
+
+    # 3. ALTER TABLE — doit s'exécuter AVANT toute requête ORM sur ces colonnes
+    try:
+        with _engine.connect() as conn:
+            conn.execute(_text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS feedback INTEGER"))
+            conn.execute(_text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS transfer_reason VARCHAR(50)"))
+            conn.execute(_text("ALTER TABLE utilisateur ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"))
+            conn.execute(_text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"))
+            conn.commit()
+    except Exception as exc:
+        _log.error("ALTER TABLE migration failed: %s", exc, exc_info=True)
+
+    # 4. Rôles + compte admin (les colonnes deleted_at existent maintenant)
+    try:
+        from database import SessionLocal as _SessionLocal
+        from dependencies import pwd_context as _pwd
         with _SessionLocal() as session:
             for role_name in ["user", "ai", "sav", "admin"]:
                 if not session.query(models.Role).filter_by(nom_role=role_name).first():
                     session.add(models.Role(nom_role=role_name))
             session.commit()
 
-            # Crée ou synchronise le compte admin configuré via env vars
-            from dependencies import pwd_context as _pwd
             admin_role = session.query(models.Role).filter_by(nom_role="admin").first()
             if admin_role:
                 admin_email = os.getenv("ADMIN_EMAIL", "admin@smartticket.app")
@@ -113,14 +135,12 @@ def run_migrations():
                 admin_password = os.getenv("ADMIN_PASSWORD", "ChangeMe123!")
                 existing_admin = session.query(models.Utilisateur).filter_by(email=admin_email).first()
                 if existing_admin:
-                    # Resynchronise le mot de passe et le rôle à chaque démarrage
                     existing_admin.password_hash = _pwd.hash(admin_password)
                     existing_admin.id_role = admin_role.id
                     existing_admin.deleted_at = None
                     session.commit()
                     _log.info("Compte admin synchronisé : %s", admin_email)
                 else:
-                    # Évite les collisions de username
                     if session.query(models.Utilisateur).filter_by(username=admin_username).first():
                         admin_username = admin_username + "_admin"
                     session.add(models.Utilisateur(
@@ -131,14 +151,8 @@ def run_migrations():
                     ))
                     session.commit()
                     _log.info("Compte admin créé : %s", admin_email)
-        with _engine.connect() as conn:
-            conn.execute(_text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS feedback INTEGER"))
-            conn.execute(_text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS transfer_reason VARCHAR(50)"))
-            conn.execute(_text("ALTER TABLE utilisateur ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"))
-            conn.execute(_text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"))
-            conn.commit()
     except Exception as exc:
-        _log.error("Startup migration failed: %s", exc, exc_info=True)
+        _log.error("Roles/admin setup failed: %s", exc, exc_info=True)
 
 
 @app.on_event("startup")

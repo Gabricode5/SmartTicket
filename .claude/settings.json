@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m ' *)",
+      "Bash(dir \"c:\\\\Users\\\\gguery\\\\Documents\\\\perso\\\\SmartTicket\\\\frontend\" /b)",
+      "Bash(git commit *)"
+    ]
+  }
+}
