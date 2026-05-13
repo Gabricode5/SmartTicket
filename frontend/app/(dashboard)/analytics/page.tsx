@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -84,10 +85,24 @@ function fmtLatency(ms: number | null): string {
 }
 
 export default function AnalyticsPage() {
+    const router = useRouter()
     const [days, setDays] = useState(30)
     const [data, setData] = useState<AnalyticsData | null>(null)
     const [aiMetrics, setAiMetrics] = useState<AiMetrics | null>(null)
     const [isLoading, setIsLoading] = useState(true)
+
+    useEffect(() => {
+        fetch("/api/me")
+            .then(r => {
+                if (r.status === 401) { router.replace("/login"); return null }
+                return r.ok ? r.json() : null
+            })
+            .then(me => {
+                if (!me) return
+                if (me.role !== "admin" && me.role !== "sav") { router.replace("/"); return }
+            })
+            .catch(() => {})
+    }, [router])
 
     useEffect(() => {
         setIsLoading(true)
