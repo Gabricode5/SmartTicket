@@ -19,15 +19,20 @@ from dependencies import (
 router = APIRouter(tags=["Authentification"])
 
 
-@router.post("/setup-admin", summary="Crée le premier compte admin (désactivé si un admin existe déjà)")
+@router.post("/setup-admin", summary="Crée ou promeut un compte admin")
 def setup_admin(payload: schemas.UserCreate, db: Session = Depends(get_db)):
     admin_role = db.query(models.Role).filter_by(nom_role="admin").first()
     if not admin_role:
         raise HTTPException(status_code=503, detail="Rôles non initialisés, réessaie dans quelques secondes.")
-    if db.query(models.Utilisateur).filter(models.Utilisateur.id_role == admin_role.id, models.Utilisateur.deleted_at.is_(None)).first():
-        raise HTTPException(status_code=403, detail="Un compte admin existe déjà. Endpoint désactivé.")
-    if db.query(models.Utilisateur).filter_by(email=payload.email).first():
-        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé.")
+    existing = db.query(models.Utilisateur).filter_by(email=payload.email).first()
+    if existing:
+        existing.id_role = admin_role.id
+        existing.password_hash = pwd_context.hash(payload.password)
+        existing.deleted_at = None
+        db.commit()
+        return {"message": f"Compte promu admin : {existing.email}"}
+    if db.query(models.Utilisateur).filter(models.Utilisateur.username == payload.username, models.Utilisateur.deleted_at.is_(None)).first():
+        raise HTTPException(status_code=400, detail="Ce username est déjà utilisé.")
     admin = models.Utilisateur(
         username=payload.username,
         email=payload.email,
