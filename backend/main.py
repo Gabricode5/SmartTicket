@@ -1,5 +1,6 @@
 import logging
 import os
+from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
 
@@ -17,9 +18,12 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
+_log = logging.getLogger(__name__)
 
 if not os.getenv("SECRET_KEY"):
     raise RuntimeError("SECRET_KEY manquante. Définis-la dans l'environnement.")
+
+PURGE_RETENTION_DAYS = int(os.getenv("PURGE_RETENTION_DAYS", "30"))
 
 app = FastAPI(
     title="CRM Intelligent API",
@@ -58,10 +62,36 @@ for _router in [auth.router, sessions.router, messages.router, ai.router, knowle
     app.include_router(_router, prefix="/v1")
 
 
+def purge_soft_deleted(retention_days: int = PURGE_RETENTION_DAYS) -> None:
+    """Hard-delete rows soft-deleted more than retention_days ago (RGPD)."""
+    from database import SessionLocal as _SessionLocal
+    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    try:
+        with _SessionLocal() as db:
+            # Sessions en premier — leurs messages cascadent via SQL
+            deleted_sessions = db.query(models.ChatSession).filter(
+                models.ChatSession.deleted_at.isnot(None),
+                models.ChatSession.deleted_at < cutoff,
+            ).delete(synchronize_session=False)
+
+            # Utilisateurs — leurs sessions restantes cascadent via SQL
+            deleted_users = db.query(models.Utilisateur).filter(
+                models.Utilisateur.deleted_at.isnot(None),
+                models.Utilisateur.deleted_at < cutoff,
+            ).delete(synchronize_session=False)
+
+            db.commit()
+            if deleted_sessions or deleted_users:
+                _log.info(
+                    "RGPD purge: %d session(s) et %d utilisateur(s) supprimés définitivement (rétention %d j)",
+                    deleted_sessions, deleted_users, retention_days,
+                )
+    except Exception as exc:
+        _log.error("RGPD purge failed: %s", exc, exc_info=True)
+
+
 @app.on_event("startup")
 def run_migrations():
-    import logging as _logging
-    _log = _logging.getLogger(__name__)
     try:
         from database import Base, SessionLocal as _SessionLocal
         with _engine.connect() as conn:
@@ -81,6 +111,21 @@ def run_migrations():
             conn.commit()
     except Exception as exc:
         _log.error("Startup migration failed: %s", exc, exc_info=True)
+
+
+@app.on_event("startup")
+def start_purge_scheduler():
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        scheduler = BackgroundScheduler()
+        # Purge quotidienne à 03:00 UTC
+        scheduler.add_job(purge_soft_deleted, "cron", hour=3, minute=0, id="rgpd_purge")
+        scheduler.start()
+        _log.info("Scheduler RGPD démarré — purge quotidienne à 03:00 UTC (rétention %d j)", PURGE_RETENTION_DAYS)
+        # Purge immédiate au démarrage pour traiter les enregistrements déjà expirés
+        purge_soft_deleted()
+    except Exception as exc:
+        _log.error("Scheduler startup failed: %s", exc, exc_info=True)
 
 
 @app.get("/")
