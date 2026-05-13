@@ -104,14 +104,22 @@ def run_migrations():
                     session.add(models.Role(nom_role=role_name))
             session.commit()
 
-            # Crée le compte admin configuré s'il n'existe pas encore
+            # Crée ou synchronise le compte admin configuré via env vars
             from dependencies import pwd_context as _pwd
             admin_role = session.query(models.Role).filter_by(nom_role="admin").first()
             if admin_role:
                 admin_email = os.getenv("ADMIN_EMAIL", "admin@smartticket.app")
                 admin_username = os.getenv("ADMIN_USERNAME", "admin")
                 admin_password = os.getenv("ADMIN_PASSWORD", "ChangeMe123!")
-                if not session.query(models.Utilisateur).filter_by(email=admin_email).first():
+                existing_admin = session.query(models.Utilisateur).filter_by(email=admin_email).first()
+                if existing_admin:
+                    # Resynchronise le mot de passe et le rôle à chaque démarrage
+                    existing_admin.password_hash = _pwd.hash(admin_password)
+                    existing_admin.id_role = admin_role.id
+                    existing_admin.deleted_at = None
+                    session.commit()
+                    _log.info("Compte admin synchronisé : %s", admin_email)
+                else:
                     # Évite les collisions de username
                     if session.query(models.Utilisateur).filter_by(username=admin_username).first():
                         admin_username = admin_username + "_admin"
