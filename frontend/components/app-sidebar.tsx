@@ -96,6 +96,7 @@ export function AppSidebar() {
 
     useEffect(() => {
         fetchConversations()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
     const handleCreateConversation = async () => {

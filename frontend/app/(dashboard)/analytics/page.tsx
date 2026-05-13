@@ -105,7 +105,6 @@ export default function AnalyticsPage() {
     }, [router])
 
     useEffect(() => {
-        setIsLoading(true)
         Promise.all([
             fetch(`/api/analytics/stats?days=${days}`).then(r => r.ok ? r.json() : null),
             fetch(`/api/analytics/ai-metrics?days=${days}`).then(r => r.ok ? r.json() : null),
@@ -140,8 +139,10 @@ export default function AnalyticsPage() {
                         <Button
                             key={d}
                             onClick={() => {
-                                setIsLoading(true)
-                                setDays(d)
+                                if (d !== days) {
+                                    setIsLoading(true)
+                                    setDays(d)
+                                }
                             }}
                             variant={days === d ? "secondary" : "ghost"}
                             size="sm"
