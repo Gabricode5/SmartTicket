@@ -49,8 +49,13 @@ function LoginForm() {
             router.push("/")
             router.refresh() // Pour mettre à jour les composants layout
         } else {
-            // Afficher le message d'erreur du backend (ex: "L'email ou le mot de passe est incorrect")
-            setError(data.detail || "Échec de la connexion")
+            if (typeof data.detail === "string") {
+                setError(data.detail)
+            } else if (Array.isArray(data.detail)) {
+                setError(data.detail[0]?.msg || "Données invalides.")
+            } else {
+                setError("Échec de la connexion.")
+            }
         }
         } catch {
             setError("Impossible de contacter le serveur.")

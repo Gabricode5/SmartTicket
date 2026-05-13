@@ -108,7 +108,7 @@ def run_migrations():
             from dependencies import pwd_context as _pwd
             admin_role = session.query(models.Role).filter_by(nom_role="admin").first()
             if admin_role and not session.query(models.Utilisateur).filter_by(id_role=admin_role.id).first():
-                admin_email = os.getenv("ADMIN_EMAIL", "admin@smartticket.local")
+                admin_email = os.getenv("ADMIN_EMAIL", "admin@smartticket.app")
                 admin_username = os.getenv("ADMIN_USERNAME", "admin")
                 admin_password = os.getenv("ADMIN_PASSWORD", "ChangeMe123!")
                 session.add(models.Utilisateur(

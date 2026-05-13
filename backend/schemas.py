@@ -50,7 +50,7 @@ class UserAdminUpdateRequest(BaseModel):
     role: Optional[str] = None
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: str
     password: str
 
 class ChatSessionCreate(BaseModel):
