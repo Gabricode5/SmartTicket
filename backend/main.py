@@ -133,16 +133,20 @@ def run_migrations():
                 admin_email = os.getenv("ADMIN_EMAIL", "admin@smartticket.app")
                 admin_username = os.getenv("ADMIN_USERNAME", "admin")
                 admin_password = os.getenv("ADMIN_PASSWORD", "ChangeMe123!")
-                existing_admin = session.query(models.Utilisateur).filter_by(email=admin_email).first()
+                # Cherche par email d'abord, puis par username en fallback
+                existing_admin = (
+                    session.query(models.Utilisateur).filter_by(email=admin_email).first()
+                    or session.query(models.Utilisateur).filter_by(username=admin_username).first()
+                )
                 if existing_admin:
+                    existing_admin.email = admin_email
+                    existing_admin.username = admin_username
                     existing_admin.password_hash = _pwd.hash(admin_password)
                     existing_admin.id_role = admin_role.id
                     existing_admin.deleted_at = None
                     session.commit()
                     _log.info("Compte admin synchronisé : %s", admin_email)
                 else:
-                    if session.query(models.Utilisateur).filter_by(username=admin_username).first():
-                        admin_username = admin_username + "_admin"
                     session.add(models.Utilisateur(
                         username=admin_username,
                         email=admin_email,
