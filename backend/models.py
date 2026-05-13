@@ -1,10 +1,8 @@
-#C'est la structure de ta Base de données (les tables SQL).
-
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
-from database import Base 
+from database import Base
 
 class Role(Base):
     __tablename__ = "roles"
@@ -24,6 +22,7 @@ class Utilisateur(Base):
     nom = Column(String(50))
     id_role = Column(Integer, ForeignKey("roles.id"), server_default="1")
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     role = relationship("Role")
 
 class ChatSession(Base):
@@ -35,6 +34,7 @@ class ChatSession(Base):
     status = Column(String(20), nullable=False, server_default="open")  # open | transferred | closed
     transfer_reason = Column(String(50), nullable=True)  # technique | complexe | sensible | autre
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
     messages = relationship("ChatMessage", cascade="all, delete-orphan", passive_deletes=True)
 
 class ChatMessage(Base):

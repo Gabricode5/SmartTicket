@@ -76,6 +76,8 @@ def run_migrations():
         with _engine.connect() as conn:
             conn.execute(_text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS feedback INTEGER"))
             conn.execute(_text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS transfer_reason VARCHAR(50)"))
+            conn.execute(_text("ALTER TABLE utilisateur ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"))
+            conn.execute(_text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"))
             conn.commit()
     except Exception as exc:
         _log.error("Startup migration failed: %s", exc, exc_info=True)

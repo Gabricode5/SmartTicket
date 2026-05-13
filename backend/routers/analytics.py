@@ -60,7 +60,7 @@ def get_analytics_stats(days: int = 30, current_user: str = Depends(get_current_
     from sqlalchemy import func as sqlfunc
     from_date = datetime.utcnow() - timedelta(days=days)
 
-    total_sessions = db.query(sqlfunc.count(models.ChatSession.id)).filter(models.ChatSession.date_creation >= from_date).scalar() or 0
+    total_sessions = db.query(sqlfunc.count(models.ChatSession.id)).filter(models.ChatSession.date_creation >= from_date, models.ChatSession.deleted_at.is_(None)).scalar() or 0
     transferred_sq = db.query(models.ChatMessage.id_session).filter(models.ChatMessage.type_envoyeur == "sav", models.ChatMessage.date_creation >= from_date).distinct().subquery()
     transferred_count = db.query(sqlfunc.count()).select_from(transferred_sq).scalar() or 0
     ai_resolution_rate = round((total_sessions - transferred_count) / total_sessions * 100, 1) if total_sessions > 0 else 0.0
@@ -86,14 +86,14 @@ def get_analytics_stats(days: int = 30, current_user: str = Depends(get_current_
     sav_role = db.query(models.Role).filter(models.Role.nom_role == "sav").first()
     sav_agents = []
     if sav_role:
-        sav_users = db.query(models.Utilisateur).filter(models.Utilisateur.id_role == sav_role.id).all()
+        sav_users = db.query(models.Utilisateur).filter(models.Utilisateur.id_role == sav_role.id, models.Utilisateur.deleted_at.is_(None)).all()
         per_agent = round(transferred_count / len(sav_users)) if sav_users else 0
         for u in sav_users:
             full_name = " ".join(filter(None, [u.prenom, u.nom])) or u.username
             sav_agents.append({"name": full_name, "initials": "".join(w[0].upper() for w in full_name.split()[:2]), "conversations": per_agent})
 
     reason_rows = db.query(models.ChatSession.transfer_reason, sqlfunc.count(models.ChatSession.id)).filter(
-        models.ChatSession.transfer_reason.isnot(None), models.ChatSession.date_creation >= from_date).group_by(models.ChatSession.transfer_reason).all()
+        models.ChatSession.transfer_reason.isnot(None), models.ChatSession.date_creation >= from_date, models.ChatSession.deleted_at.is_(None)).group_by(models.ChatSession.transfer_reason).all()
     transfer_reasons = [{"name": REASON_LABELS.get(r, r), "value": cnt, "color": REASON_COLORS.get(r, "#94a3b8")} for r, cnt in reason_rows]
 
     alerts = _compute_alerts(ai_resolution_rate, satisfaction_score, transferred_count, total_sessions)

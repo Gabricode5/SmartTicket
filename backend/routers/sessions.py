@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -21,7 +23,7 @@ REASON_COLORS = {"technique": "#0ea5e9", "complexe": "#f59e0b", "sensible": "#ef
 
 @router.post("/sessions", response_model=schemas.ChatSessionResponse, summary="Créer une session de chat")
 def create_session(session_data: schemas.ChatSessionCreate, user_id: int, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    user = db.query(models.Utilisateur).filter(models.Utilisateur.id == user_id).first()
+    user = db.query(models.Utilisateur).filter(models.Utilisateur.id == user_id, models.Utilisateur.deleted_at.is_(None)).first()
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
     requester = get_user_by_email(db, current_user)
@@ -38,7 +40,7 @@ def create_session(session_data: schemas.ChatSessionCreate, user_id: int, curren
 
 @router.get("/sessions", response_model=list[schemas.ChatSessionResponse], summary="Lister les sessions d'un utilisateur")
 def list_sessions(user_id: int, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    user = db.query(models.Utilisateur).filter(models.Utilisateur.id == user_id).first()
+    user = db.query(models.Utilisateur).filter(models.Utilisateur.id == user_id, models.Utilisateur.deleted_at.is_(None)).first()
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
     requester = get_user_by_email(db, current_user)
@@ -46,12 +48,15 @@ def list_sessions(user_id: int, current_user: str = Depends(get_current_user), d
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
     if not is_admin_or_sav(requester) and requester.id != user_id:
         raise HTTPException(status_code=403, detail="Accès refusé")
-    return db.query(models.ChatSession).filter(models.ChatSession.id_utilisateur == user_id).order_by(models.ChatSession.date_creation.desc()).all()
+    return db.query(models.ChatSession).filter(
+        models.ChatSession.id_utilisateur == user_id,
+        models.ChatSession.deleted_at.is_(None),
+    ).order_by(models.ChatSession.date_creation.desc()).all()
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Supprimer une session")
 def delete_session(session_id: int, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id).first()
+    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id, models.ChatSession.deleted_at.is_(None)).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session non trouvée")
     requester = get_user_by_email(db, current_user)
@@ -59,14 +64,13 @@ def delete_session(session_id: int, current_user: str = Depends(get_current_user
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
     if not is_admin_or_sav(requester) and session.id_utilisateur != requester.id:
         raise HTTPException(status_code=403, detail="Accès refusé")
-    db.query(models.ChatMessage).filter(models.ChatMessage.id_session == session_id).delete(synchronize_session=False)
-    db.delete(session)
+    session.deleted_at = datetime.utcnow()
     db.commit()
 
 
 @router.post("/sessions/{session_id}/close", response_model=schemas.ChatSessionResponse, summary="Clôturer une session (génère un résumé IA et indexe le transcript)")
 def close_session(session_id: int, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id).first()
+    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id, models.ChatSession.deleted_at.is_(None)).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session non trouvée")
     requester = get_user_by_email(db, current_user)
@@ -126,7 +130,7 @@ def transfer_session(session_id: int, payload: schemas.TransferRequest, current_
     user = get_user_by_email(db, current_user)
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
-    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id).first()
+    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id, models.ChatSession.deleted_at.is_(None)).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session introuvable")
     if session.id_utilisateur != user.id and not is_admin_or_sav(user):
@@ -148,7 +152,7 @@ def resolve_session(session_id: int, current_user: str = Depends(get_current_use
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
     if not is_admin_or_sav(user):
         raise HTTPException(status_code=403, detail="Accès refusé")
-    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id).first()
+    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id, models.ChatSession.deleted_at.is_(None)).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session introuvable")
     if session.status != "transferred":
@@ -166,5 +170,9 @@ def get_transferred_sessions(current_user: str = Depends(get_current_user), db: 
     user = get_user_by_email(db, current_user)
     if not is_admin_or_sav(user):
         raise HTTPException(status_code=403, detail="Accès refusé")
-    rows = db.query(models.ChatSession, models.Utilisateur.username).join(models.Utilisateur, models.ChatSession.id_utilisateur == models.Utilisateur.id).filter(models.ChatSession.status == "transferred").order_by(models.ChatSession.date_creation.desc()).all()
+    rows = db.query(models.ChatSession, models.Utilisateur.username).join(models.Utilisateur, models.ChatSession.id_utilisateur == models.Utilisateur.id).filter(
+        models.ChatSession.status == "transferred",
+        models.ChatSession.deleted_at.is_(None),
+        models.Utilisateur.deleted_at.is_(None),
+    ).order_by(models.ChatSession.date_creation.desc()).all()
     return [{"id": s.id, "title": s.title, "status": s.status, "transfer_reason": s.transfer_reason, "date_creation": s.date_creation, "username": username} for s, username in rows]

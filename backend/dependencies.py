@@ -89,7 +89,10 @@ def get_current_user(
 
 
 def get_user_by_email(db: Session, email: str):
-    return db.query(models.Utilisateur).filter(models.Utilisateur.email == email).first()
+    return db.query(models.Utilisateur).filter(
+        models.Utilisateur.email == email,
+        models.Utilisateur.deleted_at.is_(None),
+    ).first()
 
 
 def is_admin_or_sav(user: models.Utilisateur | None) -> bool:

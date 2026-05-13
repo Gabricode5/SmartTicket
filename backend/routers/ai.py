@@ -38,7 +38,7 @@ def ask_question_stream(payload: schemas.AskRequest, current_user: str = Depends
     user = get_user_by_email(db, current_user)
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
-    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id).first()
+    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id, models.ChatSession.deleted_at.is_(None)).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session non trouvée")
     if not is_admin_or_sav(user) and session.id_utilisateur != user.id:

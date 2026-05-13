@@ -14,7 +14,7 @@ def list_messages(session_id: int, current_user: str = Depends(get_current_user)
     user = get_user_by_email(db, current_user)
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
-    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id).first()
+    session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id, models.ChatSession.deleted_at.is_(None)).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session non trouvée")
     if not is_admin_or_sav(user) and session.id_utilisateur != user.id:
@@ -27,7 +27,7 @@ def create_message(message: schemas.ChatMessageCreate, current_user: str = Depen
     user = get_user_by_email(db, current_user)
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
-    session = db.query(models.ChatSession).filter(models.ChatSession.id == message.id_session).first()
+    session = db.query(models.ChatSession).filter(models.ChatSession.id == message.id_session, models.ChatSession.deleted_at.is_(None)).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session non trouvée")
     if not is_admin_or_sav(user) and session.id_utilisateur != user.id:
@@ -52,7 +52,7 @@ def rate_message(message_id: int, payload: schemas.MessageFeedbackRequest, curre
         raise HTTPException(status_code=404, detail="Message introuvable")
     if message.type_envoyeur != "ai":
         raise HTTPException(status_code=400, detail="Le feedback n'est applicable qu'aux messages IA")
-    session = db.query(models.ChatSession).filter(models.ChatSession.id == message.id_session).first()
+    session = db.query(models.ChatSession).filter(models.ChatSession.id == message.id_session, models.ChatSession.deleted_at.is_(None)).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session introuvable")
     user = get_user_by_email(db, current_user)

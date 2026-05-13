@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -14,7 +16,7 @@ def list_users(role: str | None = None, current_user: str = Depends(get_current_
     requester = get_user_by_email(db, current_user)
     if not requester or not requester.role or requester.role.nom_role not in ["admin", "sav"]:
         raise HTTPException(status_code=403, detail="Accès refusé")
-    query = db.query(models.Utilisateur).join(models.Role)
+    query = db.query(models.Utilisateur).join(models.Role).filter(models.Utilisateur.deleted_at.is_(None))
     if role:
         query = query.filter(models.Role.nom_role == role)
     return [{"id": u.id, "username": u.username, "email": u.email, "prenom": u.prenom, "nom": u.nom,
@@ -26,7 +28,7 @@ def update_user_role(user_id: int, payload: schemas.UserRoleUpdateRequest, curre
     requester = get_user_by_email(db, current_user)
     if not requester or not requester.role or requester.role.nom_role != "admin":
         raise HTTPException(status_code=403, detail="Accès refusé")
-    target = db.query(models.Utilisateur).filter(models.Utilisateur.id == user_id).first()
+    target = db.query(models.Utilisateur).filter(models.Utilisateur.id == user_id, models.Utilisateur.deleted_at.is_(None)).first()
     if not target:
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
     if requester.id == target.id:
@@ -49,19 +51,19 @@ def update_user_by_admin(user_id: int, payload: schemas.UserAdminUpdateRequest, 
     requester = get_user_by_email(db, current_user)
     if not requester or not requester.role or requester.role.nom_role != "admin":
         raise HTTPException(status_code=403, detail="Accès refusé")
-    target = db.query(models.Utilisateur).filter(models.Utilisateur.id == user_id).first()
+    target = db.query(models.Utilisateur).filter(models.Utilisateur.id == user_id, models.Utilisateur.deleted_at.is_(None)).first()
     if not target:
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
     if payload.username is not None:
         new_username = payload.username.strip()
         if not new_username:
             raise HTTPException(status_code=400, detail="Le username ne peut pas être vide")
-        if db.query(models.Utilisateur).filter(models.Utilisateur.username == new_username, models.Utilisateur.id != target.id).first():
+        if db.query(models.Utilisateur).filter(models.Utilisateur.username == new_username, models.Utilisateur.id != target.id, models.Utilisateur.deleted_at.is_(None)).first():
             raise HTTPException(status_code=400, detail="Ce username est déjà utilisé")
         target.username = new_username
     if payload.email is not None:
         new_email = payload.email.strip().lower()
-        if db.query(models.Utilisateur).filter(models.Utilisateur.email == new_email, models.Utilisateur.id != target.id).first():
+        if db.query(models.Utilisateur).filter(models.Utilisateur.email == new_email, models.Utilisateur.id != target.id, models.Utilisateur.deleted_at.is_(None)).first():
             raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
         target.email = new_email
     if payload.prenom is not None:
@@ -89,10 +91,15 @@ def delete_user_by_admin(user_id: int, current_user: str = Depends(get_current_u
     requester = get_user_by_email(db, current_user)
     if not requester or not requester.role or requester.role.nom_role != "admin":
         raise HTTPException(status_code=403, detail="Accès refusé")
-    target = db.query(models.Utilisateur).filter(models.Utilisateur.id == user_id).first()
+    target = db.query(models.Utilisateur).filter(models.Utilisateur.id == user_id, models.Utilisateur.deleted_at.is_(None)).first()
     if not target:
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
     if requester.id == target.id:
         raise HTTPException(status_code=400, detail="Vous ne pouvez pas supprimer votre propre compte")
-    db.delete(target)
+    now = datetime.utcnow()
+    target.deleted_at = now
+    db.query(models.ChatSession).filter(
+        models.ChatSession.id_utilisateur == target.id,
+        models.ChatSession.deleted_at.is_(None),
+    ).update({"deleted_at": now})
     db.commit()

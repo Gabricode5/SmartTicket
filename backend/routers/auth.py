@@ -20,9 +20,9 @@ router = APIRouter(tags=["Authentification"])
 
 @router.post("/register", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED, summary="Créer un compte utilisateur")
 def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
-    if db.query(models.Utilisateur).filter(models.Utilisateur.email == user.email).first():
+    if db.query(models.Utilisateur).filter(models.Utilisateur.email == user.email, models.Utilisateur.deleted_at.is_(None)).first():
         raise HTTPException(status_code=400, detail="Cet email est déjà utilisé.")
-    if db.query(models.Utilisateur).filter(models.Utilisateur.username == user.username).first():
+    if db.query(models.Utilisateur).filter(models.Utilisateur.username == user.username, models.Utilisateur.deleted_at.is_(None)).first():
         raise HTTPException(status_code=400, detail="Ce username est déjà utilisé.")
     default_role = db.query(models.Role).filter(models.Role.nom_role == "user").first()
     if not default_role:
@@ -42,7 +42,7 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
 @router.post("/login", summary="Se connecter et obtenir un token JWT")
 def login(user_credentials: schemas.UserLogin, db: Session = Depends(get_db)):
-    user = db.query(models.Utilisateur).filter(models.Utilisateur.email == user_credentials.email).first()
+    user = db.query(models.Utilisateur).filter(models.Utilisateur.email == user_credentials.email, models.Utilisateur.deleted_at.is_(None)).first()
     if not user or not pwd_context.verify(user_credentials.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="L'email ou le mot de passe est incorrect")
     role_name = user.role.nom_role if user.role else "user"
