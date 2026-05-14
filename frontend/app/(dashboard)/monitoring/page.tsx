@@ -42,6 +42,7 @@ type AiMetrics = {
     prev_latency_ms: number | null
     prev_error_rate: number | null
     prev_no_context_rate: number | null
+    kb_score: number | null
 }
 
 const PERIODS = [
@@ -160,6 +161,9 @@ export default function MonitoringPage() {
                     )
                 )}
 
+                {/* KB Score */}
+                {!isLoading && metrics && <KbScoreCard score={metrics.kb_score} noContextRate={metrics.no_context_rate} totalCalls={metrics.total_calls} />}
+
                 {/* Status Mistral */}
                 <MistralStatusCard status={mistralStatus} loading={statusLoading} onRefresh={fetchMistralStatus} />
 
@@ -276,6 +280,81 @@ export default function MonitoringPage() {
                 </div>
             </div>
         </div>
+    )
+}
+
+type KbLevel = { label: string; message: string; color: string; bg: string; border: string; bar: string }
+
+const KB_LEVELS: [number, KbLevel][] = [
+    [75, { label: "Excellente", message: "La base de connaissances est bien alimentée. Le modèle dispose d'un contexte riche pour répondre aux questions.",          color: "text-emerald-700", bg: "bg-emerald-50",  border: "border-emerald-200", bar: "bg-emerald-500" }],
+    [50, { label: "Correcte",   message: "Quelques lacunes détectées. Enrichir la base de connaissances améliorerait la qualité des réponses de l'IA.",              color: "text-amber-700",   bg: "bg-amber-50",   border: "border-amber-200",   bar: "bg-amber-400"   }],
+    [25, { label: "Insuffisante", message: "La base de connaissances manque de contenu. L'IA répond souvent sans contexte — enrichissement recommandé.",             color: "text-orange-700",  bg: "bg-orange-50",  border: "border-orange-200",  bar: "bg-orange-500"  }],
+    [0,  { label: "Critique",   message: "La base de connaissances est trop pauvre. Le modèle ne peut pas répondre correctement — enrichissement urgent nécessaire.", color: "text-red-700",     bg: "bg-red-50",     border: "border-red-200",     bar: "bg-red-500"     }],
+]
+
+function getKbLevel(score: number): KbLevel {
+    for (const [threshold, level] of KB_LEVELS) {
+        if (score >= threshold) return level
+    }
+    return KB_LEVELS[KB_LEVELS.length - 1][1]
+}
+
+function KbScoreCard({ score, noContextRate, totalCalls }: { score: number | null; noContextRate: number; totalCalls: number }) {
+    if (totalCalls < 5) {
+        return (
+            <Card className="border-slate-200">
+                <CardContent className="py-4 flex items-center gap-3 text-sm text-muted-foreground">
+                    <Database className="h-4 w-4 flex-shrink-0" />
+                    <span>Score de santé KB indisponible — au moins 5 appels IA nécessaires pour calculer le score (<strong>{totalCalls}</strong> enregistrés).</span>
+                </CardContent>
+            </Card>
+        )
+    }
+
+    const s = score ?? 0
+    const level = getKbLevel(s)
+
+    return (
+        <Card className={`border ${level.border} ${level.bg}`}>
+            <CardContent className="py-4">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="flex-shrink-0">
+                            {s >= 75
+                                ? <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                                : s >= 50
+                                ? <AlertTriangle className="h-5 w-5 text-amber-600" />
+                                : <AlertCircle className="h-5 w-5 text-red-600" />}
+                        </div>
+                        <div className="min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                                <span className={`text-sm font-semibold ${level.color}`}>
+                                    Base de connaissances — {level.label}
+                                </span>
+                                <span className={`text-xs font-bold ${level.color}`}>{s}/100</span>
+                            </div>
+                            <p className={`text-xs ${level.color} opacity-80`}>{level.message}</p>
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                        <div className="w-32">
+                            <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                                <span>Score KB</span><span>{s}%</span>
+                            </div>
+                            <div className="h-2 w-full rounded-full bg-white/60 border border-white/40 overflow-hidden">
+                                <div className={`h-full rounded-full transition-all duration-500 ${level.bar}`} style={{ width: `${s}%` }} />
+                            </div>
+                        </div>
+                        {s < 75 && (
+                            <a href="/knowledge-base"
+                                className={`text-xs font-semibold px-3 py-1.5 rounded-lg border ${level.border} ${level.color} bg-white/70 hover:bg-white transition-colors whitespace-nowrap`}>
+                                Enrichir la KB →
+                            </a>
+                        )}
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
     )
 }
 

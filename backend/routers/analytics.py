@@ -212,6 +212,14 @@ def get_ai_metrics(days: int = 30, current_user: str = Depends(get_current_user)
     ).scalar() or 0
     prev_no_context_rate = round(prev_no_context / prev_total * 100, 1) if prev_total > 0 else None
 
+    # KB Health Score (0-100) — reflects how well the knowledge base feeds the model
+    if total_calls >= 5:
+        context_quality = 100 - no_context_rate          # 70% weight: main KB indicator
+        reliability     = max(0.0, 100 - error_rate * 3) # 30% weight: errors above 33% = 0
+        kb_score = round(context_quality * 0.7 + reliability * 0.3)
+    else:
+        kb_score = None
+
     alerts = []
     if avg_latency_ms:
         if avg_latency_ms > 10000:
@@ -238,4 +246,5 @@ def get_ai_metrics(days: int = 30, current_user: str = Depends(get_current_user)
         "prev_latency_ms": prev_latency_ms,
         "prev_error_rate": prev_error_rate,
         "prev_no_context_rate": prev_no_context_rate,
+        "kb_score": kb_score,
     }
