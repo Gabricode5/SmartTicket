@@ -113,6 +113,18 @@ npm run dev
 
 Le dépôt contient un fichier [`render.yaml`](./render.yaml) pour le déploiement des services.
 
+### Compte administrateur par défaut
+
+Un compte admin est créé automatiquement au premier démarrage du backend. Les identifiants par défaut (si les variables d'environnement ne sont pas définies) sont :
+
+| Variable | Valeur par défaut |
+|---|---|
+| `ADMIN_EMAIL` | `admin@smartticket.app` |
+| `ADMIN_USERNAME` | `admin` |
+| `ADMIN_PASSWORD` | `ChangeMe123!` |
+
+Ces valeurs sont surchargées par les variables d'environnement `ADMIN_EMAIL`, `ADMIN_USERNAME` et `ADMIN_PASSWORD`. Sur Render, ces variables sont marquées `sync: false` et doivent être renseignées manuellement dans le dashboard.
+
 ## Notes
 
 - Le frontend écoute sur le port `3005` en local.

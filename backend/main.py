@@ -144,6 +144,10 @@ def run_migrations():
                     existing_admin.password_hash = _pwd.hash(admin_password)
                     existing_admin.id_role = admin_role.id
                     existing_admin.deleted_at = None
+                    if not existing_admin.prenom:
+                        existing_admin.prenom = "Admin"
+                    if not existing_admin.nom:
+                        existing_admin.nom = "Admin"
                     session.commit()
                     _log.info("Compte admin synchronisé : %s", admin_email)
                 else:
@@ -152,6 +156,8 @@ def run_migrations():
                         email=admin_email,
                         password_hash=_pwd.hash(admin_password),
                         id_role=admin_role.id,
+                        prenom="Admin",
+                        nom="Admin",
                     ))
                     session.commit()
                     _log.info("Compte admin créé : %s", admin_email)
