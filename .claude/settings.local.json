@@ -16,7 +16,9 @@
       "Bash(grep -E \"\\\\.\\(ts|tsx|js\\)$\")",
       "WebFetch(domain:status.mistral.ai)",
       "Bash(npx eslint *)",
-      "Bash(./node_modules/.bin/next lint *)"
+      "Bash(./node_modules/.bin/next lint *)",
+      "Bash(python -c ' *)",
+      "Bash(python3 -c ' *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\gguery\\Documents\\perso\\PFE_ECE\\docs"

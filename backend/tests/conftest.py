@@ -78,6 +78,16 @@ def client():
 
 
 @pytest.fixture
+def db_session():
+    """Session DB directe pour insérer des données de test (ex: documents KB)."""
+    session = TestingSessionLocal()
+    try:
+        yield session
+    finally:
+        session.close()
+
+
+@pytest.fixture
 def registered_user(client):
     """Creates a standard user and returns their credentials."""
     payload = {
