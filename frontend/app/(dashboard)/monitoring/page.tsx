@@ -162,7 +162,7 @@ export default function MonitoringPage() {
                 )}
 
                 {/* KB Score */}
-                {!isLoading && metrics && <KbScoreCard score={metrics.kb_score} noContextRate={metrics.no_context_rate} totalCalls={metrics.total_calls} />}
+                {!isLoading && metrics && <KbScoreCard score={metrics.kb_score} totalCalls={metrics.total_calls} />}
 
                 {/* Status Mistral */}
                 <MistralStatusCard status={mistralStatus} loading={statusLoading} onRefresh={fetchMistralStatus} />
@@ -299,7 +299,7 @@ function getKbLevel(score: number): KbLevel {
     return KB_LEVELS[KB_LEVELS.length - 1][1]
 }
 
-function KbScoreCard({ score, noContextRate, totalCalls }: { score: number | null; noContextRate: number; totalCalls: number }) {
+function KbScoreCard({ score, totalCalls }: { score: number | null; totalCalls: number }) {
     if (totalCalls < 5) {
         return (
             <Card className="border-slate-200">
