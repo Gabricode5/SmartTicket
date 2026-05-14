@@ -1,12 +1,21 @@
 "use client"
 
+import { usePathname } from "next/navigation"
 import { AppSidebar } from "@/components/app-sidebar"
+
+const PUBLIC_PATHS = ["/", "/login", "/sign-up", "/forgot-password"]
 
 export default function DashboardLayout({
     children,
 }: {
     children: React.ReactNode
 }) {
+    const pathname = usePathname()
+
+    if (PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + "/"))) {
+        return <>{children}</>
+    }
+
     return (
         <div className="flex h-screen bg-background">
             <AppSidebar />
