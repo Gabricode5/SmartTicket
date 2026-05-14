@@ -96,9 +96,9 @@ export function AppSidebar() {
     }
 
     useEffect(() => {
-        fetchConversations()
+        if (apiUser) fetchConversations()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [apiUser?.id])
 
     const handleCreateConversation = async () => {
         if (!apiUser) {
