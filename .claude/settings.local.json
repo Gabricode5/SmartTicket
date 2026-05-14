@@ -13,7 +13,8 @@
       "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\gguery\\\\Documents\\\\perso\\\\SmartTicket\" -Recurse -Directory)",
       "Bash(Select-Object -First 50 FullName)",
       "Bash(git push *)",
-      "Bash(grep -E \"\\\\.\\(ts|tsx|js\\)$\")"
+      "Bash(grep -E \"\\\\.\\(ts|tsx|js\\)$\")",
+      "WebFetch(domain:status.mistral.ai)"
     ],
     "additionalDirectories": [
       "c:\\Users\\gguery\\Documents\\perso\\PFE_ECE\\docs"

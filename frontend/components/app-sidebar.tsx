@@ -11,6 +11,7 @@ import {
     LayoutDashboard,
     BookOpen,
     BarChart2,
+    Activity,
     Settings,
     LogOut,
     Plus,
@@ -320,6 +321,16 @@ export function AppSidebar() {
                                 <Link href="/analytics">
                                     <BarChart2 className="mr-3 h-4 w-4" />
                                     Analytique
+                                </Link>
+                            </Button>
+                            <Button
+                                variant={isActive("/monitoring") ? "secondary" : "ghost"}
+                                asChild
+                                className={cn("w-full justify-start", isActive("/monitoring") && "bg-sidebar-accent")}
+                            >
+                                <Link href="/monitoring">
+                                    <Activity className="mr-3 h-4 w-4" />
+                                    Monitoring IA
                                 </Link>
                             </Button>
                         </div>
