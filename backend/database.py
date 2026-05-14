@@ -10,7 +10,7 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:Password1234@postgres/ticketdb")
 
 # 2. Création du moteur de connexion
-engine = create_engine(DATABASE_URL)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)
 
 # 3. Création de la fabrique de sessions (pour lire/écrire)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
