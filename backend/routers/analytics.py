@@ -166,6 +166,52 @@ def get_ai_metrics(days: int = 30, current_user: str = Depends(get_current_user)
     ).group_by(models.AICallLog.model_name).order_by(sqlfunc.count(models.AICallLog.id).desc()).first()
     model_name = model_row.model_name if model_row else None
 
+    # KB enrichment events during this period (one entry per day, deduplicated)
+    kb_rows = db.query(
+        sqlfunc.date_trunc("day", sqlfunc.min(models.KnowledgeBase.date_creation)).label("day"),
+        sqlfunc.count(models.KnowledgeBase.id).label("chunks"),
+    ).filter(
+        models.KnowledgeBase.date_creation >= from_date,
+    ).group_by(sqlfunc.date_trunc("day", models.KnowledgeBase.date_creation)).order_by("day").all()
+
+    kb_events = [
+        {"date": f"{r.day.day} {r.day.strftime('%b')}", "chunks": r.chunks}
+        for r in kb_rows if r.day
+    ]
+
+    # Previous period comparison (same duration, immediately before)
+    prev_from = from_date - timedelta(days=days)
+
+    prev_total = db.query(sqlfunc.count(models.AICallLog.id)).filter(
+        models.AICallLog.date_creation >= prev_from,
+        models.AICallLog.date_creation < from_date,
+        models.AICallLog.call_type == "stream",
+    ).scalar() or 0
+
+    prev_latency = db.query(sqlfunc.avg(models.AICallLog.latency_ms)).filter(
+        models.AICallLog.date_creation >= prev_from,
+        models.AICallLog.date_creation < from_date,
+        models.AICallLog.call_type == "stream",
+        models.AICallLog.success == True,
+    ).scalar()
+    prev_latency_ms = round(float(prev_latency)) if prev_latency else None
+
+    prev_failed = db.query(sqlfunc.count(models.AICallLog.id)).filter(
+        models.AICallLog.date_creation >= prev_from,
+        models.AICallLog.date_creation < from_date,
+        models.AICallLog.call_type == "stream",
+        models.AICallLog.success == False,
+    ).scalar() or 0
+    prev_error_rate = round(prev_failed / prev_total * 100, 1) if prev_total > 0 else None
+
+    prev_no_context = db.query(sqlfunc.count(models.AICallLog.id)).filter(
+        models.AICallLog.date_creation >= prev_from,
+        models.AICallLog.date_creation < from_date,
+        models.AICallLog.call_type == "stream",
+        models.AICallLog.rag_chunks_found == 0,
+    ).scalar() or 0
+    prev_no_context_rate = round(prev_no_context / prev_total * 100, 1) if prev_total > 0 else None
+
     alerts = []
     if avg_latency_ms:
         if avg_latency_ms > 10000:
@@ -188,4 +234,8 @@ def get_ai_metrics(days: int = 30, current_user: str = Depends(get_current_user)
         "latency_trend": latency_trend,
         "alerts": alerts,
         "model_name": model_name,
+        "kb_events": kb_events,
+        "prev_latency_ms": prev_latency_ms,
+        "prev_error_rate": prev_error_rate,
+        "prev_no_context_rate": prev_no_context_rate,
     }

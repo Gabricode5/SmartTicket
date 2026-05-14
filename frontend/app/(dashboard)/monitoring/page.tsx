@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
-    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine,
 } from "recharts"
 import {
     TrendingUp, TrendingDown, Clock, ShieldAlert, Database, Activity,
@@ -15,6 +15,7 @@ import {
 
 type LatencyEntry = { name: string; latence_ms: number; appels: number }
 type AlertEntry = { level: "warning" | "critical"; metric: string; message: string; value: number; threshold: number }
+type KbEvent = { date: string; chunks: number }
 
 type ComponentStatus = {
     name: string
@@ -37,6 +38,10 @@ type AiMetrics = {
     latency_trend: LatencyEntry[]
     alerts: AlertEntry[]
     model_name: string | null
+    kb_events: KbEvent[]
+    prev_latency_ms: number | null
+    prev_error_rate: number | null
+    prev_no_context_rate: number | null
 }
 
 const PERIODS = [
@@ -168,21 +173,35 @@ export default function MonitoringPage() {
                         value={isLoading ? "…" : fmtLatency(metrics?.avg_latency_ms ?? null)}
                         trend={metrics?.total_calls ? `sur ${metrics.total_calls} appels` : "aucune donnée"}
                         trendUp={metrics?.avg_latency_ms == null || metrics.avg_latency_ms < 5000}
-                        icon={<Clock className="h-4 w-4 text-blue-500" />} />
+                        icon={<Clock className="h-4 w-4 text-blue-500" />}
+                        prev={metrics?.prev_latency_ms ?? null}
+                        curr={metrics?.avg_latency_ms ?? null}
+                        lowerIsBetter />
                     <KpiCard title="Taux d'erreur"
                         value={isLoading ? "…" : `${metrics?.error_rate ?? 0}%`}
                         trend={metrics?.total_calls ? `${metrics.total_calls} appels analysés` : "aucun appel"}
                         trendUp={(metrics?.error_rate ?? 0) <= 5}
-                        icon={<ShieldAlert className="h-4 w-4 text-red-400" />} />
-                    <KpiCard title="Chunks RAG moyens"
-                        value={isLoading ? "…" : `${metrics?.avg_rag_chunks ?? 0}`}
-                        trend="extraits de la base de connaissances"
-                        trendUp={(metrics?.avg_rag_chunks ?? 0) > 0}
-                        icon={<Database className="h-4 w-4 text-emerald-500" />} />
+                        icon={<ShieldAlert className="h-4 w-4 text-red-400" />}
+                        prev={metrics?.prev_error_rate ?? null}
+                        curr={metrics?.error_rate ?? null}
+                        lowerIsBetter />
+                    <KpiCard title="Sans contexte RAG"
+                        value={isLoading ? "…" : `${metrics?.no_context_rate ?? 0}%`}
+                        trend="requêtes sans résultat KB"
+                        trendUp={(metrics?.no_context_rate ?? 0) <= 30}
+                        icon={<Database className="h-4 w-4 text-emerald-500" />}
+                        prev={metrics?.prev_no_context_rate ?? null}
+                        curr={metrics?.no_context_rate ?? null}
+                        lowerIsBetter />
                 </div>
 
-                {/* Recommandations */}
-                {!isLoading && metrics && <RecommendationsCard metrics={metrics} />}
+                {/* Recommandations + Historique */}
+                {!isLoading && metrics && (
+                    <div className="grid gap-6 lg:grid-cols-2">
+                        <RecommendationsCard metrics={metrics} />
+                        <ImprovementHistoryCard metrics={metrics} days={days} />
+                    </div>
+                )}
 
                 {/* Graphique latence + carte sans contexte */}
                 <div className="grid gap-6 lg:grid-cols-3">
@@ -212,6 +231,10 @@ export default function MonitoringPage() {
                                             />
                                             <Legend wrapperStyle={{ paddingTop: "12px" }} iconType="circle" />
                                             <Line type="monotone" dataKey="latence_ms" name="Latence (ms)" stroke="#4f46e5" strokeWidth={2} dot={{ r: 3, fill: "#4f46e5" }} activeDot={{ r: 5 }} />
+                                            {metrics?.kb_events?.map((e, i) => (
+                                                <ReferenceLine key={i} x={e.date} stroke="#10b981" strokeDasharray="4 2"
+                                                    label={{ value: "KB+", position: "insideTopRight", fontSize: 10, fill: "#10b981" }} />
+                                            ))}
                                         </LineChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -416,7 +439,22 @@ function RecommendationsCard({ metrics }: { metrics: AiMetrics }) {
     )
 }
 
-function KpiCard({ title, value, trend, trendUp, icon }: { title: string; value: string; trend: string; trendUp: boolean; icon: React.ReactNode }) {
+function DeltaBadge({ curr, prev, lowerIsBetter }: { curr: number | null; prev: number | null; lowerIsBetter?: boolean }) {
+    if (curr === null || prev === null || prev === 0) return null
+    const pct = Math.round(((curr - prev) / prev) * 100)
+    if (pct === 0) return null
+    const improved = lowerIsBetter ? pct < 0 : pct > 0
+    return (
+        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ml-2 ${improved ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
+            {pct > 0 ? "+" : ""}{pct}% vs préc.
+        </span>
+    )
+}
+
+function KpiCard({ title, value, trend, trendUp, icon, curr, prev, lowerIsBetter }: {
+    title: string; value: string; trend: string; trendUp: boolean; icon: React.ReactNode
+    curr?: number | null; prev?: number | null; lowerIsBetter?: boolean
+}) {
     return (
         <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -424,11 +462,86 @@ function KpiCard({ title, value, trend, trendUp, icon }: { title: string; value:
                 {icon}
             </CardHeader>
             <CardContent>
-                <div className="text-2xl font-bold">{value}</div>
+                <div className="flex items-baseline">
+                    <span className="text-2xl font-bold">{value}</span>
+                    <DeltaBadge curr={curr ?? null} prev={prev ?? null} lowerIsBetter={lowerIsBetter} />
+                </div>
                 <p className="text-xs text-muted-foreground flex items-center mt-1">
                     {trendUp ? <TrendingUp className="h-3 w-3 text-green-500 mr-1" /> : <TrendingDown className="h-3 w-3 text-red-500 mr-1" />}
                     <span className="ml-1">{trend}</span>
                 </p>
+            </CardContent>
+        </Card>
+    )
+}
+
+function ImprovementHistoryCard({ metrics, days }: { metrics: AiMetrics; days: number }) {
+    const hasKbEvents = metrics.kb_events?.length > 0
+    const hasPrev = metrics.prev_latency_ms !== null || metrics.prev_error_rate !== null || metrics.prev_no_context_rate !== null
+
+    const deltas: { label: string; prev: number | null; curr: number | null; unit: string; lowerIsBetter: boolean }[] = [
+        { label: "Latence", prev: metrics.prev_latency_ms, curr: metrics.avg_latency_ms, unit: "ms", lowerIsBetter: true },
+        { label: "Taux d'erreur", prev: metrics.prev_error_rate, curr: metrics.error_rate, unit: "%", lowerIsBetter: true },
+        { label: "Sans contexte", prev: metrics.prev_no_context_rate, curr: metrics.no_context_rate, unit: "%", lowerIsBetter: true },
+    ]
+
+    return (
+        <Card>
+            <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-indigo-500" />
+                    <CardTitle className="text-base">Historique des améliorations</CardTitle>
+                </div>
+                <CardDescription>Boucle itérative : enrichissements KB et impact sur les métriques.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                {/* KB events timeline */}
+                <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Enrichissements KB sur {days} jours</p>
+                    {hasKbEvents ? (
+                        <div className="space-y-1.5">
+                            {metrics.kb_events.map((e, i) => (
+                                <div key={i} className="flex items-center gap-2 text-sm">
+                                    <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
+                                    <span className="font-mono text-xs text-muted-foreground w-12">{e.date}</span>
+                                    <span className="text-xs">{e.chunks} chunks ajoutés à la base de connaissances</span>
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-xs text-muted-foreground italic">Aucun enrichissement sur cette période.</p>
+                    )}
+                </div>
+
+                {/* Period comparison */}
+                <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Impact mesuré (vs {days} jours précédents)</p>
+                    {hasPrev ? (
+                        <div className="space-y-2">
+                            {deltas.filter(d => d.prev !== null && d.curr !== null).map((d, i) => {
+                                const pct = d.prev && d.prev > 0 ? Math.round(((d.curr! - d.prev) / d.prev) * 100) : null
+                                const improved = pct !== null && (d.lowerIsBetter ? pct < 0 : pct > 0)
+                                return (
+                                    <div key={i} className="flex items-center justify-between text-xs">
+                                        <span className="text-muted-foreground">{d.label}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-muted-foreground">{d.prev}{d.unit}</span>
+                                            <span className="text-muted-foreground">→</span>
+                                            <span className="font-medium">{d.curr}{d.unit}</span>
+                                            {pct !== null && pct !== 0 && (
+                                                <span className={`font-semibold ${improved ? "text-emerald-600" : "text-red-600"}`}>
+                                                    ({pct > 0 ? "+" : ""}{pct}%)
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    ) : (
+                        <p className="text-xs text-muted-foreground italic">Pas assez de données sur la période précédente.</p>
+                    )}
+                </div>
             </CardContent>
         </Card>
     )
