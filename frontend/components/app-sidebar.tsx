@@ -144,7 +144,7 @@ export function AppSidebar() {
             setConversations((prev) => prev.filter((chat) => chat.id !== conversationId))
 
             if (pathname === `/ai-assistant/${conversationId}`) {
-                window.location.href = "/"
+                window.location.href = "/dashboard"
             }
         } catch (error) {
             console.error("Erreur réseau :", error)
@@ -152,7 +152,7 @@ export function AppSidebar() {
     }
 
     const isActive = (path: string) => {
-        if (path === "/") return pathname === "/"
+        if (path === "/dashboard") return pathname === "/dashboard"
         return pathname?.startsWith(path)
     }
 
@@ -193,7 +193,7 @@ export function AppSidebar() {
                             asChild
                             className={cn("w-full justify-start", isActive("/") && "bg-sidebar-accent")}
                         >
-                            <Link href="/">
+                            <Link href="/dashboard">
                                 <LayoutDashboard className="mr-3 h-4 w-4" />
                                 Tableau de bord
                             </Link>

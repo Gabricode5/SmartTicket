@@ -46,7 +46,7 @@ function LoginForm() {
             localStorage.setItem("user_email", email as string)
 
             // 2. Redirection vers le dashboard ou l'accueil
-            router.push("/")
+            router.push("/dashboard")
             router.refresh() // Pour mettre à jour les composants layout
         } else {
             if (typeof data.detail === "string") {

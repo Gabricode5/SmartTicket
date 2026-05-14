@@ -103,7 +103,7 @@ export default function AiAssistantPage() {
 
     useEffect(() => {
         if (currentUser && (currentUser.role === "sav" || currentUser.role === "admin")) {
-            router.replace("/")
+            router.replace("/dashboard")
         }
     }, [currentUser, router])
 

@@ -53,7 +53,7 @@ export default function AnalyticsPage() {
     useEffect(() => {
         fetch("/api/me")
             .then(r => { if (r.status === 401) { router.replace("/login"); return null } return r.ok ? r.json() : null })
-            .then(me => { if (me && me.role !== "admin" && me.role !== "sav") router.replace("/") })
+            .then(me => { if (me && me.role !== "admin" && me.role !== "sav") router.replace("/dashboard") })
             .catch(() => {})
     }, [router])
 
