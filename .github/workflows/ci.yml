@@ -134,3 +134,38 @@ jobs:
           echo "| ESLint | ✅ |" >> $GITHUB_STEP_SUMMARY
           echo "| Tests Jest | ✅ |" >> $GITHUB_STEP_SUMMARY
           echo "| Build Next.js | ✅ |" >> $GITHUB_STEP_SUMMARY
+
+  # ─────────────────────────────────────────────
+  # JOB 3 — Déploiement (CD) sur Render
+  # Déclenché UNIQUEMENT si les deux jobs de tests passent
+  # et UNIQUEMENT sur un push sur main (pas sur les PRs)
+  # ─────────────────────────────────────────────
+  deploy:
+    name: "Déploiement → Render"
+    runs-on: ubuntu-latest
+    needs: [backend-tests, frontend-tests]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+
+    steps:
+      - name: Déployer le backend
+        run: |
+          curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.RENDER_DEPLOY_HOOK_BACKEND }}" | \
+            grep -q "^2" && echo "Backend deploy déclenché ✅" || echo "Backend deploy échoué ❌"
+
+      - name: Déployer le frontend
+        run: |
+          curl -s -o /dev/null -w "%{http_code}" \
+            -X POST "${{ secrets.RENDER_DEPLOY_HOOK_FRONTEND }}" | \
+            grep -q "^2" && echo "Frontend deploy déclenché ✅" || echo "Frontend deploy échoué ❌"
+
+      - name: Résumé déploiement → GitHub
+        run: |
+          echo "## Déploiement Render" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Déploiement déclenché après validation complète de la CI." >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Service | URL |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| Backend | https://smartticket-backend.onrender.com |" >> $GITHUB_STEP_SUMMARY
+          echo "| Frontend | https://smartticket-frontend.onrender.com |" >> $GITHUB_STEP_SUMMARY
