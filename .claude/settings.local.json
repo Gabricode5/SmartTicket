@@ -18,7 +18,8 @@
       "Bash(npx eslint *)",
       "Bash(./node_modules/.bin/next lint *)",
       "Bash(python -c ' *)",
-      "Bash(python3 -c ' *)"
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(json.dumps\\({k:d[k] for k in ['scripts','jest','devDependencies'] if k in d}, indent=2\\)\\)\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\gguery\\Documents\\perso\\PFE_ECE\\docs"
