@@ -19,7 +19,7 @@ class UserCreate(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str
-    email: EmailStr
+    email: str
     prenom: Optional[str]
     nom: Optional[str]
     role: str
@@ -31,7 +31,7 @@ class UserResponse(BaseModel):
 class UserListResponse(BaseModel):
     id: int
     username: str
-    email: EmailStr
+    email: str
     prenom: Optional[str] = None
     nom: Optional[str] = None
     role: str
@@ -138,7 +138,7 @@ class PdfIngestResponse(BaseModel):
 class MeResponse(BaseModel):
     id: int
     username: str
-    email: EmailStr
+    email: str
     prenom: Optional[str] = None
     nom: Optional[str] = None
     role: str
