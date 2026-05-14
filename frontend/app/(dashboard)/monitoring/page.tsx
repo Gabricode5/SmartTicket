@@ -187,7 +187,7 @@ export default function MonitoringPage() {
                                             <YAxis stroke="#64748B" fontSize={12} tickLine={false} axisLine={false} tickFormatter={v => `${v}ms`} />
                                             <Tooltip
                                                 contentStyle={{ backgroundColor: "#fff", borderRadius: "8px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
-                                                formatter={(value: number) => [`${value}ms`, "Latence"]}
+                                                formatter={(value: number | undefined) => [value != null ? `${value}ms` : "–", "Latence"]}
                                             />
                                             <Legend wrapperStyle={{ paddingTop: "12px" }} iconType="circle" />
                                             <Line type="monotone" dataKey="latence_ms" name="Latence (ms)" stroke="#4f46e5" strokeWidth={2} dot={{ r: 3, fill: "#4f46e5" }} activeDot={{ r: 5 }} />
