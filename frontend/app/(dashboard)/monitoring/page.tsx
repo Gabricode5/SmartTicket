@@ -66,6 +66,12 @@ export default function MonitoringPage() {
             .finally(() => setStatusLoading(false))
     }
 
+    const handlePeriodChange = (d: number) => {
+        if (d === days) return
+        setIsLoading(true)
+        setDays(d)
+    }
+
     useEffect(() => {
         fetch("/api/me")
             .then(r => { if (r.status === 401) { router.replace("/login"); return null } return r.ok ? r.json() : null })
@@ -73,10 +79,15 @@ export default function MonitoringPage() {
             .catch(() => {})
     }, [router])
 
-    useEffect(() => { fetchMistralStatus() }, [])
+    useEffect(() => {
+        fetch("/api/mistral-status")
+            .then(r => r.ok ? r.json() : null)
+            .then(data => { if (data) setMistralStatus(data) })
+            .catch(() => {})
+            .finally(() => setStatusLoading(false))
+    }, [])
 
     useEffect(() => {
-        setIsLoading(true)
         fetch(`/api/analytics/ai-metrics?days=${days}`)
             .then(r => r.ok ? r.json() : null)
             .then(data => { if (data) setMetrics(data) })
@@ -100,7 +111,7 @@ export default function MonitoringPage() {
                 </div>
                 <div className="flex bg-muted/50 p-1 rounded-lg">
                     {PERIODS.map(({ label, days: d }) => (
-                        <Button key={d} onClick={() => { if (d !== days) { setIsLoading(true); setDays(d) } }}
+                        <Button key={d} onClick={() => handlePeriodChange(d)}
                             variant={days === d ? "secondary" : "ghost"} size="sm"
                             className={`rounded-md ${days === d ? "shadow-sm bg-background text-foreground" : "hover:bg-background text-muted-foreground hover:text-foreground"}`}>
                             {label}

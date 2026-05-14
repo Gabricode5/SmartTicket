@@ -14,7 +14,9 @@
       "Bash(Select-Object -First 50 FullName)",
       "Bash(git push *)",
       "Bash(grep -E \"\\\\.\\(ts|tsx|js\\)$\")",
-      "WebFetch(domain:status.mistral.ai)"
+      "WebFetch(domain:status.mistral.ai)",
+      "Bash(npx eslint *)",
+      "Bash(./node_modules/.bin/next lint *)"
     ],
     "additionalDirectories": [
       "c:\\Users\\gguery\\Documents\\perso\\PFE_ECE\\docs"

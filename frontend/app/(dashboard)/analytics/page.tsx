@@ -41,7 +41,14 @@ export default function AnalyticsPage() {
     const router = useRouter()
     const [days, setDays] = useState(30)
     const [data, setData] = useState<AnalyticsData | null>(null)
-    const [isLoading, setIsLoading] = useState(true)
+
+    const isLoading = data === null
+
+    const handlePeriodChange = (d: number) => {
+        if (d === days) return
+        setData(null)
+        setDays(d)
+    }
 
     useEffect(() => {
         fetch("/api/me")
@@ -51,12 +58,10 @@ export default function AnalyticsPage() {
     }, [router])
 
     useEffect(() => {
-        setIsLoading(true)
         fetch(`/api/analytics/stats?days=${days}`)
             .then(r => r.ok ? r.json() : null)
-            .then(stats => { if (stats) setData(stats) })
-            .catch(() => {})
-            .finally(() => setIsLoading(false))
+            .then(stats => setData(stats ?? null))
+            .catch(() => setData(null))
     }, [days])
 
     const chartData: DayEntry[] = data?.daily_messages?.length ? data.daily_messages : [{ name: "–", IA: 0, Humain: 0 }]
@@ -71,7 +76,7 @@ export default function AnalyticsPage() {
                 </div>
                 <div className="flex bg-muted/50 p-1 rounded-lg">
                     {PERIODS.map(({ label, days: d }) => (
-                        <Button key={d} onClick={() => { if (d !== days) { setIsLoading(true); setDays(d) } }}
+                        <Button key={d} onClick={() => handlePeriodChange(d)}
                             variant={days === d ? "secondary" : "ghost"} size="sm"
                             className={`rounded-md ${days === d ? "shadow-sm bg-background text-foreground" : "hover:bg-background text-muted-foreground hover:text-foreground"}`}>
                             {label}
