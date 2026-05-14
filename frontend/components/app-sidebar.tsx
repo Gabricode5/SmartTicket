@@ -259,7 +259,7 @@ export function AppSidebar() {
                                         className={cn(
                                             "group flex items-center w-full rounded-md px-3 h-9 text-sm",
                                             pathname === `/ai-assistant/${chat.id}`
-                                                ? "bg-sidebar-accent"
+                                                ? "bg-primary/10 text-primary font-medium"
                                                 : "hover:bg-sidebar-accent/60"
                                         )}
                                     >
