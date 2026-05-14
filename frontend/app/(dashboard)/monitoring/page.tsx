@@ -10,6 +10,7 @@ import {
 import {
     TrendingUp, TrendingDown, Clock, ShieldAlert, Database, Activity,
     AlertTriangle, AlertCircle, CheckCircle2, ExternalLink, RefreshCw,
+    Lightbulb, BookOpen, Wrench, Zap,
 } from "lucide-react"
 
 type LatencyEntry = { name: string; latence_ms: number; appels: number }
@@ -35,6 +36,7 @@ type AiMetrics = {
     no_context_rate: number
     latency_trend: LatencyEntry[]
     alerts: AlertEntry[]
+    model_name: string | null
 }
 
 const PERIODS = [
@@ -106,6 +108,11 @@ export default function MonitoringPage() {
                         <Activity className="h-5 w-5 text-indigo-500" />
                         <h1 className="text-2xl font-bold tracking-tight">Monitoring du modèle IA</h1>
                         <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">Mistral AI</span>
+                        {metrics?.model_name && (
+                            <span className="text-xs font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">
+                                {metrics.model_name}
+                            </span>
+                        )}
                     </div>
                     <p className="text-muted-foreground">Latence, taux d&apos;erreur et qualité RAG du modèle en production.</p>
                 </div>
@@ -173,6 +180,9 @@ export default function MonitoringPage() {
                         trendUp={(metrics?.avg_rag_chunks ?? 0) > 0}
                         icon={<Database className="h-4 w-4 text-emerald-500" />} />
                 </div>
+
+                {/* Recommandations */}
+                {!isLoading && metrics && <RecommendationsCard metrics={metrics} />}
 
                 {/* Graphique latence + carte sans contexte */}
                 <div className="grid gap-6 lg:grid-cols-3">
@@ -318,6 +328,89 @@ function MistralStatusCard({ status, loading, onRefresh }: { status: MistralStat
                         <span>Impossible de récupérer le status. <a href="https://status.mistral.ai" target="_blank" rel="noopener noreferrer" className="underline">Voir directement →</a></span>
                     </div>
                 )}
+            </CardContent>
+        </Card>
+    )
+}
+
+type Reco = { icon: React.ReactNode; title: string; detail: string; action?: { label: string; href: string } }
+
+function buildRecommendations(m: AiMetrics): Reco[] {
+    const recos: Reco[] = []
+
+    if (m.no_context_rate > 30) {
+        recos.push({
+            icon: <BookOpen className="h-4 w-4 text-amber-500" />,
+            title: "Enrichir la base de connaissances",
+            detail: `${m.no_context_rate}% des questions n'obtiennent aucun contexte RAG. Ajouter des documents couvrant les sujets fréquents réduira les réponses génériques.`,
+            action: { label: "Gérer la base de connaissances →", href: "/knowledge-base" },
+        })
+    }
+
+    if (m.avg_latency_ms !== null && m.avg_latency_ms > 5000) {
+        recos.push({
+            icon: <Zap className="h-4 w-4 text-yellow-500" />,
+            title: "Latence élevée détectée",
+            detail: `Latence moyenne de ${m.avg_latency_ms}ms. Envisager de réduire le paramètre KB_MAX_CONTEXT_CHARS pour limiter la taille du prompt envoyé au modèle.`,
+        })
+    }
+
+    if (m.error_rate > 5) {
+        recos.push({
+            icon: <Wrench className="h-4 w-4 text-red-500" />,
+            title: "Vérifier la configuration de l'API Mistral",
+            detail: `Taux d'erreur de ${m.error_rate}%. Vérifier que la clé MISTRAL_API_KEY est valide et que les quotas de l'API ne sont pas atteints.`,
+        })
+    }
+
+    if (m.avg_rag_chunks < 1 && m.total_calls > 0) {
+        recos.push({
+            icon: <Database className="h-4 w-4 text-slate-500" />,
+            title: "Aucun chunk RAG récupéré en moyenne",
+            detail: "Le modèle répond sans contexte issu de la base de connaissances. Vérifier que les embeddings ont bien été générés lors de l'ingestion des documents.",
+            action: { label: "Gérer la base de connaissances →", href: "/knowledge-base" },
+        })
+    }
+
+    if (recos.length === 0) {
+        recos.push({
+            icon: <CheckCircle2 className="h-4 w-4 text-emerald-500" />,
+            title: "Modèle en bonne santé",
+            detail: "Toutes les métriques sont dans les seuils acceptables. Continuer à collecter du feedback utilisateur pour affiner la base de connaissances.",
+        })
+    }
+
+    return recos
+}
+
+function RecommendationsCard({ metrics }: { metrics: AiMetrics }) {
+    const recos = buildRecommendations(metrics)
+    return (
+        <Card>
+            <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                    <Lightbulb className="h-4 w-4 text-yellow-500" />
+                    <CardTitle className="text-base">Recommandations d&apos;amélioration</CardTitle>
+                </div>
+                <CardDescription>Actions concrètes basées sur les métriques actuelles pour améliorer le modèle de façon itérative.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="space-y-3">
+                    {recos.map((r, i) => (
+                        <div key={i} className="flex items-start gap-3 rounded-lg border px-4 py-3 bg-slate-50/50">
+                            <div className="mt-0.5 flex-shrink-0">{r.icon}</div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium">{r.title}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">{r.detail}</p>
+                                {r.action && (
+                                    <a href={r.action.href} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium mt-1 inline-block">
+                                        {r.action.label}
+                                    </a>
+                                )}
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </CardContent>
         </Card>
     )

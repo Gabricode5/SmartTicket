@@ -159,6 +159,13 @@ def get_ai_metrics(days: int = 30, current_user: str = Depends(get_current_user)
         for r in daily_rows if r.day and r.avg_ms
     ]
 
+    model_row = db.query(models.AICallLog.model_name, sqlfunc.count(models.AICallLog.id).label("cnt")).filter(
+        models.AICallLog.date_creation >= from_date,
+        models.AICallLog.call_type == "stream",
+        models.AICallLog.model_name.isnot(None),
+    ).group_by(models.AICallLog.model_name).order_by(sqlfunc.count(models.AICallLog.id).desc()).first()
+    model_name = model_row.model_name if model_row else None
+
     alerts = []
     if avg_latency_ms:
         if avg_latency_ms > 10000:
@@ -180,4 +187,5 @@ def get_ai_metrics(days: int = 30, current_user: str = Depends(get_current_user)
         "no_context_rate": no_context_rate,
         "latency_trend": latency_trend,
         "alerts": alerts,
+        "model_name": model_name,
     }
