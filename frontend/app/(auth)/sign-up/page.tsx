@@ -3,11 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Eye, EyeOff } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { ArrowLeft, Eye, EyeOff } from "lucide-react"
 
 type Strength = { score: number; label: string; color: string; textColor: string }
 
@@ -30,6 +26,7 @@ function getStrength(password: string): Strength {
 export default function SignUpPage() {
     const router = useRouter()
     const [error, setError] = useState("")
+    const [isLoading, setIsLoading] = useState(false)
     const [rgpdAccepted, setRgpdAccepted] = useState(false)
     const [password, setPassword] = useState("")
     const [confirmPassword, setConfirmPassword] = useState("")
@@ -44,29 +41,14 @@ export default function SignUpPage() {
         event.preventDefault()
         setError("")
 
-        if (!rgpdAccepted) {
-            setError("Vous devez accepter la politique de confidentialité pour créer un compte.")
-            return
-        }
-        if (password.length < 6) {
-            setError("Le mot de passe doit contenir au moins 6 caractères.")
-            return
-        }
-        if (password !== confirmPassword) {
-            setError("Les mots de passe ne correspondent pas.")
-            return
-        }
+        if (!rgpdAccepted) { setError("Vous devez accepter la politique de confidentialité."); return }
+        if (password.length < 6) { setError("Le mot de passe doit contenir au moins 6 caractères."); return }
+        if (password !== confirmPassword) { setError("Les mots de passe ne correspondent pas."); return }
 
+        setIsLoading(true)
         const formData = new FormData(event.currentTarget)
         const data = Object.fromEntries(formData)
-
-        const payload = {
-            username: data.username,
-            email: data.email,
-            password,
-            prenom: data.prenom,
-            nom: data.nom,
-        }
+        const payload = { username: data.username, email: data.email, password, prenom: data.prenom, nom: data.nom }
 
         try {
             const response = await fetch("/api/register", {
@@ -74,7 +56,6 @@ export default function SignUpPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             })
-
             if (response.ok) {
                 router.push("/login")
             } else {
@@ -83,140 +64,189 @@ export default function SignUpPage() {
             }
         } catch {
             setError("Impossible de contacter le serveur.")
+        } finally {
+            setIsLoading(false)
         }
     }
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle className="text-2xl">Créer un compte</CardTitle>
-                <CardDescription>
-                    Entrez vos informations pour créer votre compte.
-                </CardDescription>
-            </CardHeader>
-            <form onSubmit={handleSubmit}>
-                <CardContent className="space-y-4">
-                    {error && (
-                        <div className="p-3 text-sm font-medium text-destructive bg-destructive/10 border border-destructive/20 rounded-md">
-                            {error}
-                        </div>
-                    )}
-                    <div className="space-y-2">
-                        <Label htmlFor="username">Nom d&apos;utilisateur</Label>
-                        <Input id="username" name="username" placeholder="nom_d_utilisateur" required />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="email">Email</Label>
-                        <Input id="email" name="email" type="email" placeholder="email@exemple.com" required />
-                    </div>
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-white flex flex-col">
 
-                    {/* Mot de passe */}
-                    <div className="space-y-2">
-                        <Label htmlFor="password">Mot de passe</Label>
-                        <div className="relative">
-                            <Input
-                                id="password"
-                                name="password"
-                                type={showPassword ? "text" : "password"}
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                className="pr-10"
-                                required
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowPassword((v) => !v)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                                tabIndex={-1}
-                            >
-                                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                        </div>
-
-                        {/* Indicateur de robustesse */}
-                        {password && (
-                            <div className="space-y-1.5">
-                                <div className="flex gap-1">
-                                    {[1, 2, 3, 4, 5].map((i) => (
-                                        <div
-                                            key={i}
-                                            className={`h-1.5 flex-1 rounded-full transition-colors duration-300 ${
-                                                i <= strength.score ? strength.color : "bg-muted"
-                                            }`}
-                                        />
-                                    ))}
-                                </div>
-                                <p className={`text-xs font-medium ${strength.textColor}`}>
-                                    {strength.label}
-                                </p>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Confirmation mot de passe */}
-                    <div className="space-y-2">
-                        <Label htmlFor="confirmPassword">Confirmer le mot de passe</Label>
-                        <div className="relative">
-                            <Input
-                                id="confirmPassword"
-                                type={showConfirm ? "text" : "password"}
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                className={`pr-10 ${!passwordsMatch ? "border-destructive focus-visible:ring-destructive" : ""}`}
-                                required
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowConfirm((v) => !v)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                                tabIndex={-1}
-                            >
-                                {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                        </div>
-                        {!passwordsMatch && (
-                            <p className="text-xs text-destructive">Les mots de passe ne correspondent pas.</p>
-                        )}
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label htmlFor="prenom">Prénom</Label>
-                        <Input id="prenom" name="prenom" placeholder="Jean" required />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="name">Nom</Label>
-                        <Input id="name" name="nom" placeholder="Dupont" required />
-                    </div>
-                    <div className="flex items-start gap-3 pt-2">
-                        <input
-                            id="rgpd"
-                            type="checkbox"
-                            checked={rgpdAccepted}
-                            onChange={(e) => setRgpdAccepted(e.target.checked)}
-                            className="mt-0.5 h-4 w-4 cursor-pointer accent-primary"
-                        />
-                        <Label htmlFor="rgpd" className="text-sm font-normal leading-snug cursor-pointer">
-                            J&apos;accepte que mes données personnelles (nom, email) soient
-                            traitées afin de gérer mon compte, conformément au{" "}
-                            <a href="https://www.cnil.fr/fr/rgpd-de-quoi-parle-t-on" target="_blank" rel="noopener noreferrer" className="underline underline-offset-4 hover:text-primary">
-                                RGPD
-                            </a>
-                            . Elles ne seront pas transmises à des tiers.
-                        </Label>
-                    </div>
-                    <Button type="submit" className="w-full" disabled={!canSubmit}>
-                        S&apos;inscrire
-                    </Button>
-                </CardContent>
-            </form>
-            <CardFooter className="flex justify-center">
-                <div className="text-sm text-muted-foreground">
-                    Déjà un compte ?{" "}
-                    <Link href="/login" className="underline underline-offset-4 hover:text-primary">
-                        Se connecter
-                    </Link>
+            {/* Header */}
+            <header className="p-6 flex items-center justify-between">
+                <Link
+                    href="/"
+                    className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 transition-colors group"
+                >
+                    <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
+                    Retour à l&apos;accueil
+                </Link>
+                <div className="flex items-center gap-2 font-bold text-slate-800">
+                    <div className="h-7 w-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">S</div>
+                    <span>SmartTicket</span>
                 </div>
-            </CardFooter>
-        </Card>
+            </header>
+
+            {/* Form */}
+            <div className="flex-1 flex items-center justify-center px-4 py-8">
+                <div className="w-full max-w-md">
+                    <div className="bg-white rounded-2xl shadow-xl shadow-indigo-100/50 border border-slate-100 p-8">
+
+                        {/* Title */}
+                        <div className="text-center mb-7">
+                            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-600 mb-4">
+                                <span className="text-white text-xl font-bold">S</span>
+                            </div>
+                            <h1 className="text-2xl font-bold text-slate-900">Créer un compte</h1>
+                            <p className="text-slate-500 text-sm mt-1">Rejoignez SmartTicket gratuitement</p>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="space-y-4">
+
+                            {error && (
+                                <div className="flex items-center gap-2 p-3 text-sm text-red-700 bg-red-50 border border-red-100 rounded-xl">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
+                                    {error}
+                                </div>
+                            )}
+
+                            {/* Prénom + Nom */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label htmlFor="prenom" className="block text-sm font-medium text-slate-700">Prénom</label>
+                                    <input
+                                        id="prenom" name="prenom" placeholder="Jean" required
+                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label htmlFor="nom" className="block text-sm font-medium text-slate-700">Nom</label>
+                                    <input
+                                        id="nom" name="nom" placeholder="Dupont" required
+                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Username */}
+                            <div className="space-y-1.5">
+                                <label htmlFor="username" className="block text-sm font-medium text-slate-700">Nom d&apos;utilisateur</label>
+                                <input
+                                    id="username" name="username" placeholder="jean_dupont" required
+                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                />
+                            </div>
+
+                            {/* Email */}
+                            <div className="space-y-1.5">
+                                <label htmlFor="email" className="block text-sm font-medium text-slate-700">Adresse email</label>
+                                <input
+                                    id="email" name="email" type="email" placeholder="vous@exemple.com" required
+                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                />
+                            </div>
+
+                            {/* Mot de passe */}
+                            <div className="space-y-1.5">
+                                <label htmlFor="password" className="block text-sm font-medium text-slate-700">Mot de passe</label>
+                                <div className="relative">
+                                    <input
+                                        id="password" name="password"
+                                        type={showPassword ? "text" : "password"}
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                        required
+                                        className="w-full px-4 py-2.5 pr-11 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                    />
+                                    <button type="button" onClick={() => setShowPassword(v => !v)} tabIndex={-1}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+                                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </button>
+                                </div>
+                                {password && (
+                                    <div className="space-y-1 pt-1">
+                                        <div className="flex gap-1">
+                                            {[1, 2, 3, 4, 5].map((i) => (
+                                                <div key={i} className={`h-1 flex-1 rounded-full transition-colors duration-300 ${i <= strength.score ? strength.color : "bg-slate-100"}`} />
+                                            ))}
+                                        </div>
+                                        <p className={`text-xs font-medium ${strength.textColor}`}>{strength.label}</p>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Confirmation */}
+                            <div className="space-y-1.5">
+                                <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700">Confirmer le mot de passe</label>
+                                <div className="relative">
+                                    <input
+                                        id="confirmPassword"
+                                        type={showConfirm ? "text" : "password"}
+                                        value={confirmPassword}
+                                        onChange={(e) => setConfirmPassword(e.target.value)}
+                                        required
+                                        className={`w-full px-4 py-2.5 pr-11 rounded-xl border bg-slate-50 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:bg-white transition-all ${
+                                            !passwordsMatch
+                                                ? "border-red-300 focus:ring-red-500/30 focus:border-red-400"
+                                                : "border-slate-200 focus:ring-indigo-500/30 focus:border-indigo-400"
+                                        }`}
+                                    />
+                                    <button type="button" onClick={() => setShowConfirm(v => !v)} tabIndex={-1}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+                                        {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                    </button>
+                                </div>
+                                {!passwordsMatch && (
+                                    <p className="text-xs text-red-500">Les mots de passe ne correspondent pas.</p>
+                                )}
+                            </div>
+
+                            {/* RGPD */}
+                            <div className="flex items-start gap-3 pt-1">
+                                <input
+                                    id="rgpd" type="checkbox"
+                                    checked={rgpdAccepted}
+                                    onChange={(e) => setRgpdAccepted(e.target.checked)}
+                                    className="mt-0.5 h-4 w-4 cursor-pointer accent-indigo-600 rounded"
+                                />
+                                <label htmlFor="rgpd" className="text-xs text-slate-500 leading-relaxed cursor-pointer">
+                                    J&apos;accepte que mes données personnelles soient traitées pour gérer mon compte, conformément au{" "}
+                                    <a href="https://www.cnil.fr/fr/rgpd-de-quoi-parle-t-on" target="_blank" rel="noopener noreferrer"
+                                        className="text-indigo-600 hover:underline">RGPD</a>.
+                                    Elles ne seront pas transmises à des tiers.
+                                </label>
+                            </div>
+
+                            {/* Submit */}
+                            <button
+                                type="submit"
+                                disabled={!canSubmit || isLoading}
+                                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-2"
+                            >
+                                {isLoading ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                        <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        Création du compte…
+                                    </span>
+                                ) : "Créer mon compte"}
+                            </button>
+                        </form>
+
+                        <div className="flex items-center gap-3 my-5">
+                            <div className="flex-1 h-px bg-slate-100" />
+                            <span className="text-xs text-slate-400">ou</span>
+                            <div className="flex-1 h-px bg-slate-100" />
+                        </div>
+
+                        <p className="text-center text-sm text-slate-500">
+                            Déjà un compte ?{" "}
+                            <Link href="/login" className="text-indigo-600 font-medium hover:text-indigo-700 hover:underline">
+                                Se connecter
+                            </Link>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
     )
 }
