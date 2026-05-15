@@ -172,8 +172,7 @@ export function AppSidebar() {
             {/* Logo Area */}
             <div className="h-16 flex items-center px-6 border-b border-sidebar-border">
                 <div className="flex items-center gap-2 font-bold text-xl">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src="/SmartTicket_logo_32px.png" alt="SmartTicket" width={32} height={32} className="rounded-lg" />
+                    <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold">S</div>
                     <span>SmartTicket</span>
                 </div>
             </div>
