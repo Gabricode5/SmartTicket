@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
@@ -172,9 +173,7 @@ export function AppSidebar() {
             {/* Logo Area */}
             <div className="h-16 flex items-center px-6 border-b border-sidebar-border">
                 <div className="flex items-center gap-2 font-bold text-xl">
-                    <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground">
-                        A
-                    </div>
+                    <Image src="/logo.png" alt="SmartTicket" width={32} height={32} className="rounded-lg" />
                     <span>SmartTicket</span>
                 </div>
             </div>

@@ -3,7 +3,8 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Zap, Eye, EyeOff } from "lucide-react"
+import Image from "next/image"
+import { ArrowLeft, Eye, EyeOff } from "lucide-react"
 
 export default function LoginPage() {
     return <LoginForm />
@@ -67,9 +68,7 @@ function LoginForm() {
                     Retour à l&apos;accueil
                 </Link>
                 <div className="flex items-center gap-2 font-bold text-slate-800">
-                    <div className="h-7 w-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">
-                        A
-                    </div>
+                    <Image src="/logo.png" alt="SmartTicket" width={28} height={28} className="rounded-lg" />
                     <span>SmartTicket</span>
                 </div>
             </header>
@@ -83,8 +82,8 @@ function LoginForm() {
 
                         {/* Logo + Title */}
                         <div className="text-center mb-8">
-                            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-600 mb-4">
-                                <Zap className="h-6 w-6 text-white" />
+                            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-white border border-slate-100 shadow-sm mb-4">
+                                <Image src="/logo.png" alt="SmartTicket" width={36} height={36} className="rounded-xl" />
                             </div>
                             <h1 className="text-2xl font-bold text-slate-900">Bon retour !</h1>
                             <p className="text-slate-500 text-sm mt-1">
