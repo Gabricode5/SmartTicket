@@ -1,0 +1,30 @@
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [
+  ".git",
+  "__pycache__",
+  ".venv",
+  "venv",
+  "build",
+  "dist",
+]
+
+[tool.ruff.lint]
+select = [
+  "E",   # pycodestyle errors
+  "W",   # pycodestyle warnings
+  "F",   # pyflakes (imports inutilisés, variables non utilisées)
+  "I",   # isort (ordre des imports)
+]
+ignore = [
+  "E501",  # ligne trop longue — géré par line-length
+  "E402",  # import pas en haut du fichier — intentionnel (load_dotenv avant imports, env vars avant app)
+  "E712",  # comparaisons == True / == False — requis par les filtres SQLAlchemy ORM
+  "I001",  # ordre des imports — isort génère trop de bruit sur la base existante
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["F401", "F811"]
+"__init__.py" = ["F401"]
+"ingest_pdf.py" = ["E401", "F401"]  # fichier legacy, imports multiples tolérés

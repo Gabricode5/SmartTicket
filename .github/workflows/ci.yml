@@ -66,7 +66,12 @@ jobs:
           echo "## Résultats Backend" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           python3 -c "
-          import xml.etree.ElementTree as ET
+          import os, xml.etree.ElementTree as ET
+          if not os.path.exists('test-results.xml'):
+              print('| Tests | Réussis | Échecs | Durée |')
+              print('|-------|---------|--------|-------|')
+              print('| — | — | — | Rapport XML absent (étape précédente échouée) |')
+              exit(0)
           tree = ET.parse('test-results.xml')
           suite = tree.getroot()
           tests  = suite.get('tests', '?')
