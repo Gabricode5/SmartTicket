@@ -48,6 +48,10 @@ jobs:
       - name: Installer les dépendances
         run: pip install -r backend/requirements.txt -r backend/requirements-dev.txt
 
+      - name: Lint Python (ruff)
+        working-directory: backend
+        run: ruff check .
+
       - name: Lancer les tests
         working-directory: backend
         run: |

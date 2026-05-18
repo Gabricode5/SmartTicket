@@ -1,3 +1,4 @@
 pytest
 pytest-cov
 httpx
+ruff==0.6.9
