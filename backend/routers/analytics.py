@@ -7,7 +7,7 @@ import models
 from database import get_db
 from dependencies import get_current_user, get_user_by_email, is_admin_or_sav
 
-router = APIRouter(tags=["Analytics"])
+router = APIRouter(tags=[""])
 
 REASON_LABELS = {"technique": "Technique", "complexe": "Complexe", "sensible": "Sensible", "autre": "Autre"}
 REASON_COLORS = {"technique": "#0ea5e9", "complexe": "#f59e0b", "sensible": "#ef4444", "autre": "#8b5cf6"}
@@ -51,8 +51,8 @@ def _compute_alerts(ai_resolution_rate: float, satisfaction_score: float | None,
     return alerts
 
 
-@router.get("/analytics/stats", summary="Statistiques du service IA (taux de résolution, satisfaction, transferts)")
-def get_analytics_stats(days: int = 30, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+@router.get("//stats", summary="Statistiques du service IA (taux de résolution, satisfaction, transferts)")
+def get__stats(days: int = 30, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
     user = get_user_by_email(db, current_user)
     if not is_admin_or_sav(user):
         raise HTTPException(status_code=403, detail="Accès refusé")
@@ -103,7 +103,7 @@ def get_analytics_stats(days: int = 30, current_user: str = Depends(get_current_
             "sav_agents": sav_agents, "transfer_reasons": transfer_reasons, "alerts": alerts}
 
 
-@router.get("/analytics/ai-metrics", summary="Métriques de monitoring du modèle IA (latence, erreurs, RAG)")
+@router.get("//ai-metrics", summary="Métriques de monitoring du modèle IA (latence, erreurs, RAG)")
 def get_ai_metrics(days: int = 30, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
     user = get_user_by_email(db, current_user)
     if not is_admin_or_sav(user):

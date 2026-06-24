@@ -36,7 +36,7 @@ NON_HTML_EXTENSIONS = (
     ".ttf", ".otf", ".eot", ".css", ".js", ".json", ".xml"
 )
 MIN_TEXT_LENGTH = int(os.getenv("MIN_TEXT_LENGTH", "80"))
-MAX_WEIRD_CHAR_RATIO = float(os.getenv("MAX_WEIRD_CHAR_RATIO", "0.2"))
+CHUNK_QUALITY_THRESHOLD = float(os.getenv("CHUNK_QUALITY_THRESHOLD", "0.4"))
 BINARY_SIGNATURE_PATTERNS = (
     "Exif",
     "xmp.did",
@@ -54,27 +54,26 @@ def _sanitize_text(value: str) -> str:
     return sanitized.strip()
 
 
-def _looks_like_binary_text(value: str) -> bool:
+def chunk_quality_score(value: str) -> float:
+    """Retourne un score de qualité entre 0.0 (corrompu) et 1.0 (propre)."""
     if not value:
-        return True
+        return 0.0
 
-    weird_chars = sum(1 for char in value if ord(char) == 65533 or (not char.isprintable() and not char.isspace()))
-    if weird_chars / max(len(value), 1) > MAX_WEIRD_CHAR_RATIO:
-        return True
+    score = 1.0
 
-    replacement_ratio = value.count("�") / max(len(value), 1)
-    if replacement_ratio > 0.02:
-        return True
+    weird_chars = sum(1 for c in value if ord(c) == 65533 or (not c.isprintable() and not c.isspace()))
+    score -= (weird_chars / max(len(value), 1)) * 2
+
+    score -= (value.count("?") / max(len(value), 1)) * 5
 
     lowered = value.lower()
-    if any(signature.lower() in lowered for signature in BINARY_SIGNATURE_PATTERNS):
-        return True
+    if any(sig.lower() in lowered for sig in BINARY_SIGNATURE_PATTERNS):
+        score -= 0.5
 
-    long_token_match = re.search(r"[A-Za-z0-9+/=]{120,}", value)
-    if long_token_match:
-        return True
+    if re.search(r"[A-Za-z0-9+/=]{120,}", value):
+        score -= 0.5
 
-    return False
+    return max(0.0, min(1.0, score))
 
 
 def _is_allowed_url(page_url: str) -> bool:
@@ -248,8 +247,8 @@ def _load_documents_from_urls(urls: list[str], job_state: dict | None = None) ->
                 content = _sanitize_text(doc.page_content or "")
                 if len(content) < MIN_TEXT_LENGTH:
                     continue
-                if _looks_like_binary_text(content):
-                    print(f"Contenu ignoré (binaire ou corrompu): {page_url}")
+                if chunk_quality_score(content) < CHUNK_QUALITY_THRESHOLD:
+                    print(f"Contenu ignoré (score qualité trop bas): {page_url}")
                     continue
                 doc.page_content = content
                 docs.append(doc)
@@ -316,7 +315,7 @@ def ingest_to_postgres(url: str | None = None, category: str | None = None, job_
         for chunk in chunks
         if chunk.page_content
         and len(chunk.page_content) >= MIN_TEXT_LENGTH
-        and not _looks_like_binary_text(chunk.page_content)
+        and chunk_quality_score(chunk.page_content) >= CHUNK_QUALITY_THRESHOLD
     ]
     original_chunk_count = len(chunks)
     if MAX_KB_CHUNKS > 0:
@@ -391,7 +390,7 @@ def ingest_file_to_postgres(file_bytes: bytes, filename: str, category: str | No
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
     chunks = text_splitter.split_text(raw_text)
     chunks = [_sanitize_text(c) for c in chunks]
-    chunks = [c for c in chunks if len(c) >= MIN_TEXT_LENGTH and not _looks_like_binary_text(c)]
+    chunks = [c for c in chunks if len(c) >= MIN_TEXT_LENGTH and chunk_quality_score(c) >= CHUNK_QUALITY_THRESHOLD]
     if MAX_KB_CHUNKS > 0:
         chunks = chunks[:MAX_KB_CHUNKS]
     logger.info("chunks after filtering: %d", len(chunks))

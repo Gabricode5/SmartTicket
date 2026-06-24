@@ -1,6 +1,7 @@
 databases:
   - name: smartticket-postgres
     plan: free
+    region: frankfurt
     databaseName: ticketdb
     user: admin
 
@@ -9,6 +10,7 @@ services:
     name: smartticket-backend
     runtime: docker
     plan: free
+    region: frankfurt
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
     healthCheckPath: /
@@ -40,6 +42,7 @@ services:
     name: smartticket-frontend
     runtime: docker
     plan: free
+    region: frankfurt
     dockerfilePath: ./frontend/Dockerfile
     dockerContext: ./frontend
     envVars:
