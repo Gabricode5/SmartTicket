@@ -1,4 +1,4 @@
-"""Tests des endpoints /v1//stats et /v1//ai-metrics."""
+"""Tests des endpoints /v1/analytics/stats et /v1/analytics/ai-metrics."""
 from datetime import datetime, timedelta
 
 import models
@@ -32,32 +32,32 @@ def _make_admin_client(client):
 # ---------------------------------------------------------------------------
 
 class TestAuth:
-    """Vérifie le contrôle d'accès sur les deux endpoints ."""
+    """Vérifie le contrôle d'accès sur les deux endpoints analytics."""
 
     def test_stats_unauthenticated_returns_401(self, client):
-        response = client.get("/v1//stats")
+        response = client.get("/v1/analytics/stats")
         assert response.status_code == 401
 
     def test_ai_metrics_unauthenticated_returns_401(self, client):
-        response = client.get("/v1//ai-metrics")
+        response = client.get("/v1/analytics/ai-metrics")
         assert response.status_code == 401
 
     def test_stats_regular_user_returns_403(self, auth_client):
         """Un utilisateur avec le rôle 'user' ne peut pas accéder aux ."""
-        response = auth_client.get("/v1//stats")
+        response = auth_client.get("/v1/analytics/stats")
         assert response.status_code == 403
 
     def test_ai_metrics_regular_user_returns_403(self, auth_client):
-        response = auth_client.get("/v1//ai-metrics")
+        response = auth_client.get("/v1/analytics/ai-metrics")
         assert response.status_code == 403
 
 
 class TestStats:
-    """Vérifie la structure de la réponse /v1//stats."""
+    """Vérifie la structure de la réponse /v1/analytics/stats."""
 
     def test_stats_returns_required_keys(self, client):
         admin_client = _make_admin_client(client)
-        response = admin_client.get("/v1//stats")
+        response = admin_client.get("/v1/analytics/stats")
         assert response.status_code == 200
         data = response.json()
         expected_keys = [
@@ -71,12 +71,12 @@ class TestStats:
             "alerts",
         ]
         for key in expected_keys:
-            assert key in data, f"Clé manquante dans //stats : '{key}'"
+            assert key in data, f"Clé manquante dans /analytics/stats : '{key}'"
 
     def test_stats_empty_db_returns_zero_values(self, client):
         """Avec une base vide, les métriques doivent être 0 ou None, pas une erreur."""
         admin_client = _make_admin_client(client)
-        response = admin_client.get("/v1//stats")
+        response = admin_client.get("/v1/analytics/stats")
         assert response.status_code == 200
         data = response.json()
         assert data["total_sessions"] == 0
@@ -86,11 +86,11 @@ class TestStats:
 
 
 class TestAiMetrics:
-    """Vérifie la structure et le calcul de /v1//ai-metrics."""
+    """Vérifie la structure et le calcul de /v1/analytics/ai-metrics."""
 
     def test_ai_metrics_returns_required_keys(self, client):
         admin_client = _make_admin_client(client)
-        response = admin_client.get("/v1//ai-metrics")
+        response = admin_client.get("/v1/analytics/ai-metrics")
         assert response.status_code == 200
         data = response.json()
         expected_keys = [
@@ -104,7 +104,7 @@ class TestAiMetrics:
             "kb_score",
         ]
         for key in expected_keys:
-            assert key in data, f"Clé manquante dans //ai-metrics : '{key}'"
+            assert key in data, f"Clé manquante dans /analytics/ai-metrics : '{key}'"
 
     def test_ai_metrics_with_seeded_logs(self, client, db_session):
         """Avec des logs IA en base, les métriques doivent refléter les données."""
@@ -135,7 +135,7 @@ class TestAiMetrics:
         db_session.commit()
 
         admin_client = _make_admin_client(client)
-        response = admin_client.get("/v1//ai-metrics")
+        response = admin_client.get("/v1/analytics/ai-metrics")
         assert response.status_code == 200
         data = response.json()
 
