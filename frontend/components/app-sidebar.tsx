@@ -67,7 +67,7 @@ export function AppSidebar() {
     } : DEFAULT_USER
 
     const canManageKnowledgeBase = user.role === "admin" || user.role === "sav"
-    const canAccessConversations = user.role !== "admin"
+    const canAccessConversations = user.role === "user"
 
     const fetchConversations = async () => {
         if (!apiUser) return
