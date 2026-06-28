@@ -304,8 +304,8 @@ function KbScoreTooltip() {
     return (
         <div className="relative group inline-flex">
             <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold cursor-help select-none">i</span>
-            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 p-3 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-xl">
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-slate-900" />
+            <div className="absolute top-full left-0 mt-2 w-80 p-3 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-xl">
+                <div className="absolute bottom-full left-3 border-4 border-transparent border-b-slate-900" />
                 <p className="font-semibold mb-2 text-white">Comment ce score est-il calculé ?</p>
                 <div className="space-y-1.5 text-slate-300">
                     <div className="flex justify-between gap-2">
