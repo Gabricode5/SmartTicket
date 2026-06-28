@@ -43,6 +43,7 @@ type AiMetrics = {
     prev_error_rate: number | null
     prev_no_context_rate: number | null
     kb_score: number | null
+    negative_rate: number
 }
 
 const PERIODS = [
@@ -162,7 +163,7 @@ export default function MonitoringPage() {
                 )}
 
                 {/* KB Score */}
-                {!isLoading && metrics && <KbScoreCard score={metrics.kb_score} totalCalls={metrics.total_calls} />}
+                {!isLoading && metrics && <KbScoreCard score={metrics.kb_score} totalCalls={metrics.total_calls} negativeRate={metrics.negative_rate} />}
 
                 {/* Status Mistral */}
                 <MistralStatusCard status={mistralStatus} loading={statusLoading} onRefresh={fetchMistralStatus} />
@@ -299,7 +300,34 @@ function getKbLevel(score: number): KbLevel {
     return KB_LEVELS[KB_LEVELS.length - 1][1]
 }
 
-function KbScoreCard({ score, totalCalls }: { score: number | null; totalCalls: number }) {
+function KbScoreTooltip() {
+    return (
+        <div className="relative group inline-flex">
+            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold cursor-help select-none">i</span>
+            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-xl">
+                <p className="font-semibold mb-2 text-white">Comment ce score est-il calculé ?</p>
+                <div className="space-y-1.5 text-slate-300">
+                    <div className="flex justify-between gap-2">
+                        <span>📦 Contexte récupéré (chunks KB trouvés)</span>
+                        <span className="font-bold text-white shrink-0">× 40%</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                        <span>👎 Satisfaction utilisateur (pouces rouges)</span>
+                        <span className="font-bold text-white shrink-0">× 40%</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                        <span>⚙️ Fiabilité technique (taux d&apos;erreur)</span>
+                        <span className="font-bold text-white shrink-0">× 20%</span>
+                    </div>
+                </div>
+                <p className="mt-2 text-slate-400 text-[10px]">Sans retour utilisateur, la satisfaction est considérée comme parfaite. Le score diminue uniquement en cas de pouce rouge.</p>
+                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
+            </div>
+        </div>
+    )
+}
+
+function KbScoreCard({ score, totalCalls, negativeRate }: { score: number | null; totalCalls: number; negativeRate: number }) {
     if (totalCalls < 5) {
         return (
             <Card className="border-slate-200">
@@ -332,8 +360,12 @@ function KbScoreCard({ score, totalCalls }: { score: number | null; totalCalls: 
                                     Base de connaissances — {level.label}
                                 </span>
                                 <span className={`text-xs font-bold ${level.color}`}>{s}/100</span>
+                                <KbScoreTooltip />
                             </div>
                             <p className={`text-xs ${level.color} opacity-80`}>{level.message}</p>
+                            {negativeRate > 0 && (
+                                <p className="text-[10px] text-red-500 mt-0.5">👎 {negativeRate}% de pouces rouges sur la période</p>
+                            )}
                         </div>
                     </div>
                     <div className="flex items-center gap-3 flex-shrink-0">
