@@ -305,10 +305,10 @@ export function AppSidebar() {
                 </div>
                 )}
 
-                {user.role === "admin" && (
+                {(user.role === "admin" || user.role === "sav") && (
                     <div>
                         <h3 className="px-4 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-2">
-                            Outils IA
+                            Analyses
                         </h3>
                         <div className="space-y-1">
                             <Button
@@ -321,16 +321,18 @@ export function AppSidebar() {
                                     Analytique
                                 </Link>
                             </Button>
-                            <Button
-                                variant={isActive("/monitoring") ? "secondary" : "ghost"}
-                                asChild
-                                className={cn("w-full justify-start", isActive("/monitoring") && "bg-sidebar-accent")}
-                            >
-                                <Link href="/monitoring">
-                                    <Activity className="mr-3 h-4 w-4" />
-                                    Monitoring IA
-                                </Link>
-                            </Button>
+                            {user.role === "admin" && (
+                                <Button
+                                    variant={isActive("/monitoring") ? "secondary" : "ghost"}
+                                    asChild
+                                    className={cn("w-full justify-start", isActive("/monitoring") && "bg-sidebar-accent")}
+                                >
+                                    <Link href="/monitoring">
+                                        <Activity className="mr-3 h-4 w-4" />
+                                        Monitoring IA
+                                    </Link>
+                                </Button>
+                            )}
                         </div>
                     </div>
                 )}
