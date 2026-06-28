@@ -300,34 +300,19 @@ function getKbLevel(score: number): KbLevel {
     return KB_LEVELS[KB_LEVELS.length - 1][1]
 }
 
-function KbScoreTooltip() {
+function KbScoreInfo({ open, onToggle }: { open: boolean; onToggle: () => void }) {
     return (
-        <div className="relative group inline-flex">
-            <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold cursor-help select-none">i</span>
-            <div className="absolute top-full left-0 mt-2 w-80 p-3 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-xl">
-                <div className="absolute bottom-full left-3 border-4 border-transparent border-b-slate-900" />
-                <p className="font-semibold mb-2 text-white">Comment ce score est-il calculé ?</p>
-                <div className="space-y-1.5 text-slate-300">
-                    <div className="flex justify-between gap-2">
-                        <span>📦 Contexte récupéré (chunks KB trouvés)</span>
-                        <span className="font-bold text-white shrink-0">× 40%</span>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                        <span>👎 Satisfaction utilisateur (pouces rouges)</span>
-                        <span className="font-bold text-white shrink-0">× 40%</span>
-                    </div>
-                    <div className="flex justify-between gap-2">
-                        <span>⚙️ Fiabilité technique (taux d&apos;erreur)</span>
-                        <span className="font-bold text-white shrink-0">× 20%</span>
-                    </div>
-                </div>
-                <p className="mt-2 text-slate-400 text-[10px]">Sans retour utilisateur, la satisfaction est considérée comme parfaite. Le score diminue uniquement en cas de pouce rouge.</p>
-            </div>
-        </div>
+        <button
+            type="button"
+            onClick={onToggle}
+            className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold cursor-pointer select-none transition-colors ${open ? "bg-slate-700 text-white" : "bg-slate-200 text-slate-500 hover:bg-slate-300"}`}
+        >i</button>
     )
 }
 
 function KbScoreCard({ score, totalCalls, negativeRate }: { score: number | null; totalCalls: number; negativeRate: number }) {
+    const [infoOpen, setInfoOpen] = useState(false)
+
     if (totalCalls < 5) {
         return (
             <Card className="border-slate-200">
@@ -354,17 +339,35 @@ function KbScoreCard({ score, totalCalls, negativeRate }: { score: number | null
                                 ? <AlertTriangle className="h-5 w-5 text-amber-600" />
                                 : <AlertCircle className="h-5 w-5 text-red-600" />}
                         </div>
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 mb-0.5">
                                 <span className={`text-sm font-semibold ${level.color}`}>
                                     Base de connaissances — {level.label}
                                 </span>
                                 <span className={`text-xs font-bold ${level.color}`}>{s}/100</span>
-                                <KbScoreTooltip />
+                                <KbScoreInfo open={infoOpen} onToggle={() => setInfoOpen(o => !o)} />
                             </div>
                             <p className={`text-xs ${level.color} opacity-80`}>{level.message}</p>
                             {negativeRate > 0 && (
                                 <p className="text-[10px] text-red-500 mt-0.5">👎 {negativeRate}% de pouces rouges sur la période</p>
+                            )}
+                            {infoOpen && (
+                                <div className="mt-3 p-3 bg-slate-900 text-white text-xs rounded-lg space-y-1.5">
+                                    <p className="font-semibold mb-2">Comment ce score est-il calculé ?</p>
+                                    <div className="flex justify-between gap-2 text-slate-300">
+                                        <span>📦 Contexte récupéré (chunks KB trouvés)</span>
+                                        <span className="font-bold text-white shrink-0">× 40%</span>
+                                    </div>
+                                    <div className="flex justify-between gap-2 text-slate-300">
+                                        <span>👎 Satisfaction utilisateur (pouces rouges)</span>
+                                        <span className="font-bold text-white shrink-0">× 40%</span>
+                                    </div>
+                                    <div className="flex justify-between gap-2 text-slate-300">
+                                        <span>⚙️ Fiabilité technique (taux d&apos;erreur)</span>
+                                        <span className="font-bold text-white shrink-0">× 20%</span>
+                                    </div>
+                                    <p className="mt-2 text-slate-400 text-[10px] pt-1 border-t border-slate-700">Sans retour utilisateur, la satisfaction est considérée parfaite. Le score diminue uniquement en cas de pouce rouge.</p>
+                                </div>
                             )}
                         </div>
                     </div>
