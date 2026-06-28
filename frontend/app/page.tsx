@@ -225,7 +225,7 @@ export default function LandingPage() {
                     <h2 className="text-3xl font-bold text-slate-900 mb-4">Construit sur des technologies modernes</h2>
                     <p className="text-slate-500 mb-12">Stack open-source, déployé sur Render, modèle Mistral AI.</p>
                     <div className="flex flex-wrap justify-center gap-3">
-                        {["Next.js 15", "FastAPI", "PostgreSQL", "pgvector", "Mistral AI", "Docker", "GitHub Actions"].map((tech) => (
+                        {["Next.js 16", "FastAPI", "PostgreSQL", "pgvector", "Mistral AI", "Docker", "GitHub Actions"].map((tech) => (
                             <span key={tech} className="px-4 py-2 rounded-full border border-slate-200 bg-white text-sm font-medium text-slate-600 hover:border-indigo-300 hover:text-indigo-600 transition-colors">
                                 {tech}
                             </span>
