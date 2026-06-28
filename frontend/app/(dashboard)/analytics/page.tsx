@@ -124,7 +124,7 @@ export default function AnalyticsPage() {
                         icon={<Zap className="h-4 w-4 text-yellow-500" />} />
                     <KpiCard title="Score de satisfaction"
                         value={isLoading ? "…" : (data?.satisfaction_score != null ? data.satisfaction_score.toFixed(2) : "–")}
-                        trend={data?.satisfaction_score != null ? "basé sur les retours 👍/👎" : "aucun retour utilisateur"}
+                        trend={data?.satisfaction_score != null ? "basé sur les pouces rouges 👎" : "aucune réponse négative"}
                         trendUp={data?.satisfaction_score != null ? data.satisfaction_score >= 2.5 : true}
                         icon={<Star className="h-4 w-4 text-purple-500" />} />
                 </div>

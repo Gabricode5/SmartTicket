@@ -79,9 +79,9 @@ def get__stats(days: int = 30, current_user: str = Depends(get_current_user), db
         elif row.type_envoyeur == "sav":
             day_map[label]["Humain"] += row.cnt
 
-    total_rated = db.query(sqlfunc.count(models.ChatMessage.id)).filter(models.ChatMessage.type_envoyeur == "ai", models.ChatMessage.feedback.isnot(None), models.ChatMessage.date_creation >= from_date).scalar() or 0
-    positive = db.query(sqlfunc.count(models.ChatMessage.id)).filter(models.ChatMessage.type_envoyeur == "ai", models.ChatMessage.feedback == 1, models.ChatMessage.date_creation >= from_date).scalar() or 0
-    satisfaction_score = round(positive / total_rated * 5, 2) if total_rated > 0 else None
+    total_ai_messages = db.query(sqlfunc.count(models.ChatMessage.id)).filter(models.ChatMessage.type_envoyeur == "ai", models.ChatMessage.date_creation >= from_date).scalar() or 0
+    negative = db.query(sqlfunc.count(models.ChatMessage.id)).filter(models.ChatMessage.type_envoyeur == "ai", models.ChatMessage.feedback == -1, models.ChatMessage.date_creation >= from_date).scalar() or 0
+    satisfaction_score = round(5 * (1 - negative / total_ai_messages), 2) if total_ai_messages > 0 else None
 
     sav_role = db.query(models.Role).filter(models.Role.nom_role == "sav").first()
     sav_agents = []

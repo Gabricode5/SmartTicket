@@ -19,7 +19,6 @@ import {
     MessageCircle,
     Zap,
     Sparkles,
-    ThumbsUp,
     ThumbsDown,
     Headphones,
     X,
@@ -376,15 +375,6 @@ export default function AiAssistantPage() {
                                         </span>
                                         {m.role === "ai" && m.content && !(isSending && isLastMessage(m.id)) && (
                                             <div className="flex items-center gap-0.5">
-                                                <button
-                                                    type="button"
-                                                    disabled={m.feedback !== null && m.feedback !== undefined}
-                                                    onClick={() => handleFeedback(m.id, 1)}
-                                                    aria-label="Marquer comme bonne réponse"
-                                                    className={`p-0.5 rounded transition-colors disabled:cursor-default ${m.feedback === 1 ? "text-indigo-600" : "text-slate-300 hover:text-slate-500"}`}
-                                                >
-                                                    <ThumbsUp className={`h-3.5 w-3.5 ${m.feedback === 1 ? "fill-indigo-600" : ""}`} />
-                                                </button>
                                                 <button
                                                     type="button"
                                                     disabled={m.feedback !== null && m.feedback !== undefined}
