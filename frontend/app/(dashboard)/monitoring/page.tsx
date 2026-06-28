@@ -304,7 +304,8 @@ function KbScoreTooltip() {
     return (
         <div className="relative group inline-flex">
             <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-slate-200 text-slate-500 text-[10px] font-bold cursor-help select-none">i</span>
-            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-72 p-3 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-xl">
+            <div className="absolute top-full left-1/2 -translate-x-1/2 mt-2 w-72 p-3 bg-slate-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-20 shadow-xl">
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 border-4 border-transparent border-b-slate-900" />
                 <p className="font-semibold mb-2 text-white">Comment ce score est-il calculé ?</p>
                 <div className="space-y-1.5 text-slate-300">
                     <div className="flex justify-between gap-2">
@@ -321,7 +322,6 @@ function KbScoreTooltip() {
                     </div>
                 </div>
                 <p className="mt-2 text-slate-400 text-[10px]">Sans retour utilisateur, la satisfaction est considérée comme parfaite. Le score diminue uniquement en cas de pouce rouge.</p>
-                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900" />
             </div>
         </div>
     )
