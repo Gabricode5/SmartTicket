@@ -19,11 +19,14 @@ import {
     Trash2,
     ChevronLeft,
     ChevronRight,
+    Headphones,
 } from "lucide-react"
 
 interface Conversation {
     id: string
     title: string
+    status?: string
+    has_sav_reply?: boolean
 }
 
 type UserRole = "user" | "sav" | "admin"
@@ -82,9 +85,11 @@ export function AppSidebar() {
             }
             if (!response.ok) return
             const data = await response.json()
-            const normalized: Conversation[] = data.map((item: { id: number | string; title?: string | null }) => ({
+            const normalized: Conversation[] = data.map((item: { id: number | string; title?: string | null; status?: string; has_sav_reply?: boolean }) => ({
                 id: String(item.id),
                 title: item.title || "Nouvelle conversation",
+                status: item.status,
+                has_sav_reply: item.has_sav_reply,
             }))
             setConversations(normalized)
             setConvoPage(1)
@@ -266,7 +271,13 @@ export function AppSidebar() {
                                             className="flex items-center gap-3 flex-1 min-w-0"
                                         >
                                             <MessageSquare className="h-3.5 w-3.5 flex-shrink-0" />
-                                            <span className="truncate">{chat.title}</span>
+                                            <span className="truncate flex-1">{chat.title}</span>
+                                            {chat.status === "transferred" && chat.has_sav_reply && (
+                                                <Headphones className="h-3 w-3 flex-shrink-0 text-emerald-500" title="Agent SAV a répondu" />
+                                            )}
+                                            {chat.status === "transferred" && !chat.has_sav_reply && (
+                                                <span className="h-2 w-2 rounded-full bg-amber-400 flex-shrink-0" title="En attente SAV" />
+                                            )}
                                         </Link>
                                         <button
                                             type="button"
