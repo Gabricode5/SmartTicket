@@ -273,7 +273,9 @@ export function AppSidebar() {
                                             <MessageSquare className="h-3.5 w-3.5 flex-shrink-0" />
                                             <span className="truncate flex-1">{chat.title}</span>
                                             {chat.status === "transferred" && chat.has_sav_reply && (
-                                                <Headphones className="h-3 w-3 flex-shrink-0 text-emerald-500" title="Agent SAV a répondu" />
+                                                <span title="Agent SAV a répondu" className="flex-shrink-0">
+                                                    <Headphones className="h-3 w-3 text-emerald-500" />
+                                                </span>
                                             )}
                                             {chat.status === "transferred" && !chat.has_sav_reply && (
                                                 <span className="h-2 w-2 rounded-full bg-amber-400 flex-shrink-0" title="En attente SAV" />
