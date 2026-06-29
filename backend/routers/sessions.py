@@ -48,10 +48,29 @@ def list_sessions(user_id: int, current_user: str = Depends(get_current_user), d
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
     if not is_admin_or_sav(requester) and requester.id != user_id:
         raise HTTPException(status_code=403, detail="Accès refusé")
-    return db.query(models.ChatSession).filter(
+    sessions = db.query(models.ChatSession).filter(
         models.ChatSession.id_utilisateur == user_id,
         models.ChatSession.deleted_at.is_(None),
     ).order_by(models.ChatSession.date_creation.desc()).all()
+    session_ids = [s.id for s in sessions]
+    sav_ids: set[int] = set()
+    if session_ids:
+        sav_ids = {row[0] for row in db.query(models.ChatMessage.id_session).filter(
+            models.ChatMessage.id_session.in_(session_ids),
+            models.ChatMessage.type_envoyeur == "sav",
+        ).distinct().all()}
+    return [
+        {
+            "id": s.id,
+            "id_utilisateur": s.id_utilisateur,
+            "title": s.title,
+            "status": s.status,
+            "transfer_reason": s.transfer_reason,
+            "date_creation": s.date_creation,
+            "has_sav_reply": s.id in sav_ids,
+        }
+        for s in sessions
+    ]
 
 
 @router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Supprimer une session")

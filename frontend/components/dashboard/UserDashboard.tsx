@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Search, MessageSquare, Zap, Clock, Star, TrendingUp, Bot, ChevronLeft, ChevronRight } from "lucide-react"
+import { Search, MessageSquare, Zap, Clock, Star, TrendingUp, Bot, Headphones, ChevronLeft, ChevronRight } from "lucide-react"
 import type { SessionItem } from "./types"
 
 export default function UserDashboard({ userId }: { userId: number }) {
@@ -193,8 +193,12 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                                         ? new Date(session.date_creation).toLocaleDateString("fr-FR")
                                                         : "—"}
                                                 </span>
-                                                <Badge variant="secondary" className={`${session.status === "closed" ? "bg-slate-200 text-slate-700" : "bg-emerald-100 text-emerald-700"} border-0`}>
-                                                    {session.status === "closed" ? "Clôturée" : "Ouverte"}
+                                                <Badge variant="secondary" className={`${
+                                                    session.status === "closed" ? "bg-slate-200 text-slate-700"
+                                                    : session.status === "transferred" ? "bg-amber-100 text-amber-700"
+                                                    : "bg-emerald-100 text-emerald-700"
+                                                } border-0`}>
+                                                    {session.status === "closed" ? "Clôturée" : session.status === "transferred" ? "Transférée" : "Ouverte"}
                                                 </Badge>
                                                 <Button
                                                     size="sm"
@@ -204,10 +208,22 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                                 >
                                                     {closingSessionId === session.id ? "..." : "Clôturer"}
                                                 </Button>
-                                                <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/15 border-0">
-                                                    <Bot className="h-3 w-3 mr-1" />
-                                                    IA Autonome
-                                                </Badge>
+                                                {session.status === "transferred" && session.has_sav_reply ? (
+                                                    <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-0">
+                                                        <Headphones className="h-3 w-3 mr-1" />
+                                                        Agent SAV a répondu
+                                                    </Badge>
+                                                ) : session.status === "transferred" ? (
+                                                    <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-0">
+                                                        <Headphones className="h-3 w-3 mr-1" />
+                                                        En attente SAV
+                                                    </Badge>
+                                                ) : (
+                                                    <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/15 border-0">
+                                                        <Bot className="h-3 w-3 mr-1" />
+                                                        IA Autonome
+                                                    </Badge>
+                                                )}
                                             </div>
                                         </div>
                                     ))

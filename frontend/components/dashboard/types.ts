@@ -12,6 +12,7 @@ export type SessionItem = {
     title?: string | null
     date_creation?: string | null
     status?: string | null
+    has_sav_reply?: boolean
 }
 
 export type TransferredSession = {

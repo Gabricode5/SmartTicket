@@ -63,6 +63,7 @@ class ChatSessionResponse(BaseModel):
     status: str
     transfer_reason: Optional[str] = None
     date_creation: datetime
+    has_sav_reply: Optional[bool] = False
 
     class Config:
         from_attributes = True
