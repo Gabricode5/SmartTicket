@@ -86,7 +86,7 @@ PFE_ECE/
 |---|---|---|---|
 | backend | ./backend/Dockerfile (python:3.11-slim) | 8000 | DATABASE_URL, SECRET_KEY, CORS_ORIGINS |
 | frontend | ./frontend/Dockerfile (node:20-slim) | 3005 | NEXT_PUBLIC_API_URL |
-| postgres | pgvector/pgvector:pg16 | 5432 | POSTGRES_DB=ticketdb, POSTGRES_USER=admin |
+| postgres | pgvector/pgvector:pg18 | 5432 | POSTGRES_DB=ticketdb, POSTGRES_USER=admin |
 | redis | redis:7-alpine | 6379 | — |
 | pgadmin | dpage/pgadmin4 | 5050 | (outil admin, dev uniquement) |
 | ollama | ollama/ollama:latest | 11434 | (LLM local, dev uniquement) |
@@ -202,7 +202,7 @@ Déclencheur : push/PR sur `master`
 | backend-tests | checkout → setup Python 3.11 → pip install → pytest tests/ -v |
 | frontend-tests | checkout → setup Node 20 → npm ci → tsc --noEmit → eslint → jest → npm run build |
 
-Service PostgreSQL (pgvector/pgvector:pg15) instancié dans le runner CI pour les tests d'intégration backend.
+Service PostgreSQL (pgvector/pgvector:pg18) instancié dans le runner CI pour les tests d'intégration backend.
 
 ---
 

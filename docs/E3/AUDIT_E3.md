@@ -166,7 +166,7 @@ L'évaluation porte sur l'instrumentation de la boucle : collecte de métriques 
 
 - **Dockerfile backend** : `python:3.11-slim`, `libpq-dev`, `pip install -r requirements.txt`, `EXPOSE 8000`, CMD uvicorn avec `${PORT:-8000}` (`backend/Dockerfile`)
 - **Dockerfile frontend** : `node:20-slim`, `npm ci`, `npm run build` prod, `EXPOSE 3005`, `${PORT:-3005}` (`frontend/Dockerfile`)
-- **`docker-compose.yml`** orchestrant 7 services : backend, frontend, postgres (pgvector/pg16), redis, ollama, pgadmin, open-webui (`docker-compose.yml`)
+- **`docker-compose.yml`** orchestrant 7 services : backend, frontend, postgres (pgvector/pg18), redis, ollama, pgadmin, open-webui (`docker-compose.yml`)
 - **CI GitHub Actions** avec 3 jobs séquencés : `backend-tests` → `frontend-tests` → `deploy` (ce dernier conditionné aux deux premiers) (`.github/workflows/ci.yml`)
 - **ESLint** sur `app components hooks lib` avec `--max-warnings 0` dans la CI (`ci.yml:113-114`)
 - **TypeScript check** `tsc --noEmit` dans la CI (`ci.yml:108-110`)
