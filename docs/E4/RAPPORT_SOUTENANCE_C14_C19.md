@@ -292,7 +292,7 @@ jobs:
   backend-tests:
     services:
       postgres:
-        image: pgvector/pgvector:pg16   # DB réelle (pas de mock)
+        image: pgvector/pgvector:pg18   # DB réelle (pas de mock)
         env: POSTGRES_DB/USER/PASSWORD
     steps:
       - pip install -r requirements-dev.txt
@@ -346,7 +346,7 @@ conftest.py         → Fixtures : client, auth_client, registered_user, admin_c
 
 ### 3 bullet points clés
 
-1. **Pipeline CI 3 jobs** avec base de données PostgreSQL réelle en CI (service `pgvector:pg16`) — pas de mock, intégration testée dans les mêmes conditions qu'en production
+1. **Pipeline CI 3 jobs** avec base de données PostgreSQL réelle en CI (service `pgvector:pg18`) — pas de mock, intégration testée dans les mêmes conditions qu'en production
 2. **Double barrière qualité** : Ruff (lint Python, 0 warning toléré) + ESLint TypeScript strict + `tsc --noEmit` bloquants avant tout déploiement — la PR ne merge pas si le code ne compile pas proprement
 3. **CD conditionnel** : le job `deploy` n'est déclenché que si `backend-tests` ET `frontend-tests` sont verts ET si le push est sur `main` — garantie que seul du code testé et lintérisé part en production
 
@@ -417,7 +417,7 @@ databases:
 Git push → main
     ↓
 GitHub Actions CI
-    ├── backend-tests (PostgreSQL service pgvector:pg16)
+    ├── backend-tests (PostgreSQL service pgvector:pg18)
     └── frontend-tests (tsc + eslint + jest + build)
     ↓ (si tous verts)
 Job "deploy"

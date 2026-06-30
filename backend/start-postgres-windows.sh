@@ -15,4 +15,4 @@ MSYS_NO_PATHCONV=1 docker run -d \
   -p 5432:5432 \
   -v "$(pwd)/data/postgres:/var/lib/postgresql/data" \
   -v "$(pwd)/backend/db/init-db.sql:/docker-entrypoint-initdb.d/init.sql" \
-  pgvector/pgvector:pg16
+  pgvector/pgvector:pg18

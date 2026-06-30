@@ -15,7 +15,7 @@ services:
     restart: unless-stopped
   
   postgres:
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:pg18
     container_name: ticket-ai-postgres
     environment:
       POSTGRES_DB: ticketdb

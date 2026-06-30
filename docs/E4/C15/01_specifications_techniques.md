@@ -69,7 +69,7 @@ L'architecture est un **backend-for-frontend (BFF) à deux niveaux** :
 
 | Attribut | Valeur |
 |---|---|
-| **Image** | `pgvector/pgvector:pg16` (local) / PostgreSQL managé Render (pré-prod) |
+| **Image** | `pgvector/pgvector:pg18` (local) / PostgreSQL managé Render (pré-prod) |
 | **Port** | 5432 |
 | **Base** | `ticketdb` |
 | **Extensions** | `vector` (pgvector), `pgcrypto` |
@@ -100,7 +100,7 @@ C4Container
     System_Boundary(app, "SmartTicket") {
         Container(frontend, "Frontend", "Next.js 16 / React 19", "Interface utilisateur, proxy BFF pour le streaming")
         Container(backend, "Backend API", "FastAPI / Python 3.11", "Logique métier, RAG, gestion des rôles")
-        ContainerDb(postgres, "PostgreSQL + pgvector", "pgvector:pg16", "Données applicatives + vecteurs d'embeddings (1024-d)")
+        ContainerDb(postgres, "PostgreSQL + pgvector", "pgvector:pg18", "Données applicatives + vecteurs d'embeddings (1024-d)")
         ContainerDb(redis, "Redis", "redis:7-alpine", "Cache (local dev uniquement, non connecté)")
     }
 
@@ -166,8 +166,8 @@ C4Container
 
 | Service | Image Docker | Version | Usage |
 |---|---|---|---|
-| PostgreSQL | `pgvector/pgvector:pg16` | PostgreSQL 16 + pgvector | Données applicatives et vectorielles |
-| PostgreSQL (CI) | `pgvector/pgvector:pg15` | PostgreSQL 15 + pgvector | Tests d'intégration CI uniquement |
+| PostgreSQL | `pgvector/pgvector:pg18` | PostgreSQL 18 + pgvector | Données applicatives et vectorielles |
+| PostgreSQL (CI) | `pgvector/pgvector:pg18` | PostgreSQL 18 + pgvector | Tests d'intégration CI uniquement |
 | Redis | `redis:7-alpine` | Redis 7 | Prévu pour cache (non connecté en prod) |
 | pgAdmin | `dpage/pgadmin4` | latest | Administration DB (dev uniquement) |
 | Ollama | `ollama/ollama:latest` | latest | LLM local (dev uniquement, non utilisé en prod) |
@@ -213,7 +213,7 @@ Code source : `backend/mistral_client.py` (fonctions `stream_text`, `generate_te
 
 | Paramètre | Valeur |
 |---|---|
-| **Image** | `pgvector/pgvector:pg16` |
+| **Image** | `pgvector/pgvector:pg18` |
 | **Port** | 5432 |
 | **Volumes** | `./data/postgres:/var/lib/postgresql/data` |
 | **Init SQL** | `./backend/db/init-db.sql` (extensions, tables, index HNSW, compte admin par défaut) |
@@ -334,7 +334,7 @@ Déclenché sur push et pull request vers `master`. Deux jobs :
 ```
 Job 1 — backend-tests :
   Python 3.11 → pip install → pytest tests/ -v --tb=short
-  (service postgres pgvector:pg15 en sidecar)
+  (service postgres pgvector:pg18 en sidecar)
 
 Job 2 — frontend-tests :
   Node 20 → npm ci → tsc --noEmit → eslint → jest → npm run build
