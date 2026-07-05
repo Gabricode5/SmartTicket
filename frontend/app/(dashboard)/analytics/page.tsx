@@ -17,7 +17,7 @@ import {
 type DayEntry = { name: string; IA: number; Humain: number }
 type AgentEntry = { name: string; initials: string; conversations: number }
 type ReasonEntry = { name: string; value: number; color: string }
-type AlertEntry = { level: "warning" | "critical"; metric: string; message: string; value: number; threshold: number }
+type AlertEntry = { level: "warning" | "critical"; metric: string; message: string; recommendation?: string; value: number; threshold: number }
 
 type AnalyticsData = {
     total_sessions: number
@@ -100,6 +100,9 @@ export default function AnalyticsPage() {
                                         <span className="font-semibold">{alert.level === "critical" ? "Critique" : "Attention"} — </span>
                                         {alert.message}
                                         <span className="ml-2 text-xs opacity-70">(seuil : {alert.threshold}{alert.metric.includes("rate") ? "%" : "/5"})</span>
+                                        {alert.recommendation && (
+                                            <p className="mt-1 text-xs opacity-80">→ {alert.recommendation}</p>
+                                        )}
                                     </div>
                                 </div>
                             ))}

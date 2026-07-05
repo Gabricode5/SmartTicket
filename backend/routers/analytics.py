@@ -27,26 +27,31 @@ def _compute_alerts(ai_resolution_rate: float, satisfaction_score: float | None,
         if ai_resolution_rate < ALERT_THRESHOLDS["resolution_rate_critical"]:
             alerts.append({"level": "critical", "metric": "ai_resolution_rate",
                            "message": f"Taux de résolution IA critique : {ai_resolution_rate}%",
+                           "recommendation": "Vérifier la qualité de la base de connaissances et les raisons de transfert les plus fréquentes",
                            "value": ai_resolution_rate, "threshold": ALERT_THRESHOLDS["resolution_rate_critical"]})
         elif ai_resolution_rate < ALERT_THRESHOLDS["resolution_rate_warning"]:
             alerts.append({"level": "warning", "metric": "ai_resolution_rate",
                            "message": f"Taux de résolution IA en baisse : {ai_resolution_rate}%",
+                           "recommendation": "Analyser les sessions transférées récentes pour identifier des lacunes de contenu",
                            "value": ai_resolution_rate, "threshold": ALERT_THRESHOLDS["resolution_rate_warning"]})
 
         transfer_rate = transferred_count / total_sessions
         if transfer_rate >= ALERT_THRESHOLDS["transfer_rate_warning"]:
             alerts.append({"level": "warning", "metric": "transfer_rate",
                            "message": f"Taux de transfert élevé : {round(transfer_rate * 100, 1)}% des sessions",
+                           "recommendation": "Identifier les motifs de transfert dominants et enrichir la base de connaissances en conséquence",
                            "value": round(transfer_rate * 100, 1), "threshold": round(ALERT_THRESHOLDS["transfer_rate_warning"] * 100)})
 
     if satisfaction_score is not None:
         if satisfaction_score < ALERT_THRESHOLDS["satisfaction_critical"]:
             alerts.append({"level": "critical", "metric": "satisfaction_score",
                            "message": f"Score de satisfaction critique : {satisfaction_score}/5",
+                           "recommendation": "Relire les derniers messages notés négativement et corriger les réponses IA en cause",
                            "value": satisfaction_score, "threshold": ALERT_THRESHOLDS["satisfaction_critical"]})
         elif satisfaction_score < ALERT_THRESHOLDS["satisfaction_warning"]:
             alerts.append({"level": "warning", "metric": "satisfaction_score",
                            "message": f"Score de satisfaction bas : {satisfaction_score}/5",
+                           "recommendation": "Surveiller l'évolution du score et vérifier les retours utilisateurs négatifs",
                            "value": satisfaction_score, "threshold": ALERT_THRESHOLDS["satisfaction_warning"]})
     return alerts
 
@@ -237,15 +242,15 @@ def get_ai_metrics(days: int = 30, current_user: str = Depends(get_current_user)
     alerts = []
     if avg_latency_ms:
         if avg_latency_ms > 10000:
-            alerts.append({"level": "critical", "metric": "latency", "message": f"Latence IA critique : {avg_latency_ms}ms en moyenne", "value": avg_latency_ms, "threshold": 10000})
+            alerts.append({"level": "critical", "metric": "latency", "message": f"Latence IA critique : {avg_latency_ms}ms en moyenne", "recommendation": "Vérifier la disponibilité et la charge de l'API Mistral, envisager d'augmenter le timeout", "value": avg_latency_ms, "threshold": 10000})
         elif avg_latency_ms > 5000:
-            alerts.append({"level": "warning", "metric": "latency", "message": f"Latence IA élevée : {avg_latency_ms}ms en moyenne", "value": avg_latency_ms, "threshold": 5000})
+            alerts.append({"level": "warning", "metric": "latency", "message": f"Latence IA élevée : {avg_latency_ms}ms en moyenne", "recommendation": "Surveiller la tendance de latence sur les prochains appels", "value": avg_latency_ms, "threshold": 5000})
     if error_rate > 15:
-        alerts.append({"level": "critical", "metric": "error_rate", "message": f"Taux d'erreur IA critique : {error_rate}%", "value": error_rate, "threshold": 15})
+        alerts.append({"level": "critical", "metric": "error_rate", "message": f"Taux d'erreur IA critique : {error_rate}%", "recommendation": "Consulter les logs d'erreur récents et vérifier la clé API et les quotas Mistral", "value": error_rate, "threshold": 15})
     elif error_rate > 5:
-        alerts.append({"level": "warning", "metric": "error_rate", "message": f"Taux d'erreur IA élevé : {error_rate}%", "value": error_rate, "threshold": 5})
+        alerts.append({"level": "warning", "metric": "error_rate", "message": f"Taux d'erreur IA élevé : {error_rate}%", "recommendation": "Identifier les types d'erreurs les plus fréquents dans ai_call_logs", "value": error_rate, "threshold": 5})
     if no_context_rate > 70 and total_calls >= 5:
-        alerts.append({"level": "warning", "metric": "rag_quality", "message": f"{no_context_rate}% des questions sans contexte base de connaissances", "value": no_context_rate, "threshold": 70})
+        alerts.append({"level": "warning", "metric": "rag_quality", "message": f"{no_context_rate}% des questions sans contexte base de connaissances", "recommendation": "Enrichir la base de connaissances sur les sujets les plus demandés", "value": no_context_rate, "threshold": 70})
 
     return {
         "total_calls": total_calls,

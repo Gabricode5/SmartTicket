@@ -14,7 +14,7 @@ import {
 } from "lucide-react"
 
 type LatencyEntry = { name: string; latence_ms: number; appels: number }
-type AlertEntry = { level: "warning" | "critical"; metric: string; message: string; value: number; threshold: number }
+type AlertEntry = { level: "warning" | "critical"; metric: string; message: string; recommendation?: string; value: number; threshold: number }
 type KbEvent = { date: string; chunks: number }
 
 type ComponentStatus = {
@@ -150,6 +150,9 @@ export default function MonitoringPage() {
                                         <span className="ml-2 text-xs opacity-70">
                                             (seuil : {alert.threshold}{alert.metric === "latency" ? "ms" : "%"})
                                         </span>
+                                        {alert.recommendation && (
+                                            <p className="mt-1 text-xs opacity-80">→ {alert.recommendation}</p>
+                                        )}
                                     </div>
                                 </div>
                             ))}
