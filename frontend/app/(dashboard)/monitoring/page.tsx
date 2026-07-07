@@ -10,8 +10,9 @@ import {
 import {
     TrendingUp, TrendingDown, Clock, ShieldAlert, Database, Activity,
     AlertTriangle, AlertCircle, CheckCircle2, ExternalLink, RefreshCw,
-    Lightbulb, BookOpen, Wrench, Zap,
+    Lightbulb, BookOpen, Wrench, Zap, Download, FileText,
 } from "lucide-react"
+import { downloadCsv } from "@/lib/csv"
 
 type LatencyEntry = { name: string; latence_ms: number; appels: number }
 type AlertEntry = { level: "warning" | "critical"; metric: string; message: string; value: number; threshold: number }
@@ -65,6 +66,42 @@ export default function MonitoringPage() {
     const [isLoading, setIsLoading] = useState(true)
     const [mistralStatus, setMistralStatus] = useState<MistralStatus | null>(null)
     const [statusLoading, setStatusLoading] = useState(true)
+    const [exportingPdf, setExportingPdf] = useState(false)
+
+    const handleExportCsv = () => {
+        if (!metrics) return
+        downloadCsv(`monitoring-ia-smartticket-${new Date().toISOString().slice(0, 10)}.csv`, [
+            {
+                title: "Évolution de la latence",
+                headers: ["Jour", "Latence moyenne (ms)", "Appels"],
+                rows: metrics.latency_trend.map((t) => [t.name, t.latence_ms, t.appels]),
+            },
+            {
+                title: "Enrichissements de la base de connaissances",
+                headers: ["Date", "Chunks ajoutés"],
+                rows: metrics.kb_events.map((e) => [e.date, e.chunks]),
+            },
+        ])
+    }
+
+    const handleExportPdf = async () => {
+        setExportingPdf(true)
+        try {
+            const res = await fetch(`/api/analytics/ai-metrics/pdf?days=${days}`)
+            if (!res.ok) return
+            const blob = await res.blob()
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = `monitoring-ia-smartticket-${new Date().toISOString().slice(0, 10)}.pdf`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+        } finally {
+            setExportingPdf(false)
+        }
+    }
 
     const fetchMistralStatus = () => {
         setStatusLoading(true)
@@ -123,14 +160,22 @@ export default function MonitoringPage() {
                     </div>
                     <p className="text-muted-foreground">Latence, taux d&apos;erreur et qualité RAG du modèle en production.</p>
                 </div>
-                <div className="flex bg-muted/50 p-1 rounded-lg">
-                    {PERIODS.map(({ label, days: d }) => (
-                        <Button key={d} onClick={() => handlePeriodChange(d)}
-                            variant={days === d ? "secondary" : "ghost"} size="sm"
-                            className={`rounded-md ${days === d ? "shadow-sm bg-background text-foreground" : "hover:bg-background text-muted-foreground hover:text-foreground"}`}>
-                            {label}
-                        </Button>
-                    ))}
+                <div className="flex items-center gap-3">
+                    <div className="flex bg-muted/50 p-1 rounded-lg">
+                        {PERIODS.map(({ label, days: d }) => (
+                            <Button key={d} onClick={() => handlePeriodChange(d)}
+                                variant={days === d ? "secondary" : "ghost"} size="sm"
+                                className={`rounded-md ${days === d ? "shadow-sm bg-background text-foreground" : "hover:bg-background text-muted-foreground hover:text-foreground"}`}>
+                                {label}
+                            </Button>
+                        ))}
+                    </div>
+                    <Button variant="outline" size="sm" onClick={handleExportCsv} disabled={isLoading}>
+                        <Download className="h-4 w-4 mr-1.5" /> CSV
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={isLoading || exportingPdf}>
+                        <FileText className="h-4 w-4 mr-1.5" /> {exportingPdf ? "…" : "PDF"}
+                    </Button>
                 </div>
             </div>
 

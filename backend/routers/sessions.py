@@ -1,6 +1,7 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
 import models
@@ -16,6 +17,10 @@ from dependencies import (
 from mistral_client import embed_text, generate_text
 
 router = APIRouter(tags=["Sessions"])
+
+
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 @router.post("/sessions", response_model=schemas.ChatSessionResponse, summary="Créer une session de chat")
@@ -65,6 +70,67 @@ def list_sessions(user_id: int, current_user: str = Depends(get_current_user), d
             "transfer_reason": s.transfer_reason,
             "date_creation": s.date_creation,
             "has_sav_reply": s.id in sav_ids,
+        }
+        for s in sessions
+    ]
+
+
+@router.get("/sessions/search", response_model=list[schemas.SessionSearchResult], summary="Recherche full-text dans l'historique des conversations")
+def search_sessions(user_id: int, q: str, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    query = q.strip()
+    if not query:
+        return []
+    user = db.query(models.Utilisateur).filter(models.Utilisateur.id == user_id, models.Utilisateur.deleted_at.is_(None)).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    requester = get_user_by_email(db, current_user)
+    if not requester:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    if not is_admin_or_sav(requester) and requester.id != user_id:
+        raise HTTPException(status_code=403, detail="Accès refusé")
+
+    # 1. Messages dont le contenu correspond à la recherche (full-text Postgres),
+    # restreints aux sessions de l'utilisateur ciblé. On garde le meilleur extrait par session.
+    message_rows = db.execute(
+        text("""
+            SELECT m.id_session AS id_session,
+                   ts_headline('french', m.contenu, plainto_tsquery('french', :q),
+                               'MaxWords=25, MinWords=10, ShortWord=3, MaxFragments=1') AS snippet,
+                   ts_rank(to_tsvector('french', m.contenu), plainto_tsquery('french', :q)) AS rank
+            FROM chat_messages m
+            JOIN chat_sessions s ON s.id = m.id_session
+            WHERE s.id_utilisateur = :user_id
+              AND s.deleted_at IS NULL
+              AND to_tsvector('french', m.contenu) @@ plainto_tsquery('french', :q)
+            ORDER BY rank DESC
+        """),
+        {"q": query, "user_id": user_id},
+    ).mappings().all()
+
+    snippet_by_session: dict[int, str] = {}
+    for row in message_rows:
+        snippet_by_session.setdefault(row["id_session"], row["snippet"])
+
+    # 2. Sessions à retourner : celles dont un message a matché, plus celles dont
+    # le titre correspond directement (recherche simple, pas besoin de full-text ici).
+    sessions = db.query(models.ChatSession).filter(
+        models.ChatSession.id_utilisateur == user_id,
+        models.ChatSession.deleted_at.is_(None),
+        or_(
+            models.ChatSession.id.in_(list(snippet_by_session.keys())),
+            models.ChatSession.title.ilike(f"%{_escape_like(query)}%", escape="\\"),
+        ),
+    ).order_by(models.ChatSession.date_creation.desc()).all()
+
+    return [
+        {
+            "id": s.id,
+            "id_utilisateur": s.id_utilisateur,
+            "title": s.title,
+            "status": s.status,
+            "transfer_reason": s.transfer_reason,
+            "date_creation": s.date_creation,
+            "snippet": snippet_by_session.get(s.id),
         }
         for s in sessions
     ]

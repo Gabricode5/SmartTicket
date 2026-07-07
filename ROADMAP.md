@@ -30,6 +30,24 @@ Suivi des évolutions techniques et fonctionnelles du projet. Statuts : **Fait**
 ### Fonctionnel / produit (2026-07-07)
 - [x] Export RGPD (`GET /v1/me/export`) génère maintenant un vrai PDF au lieu d'un JSON téléchargé tel quel — nouveau module `backend/pdf_export.py` (`fpdf2`). Limite connue : les fonts core PDF (Helvetica) ne couvrent que le Latin-1, donc les emoji/caractères exotiques dans le contenu des messages utilisateurs sont remplacés par `?` plutôt que de faire planter l'export (compromis assumé plutôt que d'ajouter une police Unicode embarquée)
 
+### Dette technique backend (2026-07-07)
+- [x] `@app.on_event("startup")` (déprécié) remplacé par un `lifespan` FastAPI unique dans `main.py`. Bonus au passage : le scheduler APScheduler (purge RGPD) est désormais arrêté proprement à l'extinction de l'app (`scheduler.shutdown()`), ce qu'`on_event` ne faisait jamais puisqu'il n'y avait aucun handler `"shutdown"`. Vérifié via `TestClient` en cycle complet (entrée + sortie de contexte) et collecte des 55 tests pytest sans erreur d'import
+- [x] `sqlalchemy.ext.declarative.declarative_base` (déprécié) remplacé par `sqlalchemy.orm.declarative_base` dans `backend/database.py` — le `MovedIn20Warning` associé a disparu à la collecte des tests
+
+### Tests & CI (2026-07-07)
+- [x] Nouveau test `backend/tests/test_schema_consistency.py` : charge `init-db.sql` dans un schéma Postgres jetable (isolé des tables utilisées par le reste de la suite) et compare colonnes/tables obtenues avec `Base.metadata` (donc `models.py`). Tourne automatiquement dans la CI existante (le service Postgres du job `backend-tests` suffit, aucune config CI à ajouter). **Non exécuté en local** : le PostgreSQL local de la machine s'est arrêté en cours de route et `initdb` ne peut pas créer de cluster jetable (`pg_hba.conf.sample` manquant dans l'installation locale — problème propre à cette machine, sans rapport avec le projet) ; validé uniquement par relecture rigoureuse + vérification statique que `Base.metadata` correspond exactement colonne par colonne à `init-db.sql` actuel — à confirmer par le premier run CI
+
+### Bugs corrigés (2026-07-07)
+- [x] `AdminDashboard.tsx` (colonne Conversations) — le `<button>` "Clôturer" imbriqué dans le `<button>` de sélection de session (HTML invalide, erreur d'hydratation React) a été corrigé en remplaçant l'élément englobant par un `<div role="button" tabIndex={0}>` avec support clavier (Entrée/Espace), sur le même modèle que `UserDashboard.tsx`. Vérifié : les 25 tests Jest passent, le warning `<button> cannot be a descendant of <button>` a disparu de la console, `tsc --noEmit` et `eslint` restent propres
+
+### Documentation (2026-07-07)
+- [x] `CHANGELOG.md` corrigé — la section `[1.0.0]` mentionnait Traefik/Watchtower (jamais utilisés dans le projet) et omettait Redis/Ollama/Open WebUI (bien présents dans `docker-compose.yml`). Liste des 7 services alignée sur le fichier réel
+
+### Fonctionnel / produit (2026-07-07)
+- [x] Recherche full-text dans l'historique des conversations — nouvel endpoint `GET /v1/sessions/search` (Postgres `to_tsvector`/`plainto_tsquery`/`ts_headline`, config `french`), cherche dans le contenu des messages + les titres. Intégré dans `UserDashboard.tsx` (recherche serveur débouncée à 300ms, remplace l'ancien filtre client qui ne portait que sur les titres). **Point de sécurité traité** : `ts_headline` entoure les termes trouvés de balises `<b>` sans échapper le reste du texte — un rendu naïf via `dangerouslySetInnerHTML` aurait ouvert une XSS si un message contenait du HTML ; le snippet est donc découpé côté client sur les seules balises `<b>`/`</b>` connues et rendu comme texte React normal (jamais interprété comme HTML). Ajout de `backend/tests/test_session_search.py` (6 tests : contenu, titre, aucun résultat, requête vide, permissions) et de 2 tests frontend (surlignage + absence de résultats). Bump `2.0.0` → `2.1.0` (ajout d'endpoint rétrocompatible). **Non exécuté en local côté backend** (même limite Postgres locale que le test de cohérence de schéma) — vérifié par relecture rigoureuse, `ruff`, et collecte pytest (62 tests) sans erreur ; à confirmer par la CI. Côté frontend, entièrement vérifié réellement (Jest, tsc, eslint, build)
+- [x] Recherche full-text étendue à `AdminDashboard.tsx` (liste des conversations de l'utilisateur sélectionné) — même endpoint `/v1/sessions/search`, même helper de surlignage sécurisé, désormais partagé entre les deux dashboards via `frontend/components/dashboard/searchSnippet.tsx` (au lieu d'être dupliqué). La recherche se réinitialise proprement au changement d'utilisateur sélectionné. 2 tests frontend ajoutés (surlignage + réinitialisation au changement d'utilisateur) — 28 tests Jest passent, `tsc`/`eslint`/`build` vérifiés réellement
+- [x] Export des dashboards Analytics et Monitoring IA en PDF/CSV. **PDF** (serveur) : nouveaux endpoints `GET /v1/analytics/stats/pdf` et `GET /v1/analytics/ai-metrics/pdf`, réutilisant `backend/pdf_export.py` (même pattern que l'export RGPD) — KPIs, alertes, et tableaux (évolution quotidienne, raisons de transfert, agents SAV / latence, enrichissements KB). Le calcul des données a été extrait de chaque route JSON existante en fonctions `_build_stats_data`/`_build_ai_metrics_data` réutilisables, sans changer le comportement des endpoints JSON déjà en place. **CSV** (client, sans aller-retour serveur) : nouveau `frontend/lib/csv.ts` (export multi-sections, échappement RFC 4180, BOM UTF-8 pour Excel), boutons ajoutés sur `/analytics` et `/monitoring`. Bump `2.1.0` → `2.2.0` (ajout d'endpoints rétrocompatibles). Vérifié réellement : les 4 builders PDF testés avec données réalistes + cas vides (rendu inspecté visuellement), 7 tests pytest ajoutés (permissions + validité PDF), 2 tests Jest pour `downloadCsv` (structure CSV + échappement — un test sur le BOM a été retiré car `FileReader` le strip automatiquement au décodage sous jsdom, ce n'est pas un bug). 30 tests Jest, `tsc`/`eslint`/`build` passent tous. **Non exécuté en local côté backend** (même limite Postgres locale que les autres tests ajoutés cette session) — à confirmer par la CI
+
 ## En cours
 
 _Rien en cours actuellement._
@@ -40,23 +58,11 @@ _Rien en cours actuellement._
 - [ ] Sortir le mot de passe DB par défaut `Password1234` du code source (actuellement codé en dur dans `database.py`, `docker-compose.yml`, `.env.example`)
 - [ ] Revoir le rate limiting selon le plan Render retenu : si l'app tourne un jour sur plusieurs instances, basculer `RATE_LIMIT_STORAGE_URI` sur le Redis de `docker-compose.yml` (à provisionner aussi côté Render) pour un comptage partagé entre instances — `memory://` ne suffit qu'en mono-instance
 
-### Dette technique backend
-- [ ] Remplacer `@app.on_event("startup")` (déprécié) par `lifespan` FastAPI
-- [ ] Remplacer `sqlalchemy.ext.declarative.declarative_base` (déprécié) par `sqlalchemy.orm.declarative_base`
-
-### Tests & CI
-- [ ] Ajouter un test de cohérence entre `init-db.sql` et `models.py` dans la CI
-
-### Bugs découverts (pendant l'ajout des tests, 2026-07-07)
-- [ ] `AdminDashboard.tsx` (colonne Conversations) imbrique un `<button>` "Clôturer" à l'intérieur du `<button>` de sélection de session — HTML invalide, React log une erreur d'hydratation (`<button> cannot be a descendant of <button>`). À corriger en remplaçant l'élément englobant par un `<div role="button">` (comme déjà fait dans `UserDashboard.tsx`) ou en sortant le bouton de clôture de l'élément cliquable
-
 ### Documentation
 - [ ] Resynchroniser `docs/E3/RAG_DECISIONS_LOG.md` avec le code actuel (fonction renommée `chunk_quality_score`, formule du KB Health Score obsolète)
-- [ ] Corriger `CHANGELOG.md` (mentionne Traefik/Watchtower, absents du `docker-compose.yml` réel)
 
 ### Fonctionnel / produit
 - [ ] Notifications (email ou in-app) quand le SAV répond ou qu'un ticket est transféré
-- [ ] Recherche full-text dans l'historique des conversations
-- [ ] Export des dashboards analytics en PDF/CSV
 - [ ] Rôles/permissions plus fins (ex : superviseur SAV) si le besoin se confirme
 - [ ] Amélioration du pipeline RAG : reranking des chunks, ajustement automatique du seuil de qualité selon le feedback utilisateur
+- [ ] Démo/onboarding guidé au premier login, adapté à chaque rôle (user/SAV/admin) pour apprendre à utiliser l'application. Piste : soit une librairie de "product tour" (ex. driver.js, intro.js — rapide à intégrer, mais dépendance + code à maintenir par écran), soit un simple modal "Bienvenue" avec quelques étapes clés sans dépendance externe (moins interactif, pas de spotlight sur les éléments réels de l'UI)

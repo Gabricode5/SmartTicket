@@ -68,6 +68,18 @@ class ChatSessionResponse(BaseModel):
     class Config:
         from_attributes = True
 
+class SessionSearchResult(BaseModel):
+    id: int
+    id_utilisateur: int
+    title: Optional[str]
+    status: str
+    transfer_reason: Optional[str] = None
+    date_creation: datetime
+    snippet: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 class TransferRequest(BaseModel):
     reason: str  # technique | complexe | sensible | autre
 

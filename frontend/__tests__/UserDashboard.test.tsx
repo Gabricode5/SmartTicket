@@ -52,10 +52,21 @@ describe("UserDashboard", () => {
     expect(await screen.findByText(/session expirée/i)).toBeInTheDocument();
   });
 
-  it("filters the session list via the search box", async () => {
-    mockFetch((url) =>
-      url.startsWith("/api/sessions?user_id=") ? jsonResponse(sessions) : jsonResponse({}, 404)
-    );
+  it("performs a debounced server-side search and highlights the match", async () => {
+    const searchResults = [
+      {
+        id: 2,
+        title: "Facture erronée",
+        date_creation: "2026-01-01T10:00:00Z",
+        status: "closed",
+        snippet: "remboursement de la <b>facture</b> incorrecte",
+      },
+    ];
+    const fetchMock = mockFetch((url) => {
+      if (url.startsWith("/api/sessions/search")) return jsonResponse(searchResults);
+      if (url.startsWith("/api/sessions?user_id=")) return jsonResponse(sessions);
+      return jsonResponse({}, 404);
+    });
 
     render(<UserDashboard userId={42} />);
     await screen.findByText("Problème de connexion");
@@ -64,8 +75,37 @@ describe("UserDashboard", () => {
       target: { value: "facture" },
     });
 
+    // The fetch itself is debounced (300ms), so it shouldn't fire immediately.
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/sessions/search"));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/sessions/search?user_id=42&q=facture");
+    });
+
+    expect(await screen.findByText("Facture erronée")).toBeInTheDocument();
     expect(screen.queryByText("Problème de connexion")).not.toBeInTheDocument();
-    expect(screen.getByText("Facture erronée")).toBeInTheDocument();
+    // The snippet's <b>facture</b> must render as a real element, not raw HTML text.
+    expect(screen.getByText("facture", { selector: "strong" })).toBeInTheDocument();
+  });
+
+  it("shows an empty-results message when the search has no matches", async () => {
+    const fetchMock = mockFetch((url) => {
+      if (url.startsWith("/api/sessions/search")) return jsonResponse([]);
+      if (url.startsWith("/api/sessions?user_id=")) return jsonResponse(sessions);
+      return jsonResponse({}, 404);
+    });
+
+    render(<UserDashboard userId={42} />);
+    await screen.findByText("Problème de connexion");
+
+    fireEvent.change(screen.getByPlaceholderText("Rechercher des conversations..."), {
+      target: { value: "introuvable" },
+    });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/sessions/search?user_id=42&q=introuvable");
+    });
+    expect(await screen.findByText("Aucun résultat pour « introuvable ».")).toBeInTheDocument();
   });
 
   it("closes an open session after confirmation and refreshes the list", async () => {

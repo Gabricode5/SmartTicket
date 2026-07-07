@@ -1,12 +1,14 @@
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 import models
 from constants import REASON_COLORS, REASON_LABELS
 from database import get_db
 from dependencies import get_current_user, get_user_by_email, is_admin_or_sav
+from pdf_export import build_ai_metrics_report_pdf, build_stats_report_pdf
 
 router = APIRouter(tags=["Analytics"])
 
@@ -49,12 +51,7 @@ def _compute_alerts(ai_resolution_rate: float, satisfaction_score: float | None,
     return alerts
 
 
-@router.get("/analytics/stats", summary="Statistiques du service IA (taux de résolution, satisfaction, transferts)")
-def get__stats(days: int = 30, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    user = get_user_by_email(db, current_user)
-    if not is_admin_or_sav(user):
-        raise HTTPException(status_code=403, detail="Accès refusé")
-
+def _build_stats_data(db: Session, days: int) -> dict:
     from sqlalchemy import func as sqlfunc
     from_date = datetime.utcnow() - timedelta(days=days)
 
@@ -101,12 +98,30 @@ def get__stats(days: int = 30, current_user: str = Depends(get_current_user), db
             "sav_agents": sav_agents, "transfer_reasons": transfer_reasons, "alerts": alerts}
 
 
-@router.get("/analytics/ai-metrics", summary="Métriques de monitoring du modèle IA (latence, erreurs, RAG)")
-def get_ai_metrics(days: int = 30, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+@router.get("/analytics/stats", summary="Statistiques du service IA (taux de résolution, satisfaction, transferts)")
+def get__stats(days: int = 30, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
     user = get_user_by_email(db, current_user)
     if not is_admin_or_sav(user):
         raise HTTPException(status_code=403, detail="Accès refusé")
+    return _build_stats_data(db, days)
 
+
+@router.get("/analytics/stats/pdf", summary="Export PDF des statistiques du service IA")
+def export_stats_pdf(days: int = 30, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    user = get_user_by_email(db, current_user)
+    if not is_admin_or_sav(user):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    data = _build_stats_data(db, days)
+    pdf_bytes = build_stats_report_pdf(data, days)
+    filename = f"analytics-smartticket-{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _build_ai_metrics_data(db: Session, days: int) -> dict:
     from sqlalchemy import func as sqlfunc
     from_date = datetime.utcnow() - timedelta(days=days)
 
@@ -261,3 +276,26 @@ def get_ai_metrics(days: int = 30, current_user: str = Depends(get_current_user)
         "kb_score": kb_score,
         "negative_rate": negative_rate,
     }
+
+
+@router.get("/analytics/ai-metrics", summary="Métriques de monitoring du modèle IA (latence, erreurs, RAG)")
+def get_ai_metrics(days: int = 30, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    user = get_user_by_email(db, current_user)
+    if not is_admin_or_sav(user):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    return _build_ai_metrics_data(db, days)
+
+
+@router.get("/analytics/ai-metrics/pdf", summary="Export PDF des métriques de monitoring du modèle IA")
+def export_ai_metrics_pdf(days: int = 30, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    user = get_user_by_email(db, current_user)
+    if not is_admin_or_sav(user):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    data = _build_ai_metrics_data(db, days)
+    pdf_bytes = build_ai_metrics_report_pdf(data, days)
+    filename = f"monitoring-ia-smartticket-{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

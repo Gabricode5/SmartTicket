@@ -14,7 +14,8 @@ import {
     CheckCircle2, BarChart2, BookOpen, ArrowRight,
 } from "lucide-react"
 import Link from "next/link"
-import { REASON_LABELS, REASON_STYLES, type SessionItem, type TransferredSession, type UserItem } from "./types"
+import { REASON_LABELS, REASON_STYLES, type SessionItem, type SessionSearchResult, type TransferredSession, type UserItem } from "./types"
+import { renderSnippet } from "./searchSnippet"
 
 export default function AdminDashboard({ currentUserId }: { currentUserId: number }) {
     const [users, setUsers] = useState<UserItem[]>([])
@@ -34,6 +35,9 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
     const [editForm, setEditForm] = useState({ username: "", email: "", prenom: "", nom: "", role: "" })
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
     const [deletingUser, setDeletingUser] = useState<UserItem | null>(null)
+    const [sessionQuery, setSessionQuery] = useState("")
+    const [sessionSearchResults, setSessionSearchResults] = useState<SessionSearchResult[] | null>(null)
+    const [isSearchingSessions, setIsSearchingSessions] = useState(false)
 
     const PAGE_SIZE = 8
     const [usersPage, setUsersPage] = useState(1)
@@ -45,6 +49,28 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
     useEffect(() => {
         loadAll()
     }, [])
+
+    // Full-text search (débounced) sur le contenu des messages + titres de l'utilisateur sélectionné.
+    useEffect(() => {
+        const trimmed = sessionQuery.trim()
+        if (!selectedUser || !trimmed) {
+            setSessionSearchResults(null)
+            setIsSearchingSessions(false)
+            return
+        }
+        setIsSearchingSessions(true)
+        const timeoutId = setTimeout(async () => {
+            try {
+                const res = await fetch(`/api/sessions/search?user_id=${selectedUser.id}&q=${encodeURIComponent(trimmed)}`)
+                setSessionSearchResults(res.ok ? await res.json() : [])
+            } catch {
+                setSessionSearchResults([])
+            } finally {
+                setIsSearchingSessions(false)
+            }
+        }, 300)
+        return () => clearTimeout(timeoutId)
+    }, [sessionQuery, selectedUser])
 
     const loadAll = async () => {
         setIsLoading(true)
@@ -79,6 +105,8 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
         setSelectedUser(u)
         setSelectedSession(null)
         setSessionsPage(1)
+        setSessionQuery("")
+        setSessionSearchResults(null)
         setError(null)
         try {
             const res = await fetch(`/api/sessions?user_id=${u.id}`)
@@ -419,19 +447,75 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                     <Badge className="bg-violet-50 text-violet-600 border-violet-100 text-xs font-semibold">{sessions.length}</Badge>
                                 )}
                             </div>
+                            {selectedUser && (
+                                <div className="px-4 py-2.5 border-b border-slate-100">
+                                    <Input
+                                        value={sessionQuery}
+                                        onChange={(e) => setSessionQuery(e.target.value)}
+                                        placeholder="Rechercher dans les conversations..."
+                                        className="h-8 text-sm"
+                                    />
+                                </div>
+                            )}
                             <div className="divide-y divide-slate-50">
                                 {!selectedUser ? (
                                     <div className="px-5 py-10 text-center">
                                         <MessageCircle className="h-8 w-8 text-slate-200 mx-auto mb-2" />
                                         <p className="text-sm text-slate-400">Sélectionne un utilisateur</p>
                                     </div>
+                                ) : sessionQuery.trim() ? (
+                                    isSearchingSessions ? (
+                                        <div className="px-5 py-8 text-center text-sm text-slate-400">Recherche...</div>
+                                    ) : !sessionSearchResults || sessionSearchResults.length === 0 ? (
+                                        <div className="px-5 py-8 text-center text-sm text-slate-400">Aucun résultat pour « {sessionQuery.trim()} »</div>
+                                    ) : (
+                                        sessionSearchResults.map((s) => (
+                                            <div
+                                                key={s.id}
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={() => setSelectedSession(s)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter" || e.key === " ") {
+                                                        e.preventDefault()
+                                                        setSelectedSession(s)
+                                                    }
+                                                }}
+                                                className={`w-full text-left px-4 py-3 transition-colors cursor-pointer ${selectedSession?.id === s.id ? "bg-violet-50/70" : "hover:bg-slate-50/80"}`}
+                                            >
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div className="min-w-0">
+                                                        <div className="text-sm font-medium text-slate-800 truncate">{s.title || "Sans titre"}</div>
+                                                        {s.snippet ? (
+                                                            <div className="text-xs text-slate-400 mt-0.5 line-clamp-2">{renderSnippet(s.snippet)}</div>
+                                                        ) : (
+                                                            <div className="text-xs text-slate-400 mt-0.5">#{s.id}</div>
+                                                        )}
+                                                    </div>
+                                                    <div className={`flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${s.status === "closed" ? "bg-slate-100 text-slate-500" : s.status === "transferred" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                                        {s.status === "closed" ? <><CheckCircle2 className="h-2.5 w-2.5" /> Clôturée</>
+                                                            : s.status === "transferred" ? <><AlertCircle className="h-2.5 w-2.5" /> Transférée</>
+                                                            : <><CircleDot className="h-2.5 w-2.5" /> Ouverte</>}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )
                                 ) : sessions.length === 0 ? (
                                     <div className="px-5 py-8 text-center text-sm text-slate-400">Aucune session</div>
                                 ) : sessions.slice((sessionsPage - 1) * PAGE_SIZE, sessionsPage * PAGE_SIZE).map((s) => (
-                                    <button
+                                    <div
                                         key={s.id}
+                                        role="button"
+                                        tabIndex={0}
                                         onClick={() => setSelectedSession(s)}
-                                        className={`w-full text-left px-4 py-3 transition-colors ${selectedSession?.id === s.id ? "bg-violet-50/70" : "hover:bg-slate-50/80"}`}
+                                        onKeyDown={(e) => {
+                                            if (e.key === "Enter" || e.key === " ") {
+                                                e.preventDefault()
+                                                setSelectedSession(s)
+                                            }
+                                        }}
+                                        className={`w-full text-left px-4 py-3 transition-colors cursor-pointer ${selectedSession?.id === s.id ? "bg-violet-50/70" : "hover:bg-slate-50/80"}`}
                                     >
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0">
@@ -455,10 +539,10 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                                 )}
                                             </div>
                                         </div>
-                                    </button>
+                                    </div>
                                 ))}
                             </div>
-                            {Math.ceil(sessions.length / PAGE_SIZE) > 1 && (
+                            {!sessionQuery.trim() && Math.ceil(sessions.length / PAGE_SIZE) > 1 && (
                                 <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
                                     <button onClick={() => setSessionsPage(p => p - 1)} disabled={sessionsPage <= 1} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
                                         <ChevronLeft className="h-3.5 w-3.5" />
