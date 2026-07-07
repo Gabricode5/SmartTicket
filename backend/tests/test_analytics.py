@@ -1,4 +1,5 @@
 """Tests des endpoints /v1/analytics/stats et /v1/analytics/ai-metrics."""
+import os
 from datetime import datetime, timedelta
 
 import models
@@ -10,13 +11,17 @@ import models
 
 def _make_admin_client(client):
     """Crée un compte admin via /setup-admin et retourne un client authentifié."""
-    client.post("/v1/setup-admin", json={
-        "username": "test_admin",
-        "email": "admin_test@example.com",
-        "password": "admin_password123",
-        "prenom": "Admin",
-        "nom": "Test",
-    })
+    client.post(
+        "/v1/setup-admin",
+        json={
+            "username": "test_admin",
+            "email": "admin_test@example.com",
+            "password": "admin_password123",
+            "prenom": "Admin",
+            "nom": "Test",
+        },
+        headers={"X-Setup-Key": os.environ["ADMIN_SETUP_KEY"]},
+    )
     resp = client.post("/v1/login", json={
         "email": "admin_test@example.com",
         "password": "admin_password123",

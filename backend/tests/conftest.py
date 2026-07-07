@@ -4,6 +4,11 @@ import pytest
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-ci-only")
 os.environ.setdefault("ALGORITHM", "HS256")
 os.environ.setdefault("MISTRAL_API_KEY", "dummy")
+os.environ.setdefault("ADMIN_SETUP_KEY", "test-setup-key-for-ci-only")
+# La suite de tests fait largement plus de 5 logins/minute (fixtures auth_client,
+# _make_admin_client...) — on désactive la limite plutôt que de la contourner par test.
+os.environ.setdefault("LOGIN_RATE_LIMIT", "10000/minute")
+os.environ.setdefault("ASK_RATE_LIMIT", "10000/minute")
 
 # TEST_DATABASE_URL is intentionally separate from DATABASE_URL (the app's prod/dev DB).
 # Tests will refuse to run if this variable is not set or does not contain "test".

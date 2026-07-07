@@ -8,10 +8,14 @@ load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from sqlalchemy import text as _text
 
 import models
 from database import engine as _engine
+from dependencies import limiter
 from routers import ai, analytics, auth, knowledge, messages, sessions, users
 
 logging.basicConfig(
@@ -28,7 +32,7 @@ PURGE_RETENTION_DAYS = int(os.getenv("PURGE_RETENTION_DAYS", "30"))
 app = FastAPI(
     title="CRM Intelligent API",
     description="API pour un gestionnaire de tickets avec intégration IA (Mistral AI + RAG sur pgvector).",
-    version="1.0.0",
+    version="2.0.0",
     openapi_tags=[
         {"name": "IA", "description": "Endpoints exposant le modèle Mistral AI et le pipeline RAG (Retrieval-Augmented Generation)."},
         {"name": "Base de connaissances", "description": "Indexation et gestion de la base de connaissances vectorielle (pgvector)."},
@@ -57,6 +61,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
 
 for _router in [auth.router, sessions.router, messages.router, ai.router, knowledge.router, users.router, analytics.router]:
     app.include_router(_router, prefix="/v1")
@@ -107,7 +115,10 @@ def run_migrations():
     except Exception as exc:
         _log.error("create_all failed: %s", exc, exc_info=True)
 
-    # 3. ALTER TABLE — doit s'exécuter AVANT toute requête ORM sur ces colonnes
+    # 3. ALTER TABLE — doit s'exécuter AVANT toute requête ORM sur ces colonnes.
+    # backend/db/init-db.sql contient déjà ces colonnes pour les installations neuves ;
+    # ce bloc ne sert plus qu'à mettre à niveau une base déjà déployée avant leur ajout
+    # (ex: Render en prod, ou un volume Docker local créé avec un ancien init-db.sql).
     try:
         with _engine.connect() as conn:
             conn.execute(_text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS feedback INTEGER"))

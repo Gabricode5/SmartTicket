@@ -1,3 +1,47 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smartticket-backend"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi",
+  "uvicorn",
+  "apscheduler",
+  "requests",
+  "psycopg2-binary",
+  "sqlalchemy",
+  "pgvector",
+  "python-multipart",
+  "passlib[bcrypt]",
+  "bcrypt==4.0.1",
+  "python-jose[cryptography]",
+  "email-validator>=2.0.0",
+  "python-dotenv",
+  "slowapi",
+  "fpdf2",
+  "langchain-community",
+  "beautifulsoup4",
+  "langchain-text-splitters",
+  "lxml==6.0.2",
+  "pypdf==6.9.2",
+  "python-docx==1.2.0",
+  "typing-extensions==4.15.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-cov",
+  "httpx",
+  "ruff==0.6.9",
+]
+
+[tool.setuptools]
+py-modules = []
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"
@@ -27,4 +71,3 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["F401", "F811"]
 "__init__.py" = ["F401"]
-"ingest_pdf.py" = ["E401", "F401"]  # fichier legacy, imports multiples tolérés

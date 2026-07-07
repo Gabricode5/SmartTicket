@@ -5,6 +5,8 @@ from fastapi import Depends, HTTPException, Request
 from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 import models
@@ -15,6 +17,38 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/login", auto_error=False)
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
+
+# Stockage des compteurs de rate limiting. "memory://" fonctionne out-of-the-box mais
+# est local à chaque instance et se réinitialise à chaque redémarrage — suffisant pour
+# une seule instance (ex: plan Render gratuit/starter). Si l'app est scalée sur plusieurs
+# instances, pointer RATE_LIMIT_STORAGE_URI vers le Redis déjà présent dans docker-compose
+# (ex: "redis://redis:6379") pour un comptage partagé.
+RATE_LIMIT_STORAGE_URI = os.getenv("RATE_LIMIT_STORAGE_URI", "memory://")
+LOGIN_RATE_LIMIT = os.getenv("LOGIN_RATE_LIMIT", "5/minute")
+ASK_RATE_LIMIT = os.getenv("ASK_RATE_LIMIT", "20/minute")
+
+limiter = Limiter(key_func=get_remote_address, storage_uri=RATE_LIMIT_STORAGE_URI)
+
+
+def rate_limit_key_by_user(request: Request) -> str:
+    """Regroupe les compteurs de rate limit par compte (JWT) plutôt que par IP,
+    pour plafonner le coût Mistral par utilisateur même derrière une IP partagée.
+    Retombe sur l'IP si la requête n'est pas authentifiée."""
+    token = request.headers.get("authorization", "")
+    if token.lower().startswith("bearer "):
+        token = token[7:].strip()
+    else:
+        token = request.cookies.get("auth_token", "")
+    if token:
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            email = payload.get("sub")
+            if email:
+                return f"user:{email}"
+        except JWTError:
+            pass
+    return get_remote_address(request)
+
 
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "10"))
 KB_TOP_K = int(os.getenv("KB_TOP_K", "10"))

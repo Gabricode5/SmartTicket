@@ -1,8 +1,8 @@
 import os
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.orm import Session
 
 import models
@@ -10,17 +10,31 @@ import schemas
 from database import get_db
 from dependencies import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    LOGIN_RATE_LIMIT,
     create_access_token,
     get_current_user,
     get_user_by_email,
+    limiter,
     pwd_context,
 )
+from pdf_export import build_user_data_export_pdf
 
 router = APIRouter(tags=["Authentification"])
 
+ADMIN_SETUP_KEY = os.getenv("ADMIN_SETUP_KEY")
 
-@router.post("/setup-admin", summary="Crée ou promeut un compte admin")
-def setup_admin(payload: schemas.UserCreate, db: Session = Depends(get_db)):
+
+@router.post("/setup-admin", summary="Crée ou promeut un compte admin (nécessite X-Setup-Key)")
+def setup_admin(
+    payload: schemas.UserCreate,
+    x_setup_key: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    # Le bootstrap admin normal se fait automatiquement au démarrage via
+    # ADMIN_EMAIL/ADMIN_USERNAME/ADMIN_PASSWORD (voir main.py). Cet endpoint
+    # n'est qu'un outil de secours, désactivé tant que ADMIN_SETUP_KEY n'est pas défini.
+    if not ADMIN_SETUP_KEY or x_setup_key != ADMIN_SETUP_KEY:
+        raise HTTPException(status_code=403, detail="Non autorisé.")
     admin_role = db.query(models.Role).filter_by(nom_role="admin").first()
     if not admin_role:
         raise HTTPException(status_code=503, detail="Rôles non initialisés, réessaie dans quelques secondes.")
@@ -70,7 +84,8 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", summary="Se connecter et obtenir un token JWT")
-def login(user_credentials: schemas.UserLogin, db: Session = Depends(get_db)):
+@limiter.limit(LOGIN_RATE_LIMIT)
+def login(request: Request, user_credentials: schemas.UserLogin, db: Session = Depends(get_db)):
     user = db.query(models.Utilisateur).filter(models.Utilisateur.email == user_credentials.email, models.Utilisateur.deleted_at.is_(None)).first()
     if not user or not pwd_context.verify(user_credentials.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="L'email ou le mot de passe est incorrect")
@@ -130,7 +145,7 @@ def update_me(payload: schemas.MeUpdateRequest, current_user: str = Depends(get_
             "prenom": user.prenom, "nom": user.nom, "role": role_name, "date_creation": user.date_creation}
 
 
-@router.get("/me/export", summary="Exporter toutes ses données personnelles (RGPD Art. 15 et 20)")
+@router.get("/me/export", summary="Exporter toutes ses données personnelles en PDF (RGPD Art. 15 et 20)")
 def export_my_data(current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
     user = get_user_by_email(db, current_user)
     if not user:
@@ -148,32 +163,25 @@ def export_my_data(current_user: str = Depends(get_current_user), db: Session = 
         ).order_by(models.ChatMessage.date_creation.asc()).all()
         sessions_data.append({
             "id": s.id,
-            "titre": s.title,
-            "statut": s.status,
-            "date_creation": s.date_creation.isoformat() if s.date_creation else None,
+            "title": s.title,
+            "status": s.status,
             "messages": [
                 {
                     "auteur": m.type_envoyeur,
                     "contenu": m.contenu,
-                    "date": m.date_creation.isoformat() if m.date_creation else None,
+                    "date": m.date_creation.strftime("%d/%m/%Y %H:%M") if m.date_creation else None,
                 }
                 for m in messages
             ],
         })
 
-    return {
-        "date_export": datetime.utcnow().isoformat() + "Z",
-        "profil": {
-            "id": user.id,
-            "username": user.username,
-            "email": user.email,
-            "prenom": user.prenom,
-            "nom": user.nom,
-            "role": user.role.nom_role if user.role else "user",
-            "date_creation": user.date_creation.isoformat() if user.date_creation else None,
-        },
-        "conversations": sessions_data,
-    }
+    pdf_bytes = build_user_data_export_pdf(user, sessions_data)
+    filename = f"mes-donnees-smartticket-{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.put("/me/password", summary="Changer son mot de passe")

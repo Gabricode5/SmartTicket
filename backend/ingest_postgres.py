@@ -182,21 +182,21 @@ def _collect_urls_from_sitemap(base_url: str) -> list[str]:
     # Cette fonction essaye de récupérer une liste d'URLs via sitemap.xml
     sitemap_url = _find_sitemap_url(base_url)
     if not sitemap_url:
-        print("Aucun sitemap trouvé, fallback sur la page unique.")
+        logger.info("Aucun sitemap trouvé, fallback sur la page unique.")
         return []
 
-    print(f"Sitemap trouvé: {sitemap_url}")
+    logger.info("Sitemap trouvé: %s", sitemap_url)
     try:
         response = requests.get(sitemap_url, headers=DEFAULT_HEADERS, timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         first_level_urls = _extract_loc_urls_from_xml(response.text)
     except Exception:
-        print("Impossible de lire le sitemap, fallback sur la page unique.")
+        logger.warning("Impossible de lire le sitemap, fallback sur la page unique.")
         return []
 
     # Si le sitemap est vide, on retourne vide et on fera le fallback
     if not first_level_urls:
-        print("Sitemap vide, fallback sur la page unique.")
+        logger.info("Sitemap vide, fallback sur la page unique.")
         return []
 
     # On supporte un cas simple:
@@ -237,7 +237,7 @@ def _load_documents_from_urls(urls: list[str], job_state: dict | None = None) ->
             job_state["urls_done"] = i
             job_state["current_url"] = page_url
         if not _is_allowed_url(page_url):
-            print(f"Page ignorée (extension non textuelle): {page_url}")
+            logger.info("Page ignorée (extension non textuelle): %s", page_url)
             continue
         try:
             loader = WebBaseLoader(page_url)
@@ -248,12 +248,12 @@ def _load_documents_from_urls(urls: list[str], job_state: dict | None = None) ->
                 if len(content) < MIN_TEXT_LENGTH:
                     continue
                 if chunk_quality_score(content) < CHUNK_QUALITY_THRESHOLD:
-                    print(f"Contenu ignoré (score qualité trop bas): {page_url}")
+                    logger.info("Contenu ignoré (score qualité trop bas): %s", page_url)
                     continue
                 doc.page_content = content
                 docs.append(doc)
         except Exception as e:
-            print(f"Page ignorée (erreur): {page_url} -> {e}")
+            logger.warning("Page ignorée (erreur): %s -> %s", page_url, e)
     if job_state is not None:
         job_state["urls_done"] = len(urls)
         job_state["current_url"] = None
@@ -263,7 +263,7 @@ def ingest_to_postgres(url: str | None = None, category: str | None = None, job_
     # 2. Préparer l'URL et la catégorie
     source_url = url or DEFAULT_URL
     category_value = (category or DEFAULT_CATEGORY).strip() or DEFAULT_CATEGORY
-    print(f"Début de l'ingestion vers PostgreSQL depuis : {source_url}")
+    logger.info("Début de l'ingestion vers PostgreSQL depuis : %s", source_url)
 
     # 3. Vérification du robots.txt
     robots = _get_robots_parser(source_url)
@@ -271,9 +271,9 @@ def ingest_to_postgres(url: str | None = None, category: str | None = None, job_
     if robots is not None:
         if not robots.can_fetch(user_agent, source_url):
             raise ValueError(f"Le robots.txt interdit le scraping de cette URL : {source_url}")
-        print(f"robots.txt : scraping autorisé pour {source_url}")
+        logger.info("robots.txt : scraping autorisé pour %s", source_url)
     else:
-        print("robots.txt introuvable ou illisible, on continue sans restriction.")
+        logger.info("robots.txt introuvable ou illisible, on continue sans restriction.")
 
     # 4. Essayer le sitemap XML, sinon fallback sur l'URL de base
     urls_to_scrape = _collect_urls_from_sitemap(source_url)
@@ -286,13 +286,13 @@ def ingest_to_postgres(url: str | None = None, category: str | None = None, job_
         allowed = [u for u in urls_to_scrape if robots.can_fetch(user_agent, u)]
         blocked_count = urls_found - len(allowed)
         if blocked_count:
-            print(f"robots.txt : {blocked_count} URL(s) bloquée(s) et ignorées.")
+            logger.info("robots.txt : %d URL(s) bloquée(s) et ignorées.", blocked_count)
         urls_to_scrape = allowed
 
     if not urls_to_scrape:
         raise ValueError("Toutes les URLs sont bloquées par le robots.txt du site.")
 
-    print(f"Nombre d'URLs à scraper: {len(urls_to_scrape)}")
+    logger.info("Nombre d'URLs à scraper: %d", len(urls_to_scrape))
 
     if job_state is not None:
         job_state["urls_total"] = len(urls_to_scrape)
@@ -303,7 +303,7 @@ def ingest_to_postgres(url: str | None = None, category: str | None = None, job_
     docs = _load_documents_from_urls(urls_to_scrape, job_state=job_state)
     if not docs:
         raise ValueError("Aucun contenu récupéré. Vérifie l'URL ou les permissions du site.")
-    print(f"Pages chargées avec succès: {len(docs)} document(s).")
+    logger.info("Pages chargées avec succès: %d document(s).", len(docs))
 
     # 6. Découpage du texte (Chunking)
     text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
@@ -320,10 +320,10 @@ def ingest_to_postgres(url: str | None = None, category: str | None = None, job_
     original_chunk_count = len(chunks)
     if MAX_KB_CHUNKS > 0:
         chunks = chunks[:MAX_KB_CHUNKS]
-    print(f"✂️ {len(chunks)} morceaux créés.")
+    logger.info("✂️ %d morceaux créés.", len(chunks))
 
     # 7. Insertion directe dans la table SQL custom knowledge_base
-    print("Connexion à Postgres et insertion dans knowledge_base...")
+    logger.info("Connexion à Postgres et insertion dans knowledge_base...")
     db = SessionLocal()
     inserted = 0
     try:
@@ -343,7 +343,7 @@ def ingest_to_postgres(url: str | None = None, category: str | None = None, job_
                 inserted += 1
 
         db.commit()
-        print(f"✅ Mission accomplie ! {inserted} lignes insérées dans 'knowledge_base'.")
+        logger.info("✅ Mission accomplie ! %d lignes insérées dans 'knowledge_base'.", inserted)
         return {
             "inserted": inserted,
             "chunks": len(chunks),

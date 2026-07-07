@@ -7,6 +7,7 @@ const config = {
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/$1",
   },
+  setupFilesAfterEnv: ["<rootDir>/jest.setup.ts"],
 };
 
 module.exports = config;
