@@ -33,7 +33,8 @@ CREATE TABLE utilisateur (
     prenom VARCHAR(50),                                      -- Prénom optionnel
     nom VARCHAR(50),                                         -- Nom optionnel
     id_role INTEGER REFERENCES roles(id) DEFAULT 1,          -- Rôle par défaut = user
-    date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP -- Date de création
+    date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Date de création
+    deleted_at TIMESTAMP WITH TIME ZONE                      -- Soft-delete RGPD (NULL = compte actif)
 );
 
 -- =========================================
@@ -62,10 +63,12 @@ ON CONFLICT (email) DO NOTHING;
 -- Contient les conversations de chaque utilisateur.
 CREATE TABLE chat_sessions (
     id SERIAL PRIMARY KEY,                                    -- Identifiant de la session
-    id_utilisateur INTEGER REFERENCES utilisateur(id) ON DELETE CASCADE, -- Propriétaire session
+    id_utilisateur INTEGER NOT NULL REFERENCES utilisateur(id) ON DELETE CASCADE, -- Propriétaire session
     title VARCHAR(255),                                       -- Titre session
-    status VARCHAR(20) NOT NULL DEFAULT 'open',               -- Statut (open/closed)
-    date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP -- Date de création
+    status VARCHAR(20) NOT NULL DEFAULT 'open',               -- Statut (open/transferred/closed)
+    transfer_reason VARCHAR(50),                              -- Raison du transfert (technique/complexe/sensible/autre)
+    date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Date de création
+    deleted_at TIMESTAMP WITH TIME ZONE                       -- Soft-delete RGPD (NULL = session active)
 );
 
 -- =========================================
@@ -74,10 +77,28 @@ CREATE TABLE chat_sessions (
 -- Messages envoyés dans une session de chat.
 CREATE TABLE chat_messages (
     id SERIAL PRIMARY KEY,                                   -- Identifiant message
-    id_session INTEGER REFERENCES chat_sessions(id) ON DELETE CASCADE, -- Session liée
+    id_session INTEGER NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE, -- Session liée
     type_envoyeur VARCHAR(10) CHECK (type_envoyeur IN ('user', 'ai', 'sav')), -- Qui envoie
     contenu TEXT NOT NULL,                                   -- Texte du message
+    feedback INTEGER,                                        -- Retour utilisateur sur une réponse IA (1=👍, -1=👎, NULL=aucun)
     date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP -- Date d'envoi
+);
+
+-- =========================================
+-- TABLE AI_CALL_LOGS
+-- =========================================
+-- Journal des appels au modèle IA, utilisé par les dashboards monitoring/analytics.
+CREATE TABLE ai_call_logs (
+    id SERIAL PRIMARY KEY,                                    -- Identifiant du log
+    id_session INTEGER REFERENCES chat_sessions(id) ON DELETE SET NULL, -- Session liée (optionnelle)
+    call_type VARCHAR(20) NOT NULL,                           -- Type d'appel (ex: stream)
+    model_name VARCHAR(100) NOT NULL,                         -- Modèle Mistral utilisé
+    latency_ms INTEGER,                                       -- Latence de l'appel en millisecondes
+    rag_chunks_found INTEGER,                                 -- Nombre de chunks RAG trouvés
+    rag_context_chars INTEGER,                                -- Taille du contexte RAG injecté (caractères)
+    success BOOLEAN NOT NULL DEFAULT TRUE,                    -- Succès ou échec de l'appel
+    error_type VARCHAR(100),                                  -- Type d'erreur si échec
+    date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP -- Date de l'appel
 );
 
 -- =========================================
@@ -88,7 +109,7 @@ CREATE TABLE knowledge_base (
     id SERIAL PRIMARY KEY,                                    -- Identifiant chunk/document
     source_message_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL, -- Source optionnelle
     contenu TEXT NOT NULL,                                    -- Contenu textuel indexé
-    embedding vector(1024),                                   -- Vecteur embedding (mistral-embed 1024)
+    embedding vector(1024) NOT NULL,                          -- Vecteur embedding (mistral-embed 1024)
     category VARCHAR(50),                                     -- Catégorie logique (ex: service-public)
     source VARCHAR(500),                                      -- Nom/fichier/source logique du document indexé
     date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP -- Date d'insertion

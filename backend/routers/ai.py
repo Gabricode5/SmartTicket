@@ -1,6 +1,7 @@
+import logging
 import time
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -8,6 +9,7 @@ import models
 import schemas
 from database import get_db
 from dependencies import (
+    ASK_RATE_LIMIT,
     EMBED_MODEL,
     KB_MAX_CONTEXT_CHARS,
     KB_TOP_K,
@@ -17,8 +19,12 @@ from dependencies import (
     get_current_user,
     get_user_by_email,
     is_admin_or_sav,
+    limiter,
+    rate_limit_key_by_user,
 )
 from mistral_client import embed_text, stream_text
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["IA"])
 
@@ -34,7 +40,8 @@ router = APIRouter(tags=["IA"])
         "et la réponse est streamée token par token en `text/plain`."
     ),
 )
-def ask_question_stream(payload: schemas.AskRequest, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+@limiter.limit(ASK_RATE_LIMIT, key_func=rate_limit_key_by_user)
+def ask_question_stream(request: Request, payload: schemas.AskRequest, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
     question, session_id, mode = payload.question, payload.session_id, payload.mode
 
     user = get_user_by_email(db, current_user)
@@ -68,7 +75,7 @@ def ask_question_stream(payload: schemas.AskRequest, current_user: str = Depends
             rag_chunks_found = len(kb_rows)
             rag_context_chars = len(context)
     except Exception as e:
-        print(f"DEBUG: RAG context error -> {e}")
+        logger.warning("RAG context error: %s", e, exc_info=True)
         db.rollback()
 
     prompt = build_rag_prompt(question, context)
@@ -91,7 +98,7 @@ def ask_question_stream(payload: schemas.AskRequest, current_user: str = Depends
                     yield token
         except Exception as e:
             error_text = "Erreur IA pendant la génération."
-            print(f"DEBUG: stream error -> {e}")
+            logger.error("Stream error: %s", e, exc_info=True)
             yield error_text
             ai_chunks.append(error_text)
             success = False

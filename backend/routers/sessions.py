@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 import models
 import schemas
+from constants import REASON_LABELS, VALID_REASONS
 from database import get_db
 from dependencies import (
     EMBED_MODEL, MISTRAL_MODEL, REQUEST_TIMEOUT,
@@ -15,10 +16,6 @@ from dependencies import (
 from mistral_client import embed_text, generate_text
 
 router = APIRouter(tags=["Sessions"])
-
-VALID_REASONS = {"technique", "complexe", "sensible", "autre"}
-REASON_LABELS = {"technique": "Technique", "complexe": "Complexe", "sensible": "Sensible", "autre": "Autre"}
-REASON_COLORS = {"technique": "#0ea5e9", "complexe": "#f59e0b", "sensible": "#ef4444", "autre": "#8b5cf6"}
 
 
 @router.post("/sessions", response_model=schemas.ChatSessionResponse, summary="Créer une session de chat")

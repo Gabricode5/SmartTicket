@@ -4,13 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 import models
+from constants import REASON_COLORS, REASON_LABELS
 from database import get_db
 from dependencies import get_current_user, get_user_by_email, is_admin_or_sav
 
-router = APIRouter(tags=[""])
-
-REASON_LABELS = {"technique": "Technique", "complexe": "Complexe", "sensible": "Sensible", "autre": "Autre"}
-REASON_COLORS = {"technique": "#0ea5e9", "complexe": "#f59e0b", "sensible": "#ef4444", "autre": "#8b5cf6"}
+router = APIRouter(tags=["Analytics"])
 
 ALERT_THRESHOLDS = {
     "resolution_rate_critical": 50.0,

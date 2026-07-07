@@ -123,12 +123,11 @@ export default function SettingsPage() {
                 setError("Impossible d'exporter vos données.")
                 return
             }
-            const data = await response.json()
-            const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
+            const blob = await response.blob()
             const url = URL.createObjectURL(blob)
             const a = document.createElement("a")
             a.href = url
-            a.download = `mes-donnees-smartticket-${new Date().toISOString().slice(0, 10)}.json`
+            a.download = `mes-donnees-smartticket-${new Date().toISOString().slice(0, 10)}.pdf`
             document.body.appendChild(a)
             a.click()
             document.body.removeChild(a)
@@ -294,7 +293,7 @@ export default function SettingsPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                        Le fichier JSON contient votre profil, toutes vos conversations et l&apos;ensemble des messages échangés.
+                        Le fichier PDF contient votre profil, toutes vos conversations et l&apos;ensemble des messages échangés.
                     </p>
                     <Button variant="outline" onClick={handleExportData} disabled={exporting}>
                         <Download className="mr-2 h-4 w-4" />

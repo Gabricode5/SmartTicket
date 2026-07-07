@@ -7,9 +7,26 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ## [Non publié]
 
+---
+
+## [2.0.0] - 2026-07-07
+
 ### Ajouté
 - Journal des décisions RAG (`docs/E3/RAG_DECISIONS_LOG.md`)
 - Lint Python automatisé (Ruff) dans la CI
+- Rate limiting sur `POST /login` (5/min par IP) et `POST /ask/stream` (20/min par compte utilisateur) via `slowapi`
+- Tests de composants frontend : `UserDashboard`, `SavDashboard`, `AdminDashboard`
+
+### Modifié
+- `GET /v1/me/export` (export RGPD Art. 15/20) renvoie désormais un PDF au lieu d'un JSON — **rupture de contrat** pour tout consommateur qui parsait la réponse JSON
+- `backend/db/init-db.sql` resynchronisé avec `models.py` (schéma complet dès l'installation, plus besoin d'attendre les migrations au démarrage)
+- Dépendances Python unifiées dans `backend/pyproject.toml` (suppression de `requirements.txt`/`requirements-dev.txt`)
+
+### Sécurité
+- `POST /v1/setup-admin` — **rupture de contrat** : endpoint auparavant accessible sans authentification, désormais désactivé par défaut et protégé par header `X-Setup-Key`
+
+### Retiré
+- Fichiers polluants versionnés par erreur (index pgvector binaire, lock LibreOffice, lockfiles pnpm), code mort (`ingest_pdf.py`, `migrate.py`, `uv.lock`), dépendance frontend inutilisée `react-is`
 
 ---
 
@@ -74,4 +91,5 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+[2.0.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.0.0
 [1.0.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v1.0.0
