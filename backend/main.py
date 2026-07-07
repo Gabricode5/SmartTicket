@@ -1,5 +1,6 @@
 import logging
 import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
 from dotenv import load_dotenv
@@ -28,46 +29,6 @@ if not os.getenv("SECRET_KEY"):
     raise RuntimeError("SECRET_KEY manquante. Définis-la dans l'environnement.")
 
 PURGE_RETENTION_DAYS = int(os.getenv("PURGE_RETENTION_DAYS", "30"))
-
-app = FastAPI(
-    title="CRM Intelligent API",
-    description="API pour un gestionnaire de tickets avec intégration IA (Mistral AI + RAG sur pgvector).",
-    version="2.0.0",
-    openapi_tags=[
-        {"name": "IA", "description": "Endpoints exposant le modèle Mistral AI et le pipeline RAG (Retrieval-Augmented Generation)."},
-        {"name": "Base de connaissances", "description": "Indexation et gestion de la base de connaissances vectorielle (pgvector)."},
-        {"name": "Sessions", "description": "Gestion des sessions de chat et transferts vers un agent humain."},
-        {"name": "Messages", "description": "Lecture, création de messages et feedback utilisateur."},
-        {"name": "Authentification", "description": "Inscription, connexion et gestion du profil utilisateur."},
-        {"name": "Utilisateurs", "description": "Administration des comptes utilisateurs (admin uniquement)."},
-        {"name": "Analytics", "description": "Statistiques et indicateurs de performance du service IA."},
-    ],
-)
-
-cors_origins = [
-    origin.strip()
-    for origin in os.getenv("CORS_ORIGINS", "http://localhost:3005,http://localhost:3000").split(",")
-    if origin.strip()
-]
-cors_origins = [
-    origin if origin.startswith("http://") or origin.startswith("https://") else f"https://{origin}"
-    for origin in cors_origins
-]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-app.add_middleware(SlowAPIMiddleware)
-
-for _router in [auth.router, sessions.router, messages.router, ai.router, knowledge.router, users.router, analytics.router]:
-    app.include_router(_router, prefix="/v1")
 
 
 def purge_soft_deleted(retention_days: int = PURGE_RETENTION_DAYS) -> None:
@@ -98,8 +59,7 @@ def purge_soft_deleted(retention_days: int = PURGE_RETENTION_DAYS) -> None:
         _log.error("RGPD purge failed: %s", exc, exc_info=True)
 
 
-@app.on_event("startup")
-def run_migrations():
+def run_migrations() -> None:
     # 1. Extension vector
     try:
         with _engine.connect() as conn:
@@ -176,7 +136,6 @@ def run_migrations():
         _log.error("Roles/admin setup failed: %s", exc, exc_info=True)
 
 
-@app.on_event("startup")
 def start_purge_scheduler():
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
@@ -187,8 +146,61 @@ def start_purge_scheduler():
         _log.info("Scheduler RGPD démarré — purge quotidienne à 03:00 UTC (rétention %d j)", PURGE_RETENTION_DAYS)
         # Purge immédiate au démarrage pour traiter les enregistrements déjà expirés
         purge_soft_deleted()
+        return scheduler
     except Exception as exc:
         _log.error("Scheduler startup failed: %s", exc, exc_info=True)
+        return None
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    run_migrations()
+    scheduler = start_purge_scheduler()
+    yield
+    if scheduler is not None:
+        scheduler.shutdown(wait=False)
+
+
+app = FastAPI(
+    title="CRM Intelligent API",
+    description="API pour un gestionnaire de tickets avec intégration IA (Mistral AI + RAG sur pgvector).",
+    version="2.2.0",
+    lifespan=lifespan,
+    openapi_tags=[
+        {"name": "IA", "description": "Endpoints exposant le modèle Mistral AI et le pipeline RAG (Retrieval-Augmented Generation)."},
+        {"name": "Base de connaissances", "description": "Indexation et gestion de la base de connaissances vectorielle (pgvector)."},
+        {"name": "Sessions", "description": "Gestion des sessions de chat et transferts vers un agent humain."},
+        {"name": "Messages", "description": "Lecture, création de messages et feedback utilisateur."},
+        {"name": "Authentification", "description": "Inscription, connexion et gestion du profil utilisateur."},
+        {"name": "Utilisateurs", "description": "Administration des comptes utilisateurs (admin uniquement)."},
+        {"name": "Analytics", "description": "Statistiques et indicateurs de performance du service IA."},
+    ],
+)
+
+cors_origins = [
+    origin.strip()
+    for origin in os.getenv("CORS_ORIGINS", "http://localhost:3005,http://localhost:3000").split(",")
+    if origin.strip()
+]
+cors_origins = [
+    origin if origin.startswith("http://") or origin.startswith("https://") else f"https://{origin}"
+    for origin in cors_origins
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_middleware(SlowAPIMiddleware)
+
+for _router in [auth.router, sessions.router, messages.router, ai.router, knowledge.router, users.router, analytics.router]:
+    app.include_router(_router, prefix="/v1")
 
 
 @app.get("/")

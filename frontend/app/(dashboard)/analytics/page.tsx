@@ -11,8 +11,9 @@ import {
 } from "recharts"
 import {
     TrendingUp, TrendingDown, MessageSquare, Zap, Star,
-    AlertTriangle, AlertCircle, CheckCircle2,
+    AlertTriangle, AlertCircle, CheckCircle2, Download, FileText,
 } from "lucide-react"
+import { downloadCsv } from "@/lib/csv"
 
 type DayEntry = { name: string; IA: number; Humain: number }
 type AgentEntry = { name: string; initials: string; conversations: number }
@@ -41,6 +42,7 @@ export default function AnalyticsPage() {
     const router = useRouter()
     const [days, setDays] = useState(30)
     const [data, setData] = useState<AnalyticsData | null>(null)
+    const [exportingPdf, setExportingPdf] = useState(false)
 
     const isLoading = data === null
 
@@ -48,6 +50,46 @@ export default function AnalyticsPage() {
         if (d === days) return
         setData(null)
         setDays(d)
+    }
+
+    const handleExportCsv = () => {
+        if (!data) return
+        downloadCsv(`analytics-smartticket-${new Date().toISOString().slice(0, 10)}.csv`, [
+            {
+                title: "Évolution quotidienne des conversations",
+                headers: ["Jour", "Messages IA", "Messages humains"],
+                rows: data.daily_messages.map((d) => [d.name, d.IA, d.Humain]),
+            },
+            {
+                title: "Raisons de transfert",
+                headers: ["Raison", "Nombre"],
+                rows: data.transfer_reasons.map((r) => [r.name, r.value]),
+            },
+            {
+                title: "Agents SAV",
+                headers: ["Agent", "Conversations traitées"],
+                rows: data.sav_agents.map((a) => [a.name, a.conversations]),
+            },
+        ])
+    }
+
+    const handleExportPdf = async () => {
+        setExportingPdf(true)
+        try {
+            const res = await fetch(`/api/analytics/stats/pdf?days=${days}`)
+            if (!res.ok) return
+            const blob = await res.blob()
+            const url = URL.createObjectURL(blob)
+            const a = document.createElement("a")
+            a.href = url
+            a.download = `analytics-smartticket-${new Date().toISOString().slice(0, 10)}.pdf`
+            document.body.appendChild(a)
+            a.click()
+            document.body.removeChild(a)
+            URL.revokeObjectURL(url)
+        } finally {
+            setExportingPdf(false)
+        }
     }
 
     useEffect(() => {
@@ -74,14 +116,22 @@ export default function AnalyticsPage() {
                     <h1 className="text-2xl font-bold tracking-tight">Analytique Application</h1>
                     <p className="text-muted-foreground">Sessions, satisfaction et performance du service SAV.</p>
                 </div>
-                <div className="flex bg-muted/50 p-1 rounded-lg">
-                    {PERIODS.map(({ label, days: d }) => (
-                        <Button key={d} onClick={() => handlePeriodChange(d)}
-                            variant={days === d ? "secondary" : "ghost"} size="sm"
-                            className={`rounded-md ${days === d ? "shadow-sm bg-background text-foreground" : "hover:bg-background text-muted-foreground hover:text-foreground"}`}>
-                            {label}
-                        </Button>
-                    ))}
+                <div className="flex items-center gap-3">
+                    <div className="flex bg-muted/50 p-1 rounded-lg">
+                        {PERIODS.map(({ label, days: d }) => (
+                            <Button key={d} onClick={() => handlePeriodChange(d)}
+                                variant={days === d ? "secondary" : "ghost"} size="sm"
+                                className={`rounded-md ${days === d ? "shadow-sm bg-background text-foreground" : "hover:bg-background text-muted-foreground hover:text-foreground"}`}>
+                                {label}
+                            </Button>
+                        ))}
+                    </div>
+                    <Button variant="outline" size="sm" onClick={handleExportCsv} disabled={isLoading}>
+                        <Download className="h-4 w-4 mr-1.5" /> CSV
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={isLoading || exportingPdf}>
+                        <FileText className="h-4 w-4 mr-1.5" /> {exportingPdf ? "…" : "PDF"}
+                    </Button>
                 </div>
             </div>
 

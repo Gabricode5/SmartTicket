@@ -9,6 +9,21 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+## [2.2.0] - 2026-07-07
+
+### Ajouté
+- `GET /v1/analytics/stats/pdf` et `GET /v1/analytics/ai-metrics/pdf` : export PDF des tableaux de bord Analytics et Monitoring IA (`backend/pdf_export.py`)
+- Export CSV côté client des mêmes tableaux de bord (`frontend/lib/csv.ts`), sans aller-retour serveur
+
+---
+
+## [2.1.0] - 2026-07-07
+
+### Ajouté
+- `GET /v1/sessions/search` : recherche full-text (Postgres `to_tsvector`/`plainto_tsquery`, config `french`) dans le contenu des messages et les titres de conversation, avec extrait surligné (`ts_headline`). Intégré dans le tableau de bord utilisateur (recherche serveur débouncée), en remplacement de l'ancien filtre client limité aux titres
+
+---
+
 ## [2.0.0] - 2026-07-07
 
 ### Ajouté
@@ -82,7 +97,7 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 - Thème cohérent indigo, design responsive
 
 **Infrastructure**
-- Docker : Dockerfile backend et frontend, docker-compose orchestrant 7 services (backend, frontend, PostgreSQL, pgAdmin, Traefik, Watchtower, pgvector)
+- Docker : Dockerfile backend et frontend, docker-compose orchestrant 7 services (backend, frontend, PostgreSQL+pgvector, Redis, pgAdmin, Ollama, Open WebUI)
 - CI GitHub Actions : lint TypeScript, ESLint, tests Pytest avec couverture, build Next.js — déploiement Render déclenché si tout passe
 - Déploiement automatique sur Render (backend + frontend + base PostgreSQL managée)
 
@@ -91,5 +106,7 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+[2.2.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.2.0
+[2.1.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.1.0
 [2.0.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.0.0
 [1.0.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v1.0.0

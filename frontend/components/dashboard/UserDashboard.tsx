@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Search, MessageSquare, Zap, Clock, Star, TrendingUp, Bot, Headphones, ChevronLeft, ChevronRight } from "lucide-react"
-import type { SessionItem } from "./types"
+import type { SessionItem, SessionSearchResult } from "./types"
+import { renderSnippet } from "./searchSnippet"
 
 export default function UserDashboard({ userId }: { userId: number }) {
     const router = useRouter()
@@ -18,6 +19,8 @@ export default function UserDashboard({ userId }: { userId: number }) {
     const [error, setError] = useState<string | null>(null)
     const [closingSessionId, setClosingSessionId] = useState<number | null>(null)
     const [sessionsPage, setSessionsPage] = useState(1)
+    const [searchResults, setSearchResults] = useState<SessionSearchResult[] | null>(null)
+    const [isSearching, setIsSearching] = useState(false)
 
     const PAGE_SIZE = 10
 
@@ -39,6 +42,28 @@ export default function UserDashboard({ userId }: { userId: number }) {
         loadSessions()
     }, [userId])
 
+    // Full-text search (débounced) sur le contenu des messages + titres, côté serveur.
+    useEffect(() => {
+        const trimmed = userQuery.trim()
+        if (!trimmed) {
+            setSearchResults(null)
+            setIsSearching(false)
+            return
+        }
+        setIsSearching(true)
+        const timeoutId = setTimeout(async () => {
+            try {
+                const res = await fetch(`/api/sessions/search?user_id=${userId}&q=${encodeURIComponent(trimmed)}`)
+                setSearchResults(res.ok ? await res.json() : [])
+            } catch {
+                setSearchResults([])
+            } finally {
+                setIsSearching(false)
+            }
+        }, 300)
+        return () => clearTimeout(timeoutId)
+    }, [userQuery, userId])
+
     const handleCloseSession = async (session: SessionItem) => {
         const confirmed = window.confirm(`Clôturer la session #${session.id} ?`)
         if (!confirmed) return
@@ -59,10 +84,7 @@ export default function UserDashboard({ userId }: { userId: number }) {
         }
     }
 
-    const filteredSessions = userSessions.filter((s) => {
-        if (!userQuery.trim()) return true
-        return (s.title || "Nouvelle conversation").toLowerCase().includes(userQuery.toLowerCase())
-    })
+    const isSearchMode = userQuery.trim().length > 0
 
     const totalSessions = userSessions.length
     const closedSessions = userSessions.filter((s) => s.status === "closed").length
@@ -153,12 +175,59 @@ export default function UserDashboard({ userId }: { userId: number }) {
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-6">
-                                {isLoading ? (
+                                {isSearchMode ? (
+                                    isSearching ? (
+                                        <div className="text-sm text-muted-foreground">Recherche...</div>
+                                    ) : !searchResults || searchResults.length === 0 ? (
+                                        <div className="text-sm text-muted-foreground">Aucun résultat pour « {userQuery.trim()} ».</div>
+                                    ) : (
+                                        searchResults.map((session) => (
+                                            <div
+                                                key={session.id}
+                                                role="button"
+                                                tabIndex={0}
+                                                onClick={() => router.push(`/ai-assistant/${session.id}`)}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === "Enter" || e.key === " ") {
+                                                        e.preventDefault()
+                                                        router.push(`/ai-assistant/${session.id}`)
+                                                    }
+                                                }}
+                                                className="w-full flex items-start justify-between rounded-md border border-transparent hover:border-muted hover:bg-muted/30 px-3 py-2 transition cursor-pointer"
+                                            >
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-medium leading-none">
+                                                        {session.title || "Nouvelle conversation"}
+                                                    </p>
+                                                    {session.snippet && (
+                                                        <p className="text-sm text-muted-foreground mt-1.5">
+                                                            {renderSnippet(session.snippet)}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-4">
+                                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                                        {session.date_creation
+                                                            ? new Date(session.date_creation).toLocaleDateString("fr-FR")
+                                                            : "—"}
+                                                    </span>
+                                                    <Badge variant="secondary" className={`${
+                                                        session.status === "closed" ? "bg-slate-200 text-slate-700"
+                                                        : session.status === "transferred" ? "bg-amber-100 text-amber-700"
+                                                        : "bg-emerald-100 text-emerald-700"
+                                                    } border-0`}>
+                                                        {session.status === "closed" ? "Clôturée" : session.status === "transferred" ? "Transférée" : "Ouverte"}
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )
+                                ) : isLoading ? (
                                     <div className="text-sm text-muted-foreground">Chargement...</div>
-                                ) : filteredSessions.length === 0 ? (
+                                ) : userSessions.length === 0 ? (
                                     <div className="text-sm text-muted-foreground">Aucune conversation.</div>
                                 ) : (
-                                    filteredSessions.slice((sessionsPage - 1) * PAGE_SIZE, sessionsPage * PAGE_SIZE).map((session) => (
+                                    userSessions.slice((sessionsPage - 1) * PAGE_SIZE, sessionsPage * PAGE_SIZE).map((session) => (
                                         <div
                                             key={session.id}
                                             role="button"
@@ -228,7 +297,7 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                         </div>
                                     ))
                                 )}
-                                {Math.ceil(filteredSessions.length / PAGE_SIZE) > 1 && (
+                                {!isSearchMode && Math.ceil(userSessions.length / PAGE_SIZE) > 1 && (
                                     <div className="flex items-center justify-between pt-2 border-t">
                                         <button
                                             onClick={() => setSessionsPage(p => p - 1)}
@@ -238,11 +307,11 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                             <ChevronLeft className="h-4 w-4" /> Précédent
                                         </button>
                                         <span className="text-sm text-muted-foreground">
-                                            {sessionsPage} / {Math.ceil(filteredSessions.length / PAGE_SIZE)}
+                                            {sessionsPage} / {Math.ceil(userSessions.length / PAGE_SIZE)}
                                         </span>
                                         <button
                                             onClick={() => setSessionsPage(p => p + 1)}
-                                            disabled={sessionsPage >= Math.ceil(filteredSessions.length / PAGE_SIZE)}
+                                            disabled={sessionsPage >= Math.ceil(userSessions.length / PAGE_SIZE)}
                                             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                                         >
                                             Suivant <ChevronRight className="h-4 w-4" />

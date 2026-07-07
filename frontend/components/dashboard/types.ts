@@ -15,6 +15,14 @@ export type SessionItem = {
     has_sav_reply?: boolean
 }
 
+export type SessionSearchResult = {
+    id: number
+    title?: string | null
+    date_creation?: string | null
+    status?: string | null
+    snippet?: string | null
+}
+
 export type TransferredSession = {
     id: number
     title?: string | null

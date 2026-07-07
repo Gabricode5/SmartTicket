@@ -56,6 +56,22 @@ class TestAuth:
         response = auth_client.get("/v1/analytics/ai-metrics")
         assert response.status_code == 403
 
+    def test_stats_pdf_unauthenticated_returns_401(self, client):
+        response = client.get("/v1/analytics/stats/pdf")
+        assert response.status_code == 401
+
+    def test_ai_metrics_pdf_unauthenticated_returns_401(self, client):
+        response = client.get("/v1/analytics/ai-metrics/pdf")
+        assert response.status_code == 401
+
+    def test_stats_pdf_regular_user_returns_403(self, auth_client):
+        response = auth_client.get("/v1/analytics/stats/pdf")
+        assert response.status_code == 403
+
+    def test_ai_metrics_pdf_regular_user_returns_403(self, auth_client):
+        response = auth_client.get("/v1/analytics/ai-metrics/pdf")
+        assert response.status_code == 403
+
 
 class TestStats:
     """Vérifie la structure de la réponse /v1/analytics/stats."""
@@ -150,3 +166,37 @@ class TestAiMetrics:
         # latence moyenne doit être calculée (5 appels réussis)
         assert data["avg_latency_ms"] is not None
         assert data["avg_latency_ms"] > 0
+
+
+class TestExportPdf:
+    """Vérifie les endpoints d'export PDF /v1/analytics/{stats,ai-metrics}/pdf."""
+
+    def test_stats_pdf_returns_valid_pdf(self, client):
+        admin_client = _make_admin_client(client)
+        response = admin_client.get("/v1/analytics/stats/pdf")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert "attachment" in response.headers["content-disposition"]
+        assert response.content[:4] == b"%PDF"
+
+    def test_ai_metrics_pdf_returns_valid_pdf(self, client):
+        admin_client = _make_admin_client(client)
+        response = admin_client.get("/v1/analytics/ai-metrics/pdf")
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "application/pdf"
+        assert "attachment" in response.headers["content-disposition"]
+        assert response.content[:4] == b"%PDF"
+
+    def test_stats_pdf_with_seeded_data_returns_valid_pdf(self, client, db_session):
+        """Un rapport avec des vraies données (alertes, tableaux non vides) doit rester un PDF valide."""
+        admin_client = _make_admin_client(client)
+        me = admin_client.get("/v1/me").json()
+        session_resp = admin_client.post("/v1/sessions", params={"user_id": me["id"]}, json={"title": "Test export"})
+        session_id = session_resp.json()["id"]
+        db_session.add(models.ChatMessage(id_session=session_id, type_envoyeur="user", contenu="Bonjour"))
+        db_session.add(models.ChatMessage(id_session=session_id, type_envoyeur="ai", contenu="Réponse", feedback=-1))
+        db_session.commit()
+
+        response = admin_client.get("/v1/analytics/stats/pdf")
+        assert response.status_code == 200
+        assert response.content[:4] == b"%PDF"

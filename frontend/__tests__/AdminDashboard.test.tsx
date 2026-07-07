@@ -63,6 +63,56 @@ describe("AdminDashboard", () => {
     expect(await screen.findByText("Souci de paiement")).toBeInTheDocument();
   });
 
+  it("searches the selected user's conversations and highlights the match", async () => {
+    const sessions = [{ id: 7, title: "Souci de paiement", status: "open" }];
+    const searchResults = [
+      { id: 7, title: "Souci de paiement", status: "open", snippet: "problème de <b>paiement</b> récurrent" },
+    ];
+    const fetchMock = mockFetch((url, init) => {
+      if (url.startsWith("/api/sessions/search")) return jsonResponse(searchResults);
+      if (url.startsWith("/api/sessions?user_id=1")) return jsonResponse(sessions);
+      return handler(url, init);
+    });
+
+    render(<AdminDashboard currentUserId={3} />);
+    fireEvent.click(await screen.findByText("alice"));
+    await screen.findByText("Souci de paiement");
+
+    fireEvent.change(screen.getByPlaceholderText("Rechercher dans les conversations..."), {
+      target: { value: "paiement" },
+    });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/sessions/search?user_id=1&q=paiement");
+    });
+
+    expect(await screen.findByText("paiement", { selector: "strong" })).toBeInTheDocument();
+  });
+
+  it("clears the previous search when a different user is selected", async () => {
+    const fetchMock = mockFetch((url, init) => {
+      if (url.startsWith("/api/sessions/search")) return jsonResponse([{ id: 7, title: "X", status: "open", snippet: "<b>x</b>" }]);
+      if (url.startsWith("/api/sessions?user_id=")) return jsonResponse([]);
+      return handler(url, init);
+    });
+
+    render(<AdminDashboard currentUserId={3} />);
+    fireEvent.click(await screen.findByText("alice"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/sessions?user_id=1"));
+
+    fireEvent.change(screen.getByPlaceholderText("Rechercher dans les conversations..."), {
+      target: { value: "paiement" },
+    });
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/sessions/search?user_id=1&q=paiement");
+    });
+
+    fireEvent.click(screen.getByText("bob"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/sessions?user_id=2"));
+
+    expect(screen.getByPlaceholderText("Rechercher dans les conversations...")).toHaveValue("");
+  });
+
   it("promotes a user to SAV and reloads the lists", async () => {
     const fetchMock = mockFetch(handler);
 
