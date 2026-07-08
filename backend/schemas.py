@@ -33,6 +33,15 @@ class UserResponse(BaseModel):
 class ResendVerificationRequest(BaseModel):
     email: EmailStr
 
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
 class UserListResponse(BaseModel):
     id: int
     username: str

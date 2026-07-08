@@ -87,3 +87,19 @@ def send_verification_email(to_email: str, username: str, token: str) -> None:
         "<p>Ce lien expire dans 48 heures. Si vous n'êtes pas à l'origine de cette inscription, ignorez cet email.</p>"
     )
     send_email(to_email, "Confirmez votre adresse email — SmartTicket", text_body, html_body)
+
+
+def send_password_reset_email(to_email: str, username: str, token: str) -> None:
+    link = f"{FRONTEND_URL}/reset-password?token={token}"
+    text_body = (
+        f"Bonjour {username},\n\n"
+        f"Vous avez demandé à réinitialiser votre mot de passe SmartTicket. Cliquez sur ce lien pour en choisir un nouveau :\n{link}\n\n"
+        "Ce lien expire dans 1 heure. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email — votre mot de passe reste inchangé."
+    )
+    html_body = (
+        f"<p>Bonjour {username},</p>"
+        f"<p>Vous avez demandé à réinitialiser votre mot de passe SmartTicket. Cliquez sur ce lien pour en choisir un nouveau :</p>"
+        f'<p><a href="{link}">Réinitialiser mon mot de passe</a></p>'
+        "<p>Ce lien expire dans 1 heure. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email — votre mot de passe reste inchangé.</p>"
+    )
+    send_email(to_email, "Réinitialisation de votre mot de passe — SmartTicket", text_body, html_body)
