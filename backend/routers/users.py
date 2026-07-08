@@ -34,7 +34,7 @@ def update_user_role(user_id: int, payload: schemas.UserRoleUpdateRequest, curre
     if requester.id == target.id:
         raise HTTPException(status_code=400, detail="Vous ne pouvez pas modifier votre propre rôle")
     new_role = payload.role.strip().lower()
-    if new_role not in ["user", "sav", "admin"]:
+    if new_role not in ["user", "sav", "superviseur", "admin"]:
         raise HTTPException(status_code=400, detail="Rôle invalide")
 
     is_admin_requester = requester.role.nom_role == "admin"
@@ -82,7 +82,7 @@ def update_user_by_admin(user_id: int, payload: schemas.UserAdminUpdateRequest, 
         target.nom = payload.nom.strip() if payload.nom else None
     if payload.role is not None:
         next_role = payload.role.strip().lower()
-        if next_role not in ["user", "sav", "admin"]:
+        if next_role not in ["user", "sav", "superviseur", "admin"]:
             raise HTTPException(status_code=400, detail="Rôle invalide")
         if requester.id == target.id and next_role != "admin":
             raise HTTPException(status_code=400, detail="Vous ne pouvez pas retirer votre rôle admin")

@@ -1,10 +1,12 @@
 """Tests de l'endpoint GET /v1/sessions/search (full-text)."""
+import secrets
+
 import models
 
-# Identifiants factices utilisés uniquement pour créer des comptes jetables dans la
-# base de test locale/CI (conftest.py refuse de démarrer si TEST_DATABASE_URL ne
-# contient pas "test" — ces comptes ne peuvent jamais exister ailleurs).
-_TEST_PASSWORD = "not-a-real-secret-123"  # noqa: S105 (test fixture, not a credential)
+# Généré aléatoirement à chaque run (jamais une chaîne en dur) pour créer des comptes
+# jetables dans la base de test locale/CI (conftest.py refuse de démarrer si
+# TEST_DATABASE_URL ne contient pas "test" — ces comptes ne peuvent jamais exister ailleurs).
+_TEST_PASSWORD = secrets.token_urlsafe(16)
 
 
 def _create_session_with_message(auth_client, db_session, user_id: int, title: str, contenu: str) -> int:

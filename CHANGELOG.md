@@ -27,6 +27,10 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 - Nouveau rôle `superviseur` : hérite de tous les droits d'un agent SAV (sessions transférées, base de connaissances, analytics) et peut en plus promouvoir/rétrograder un compte entre `user` et `sav` — sans jamais pouvoir toucher aux comptes `admin` ni éditer/supprimer un profil utilisateur
 - `frontend/components/dashboard/SupervisorDashboard.tsx` : gestion de l'équipe SAV (promotion/rétrogradation) + file d'attente de tickets intégrée (réutilise `SavDashboard`)
 
+### Corrigé
+- `PUT /v1/users/{id}/role` et `PUT /v1/users/{id}` rejetaient `superviseur` avec `400 Rôle invalide` (liste blanche oubliée lors de l'ajout du rôle, attrapé par la CI)
+- `AdminDashboard.tsx` ne récupérait ni n'affichait les comptes `superviseur` (colonne manquante), les rendant invisibles après promotion
+
 ---
 
 ## [2.2.0] - 2026-07-07

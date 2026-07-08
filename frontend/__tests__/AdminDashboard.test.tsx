@@ -15,6 +15,7 @@ jest.mock("next/link", () => ({
 const usersByRole: Record<string, unknown[]> = {
   user: [{ id: 1, username: "alice", email: "alice@test.com", role: "user" }],
   sav: [{ id: 2, username: "bob", email: "bob@test.com", role: "sav" }],
+  superviseur: [{ id: 4, username: "dave", email: "dave@test.com", role: "superviseur" }],
   admin: [{ id: 3, username: "carol", email: "carol@test.com", role: "admin" }],
 };
 
@@ -39,6 +40,10 @@ describe("AdminDashboard", () => {
     expect(await screen.findByText("alice")).toBeInTheDocument();
     expect(screen.getByText("bob")).toBeInTheDocument();
     expect(screen.getByText("carol")).toBeInTheDocument();
+    // Regression test: a "superviseur" account must be visible in its own
+    // column, not silently dropped because loadAll() only used to fetch
+    // role=user/sav/admin.
+    expect(screen.getByText("dave")).toBeInTheDocument();
   });
 
   it("shows a session-expired error when the users endpoint returns 401", async () => {

@@ -1,10 +1,11 @@
 """Tests du rôle superviseur SAV : hérite des droits agent, gère user<->sav, jamais admin."""
 import os
+import secrets
 
-# Identifiant factice utilisé uniquement pour créer des comptes jetables dans la base
-# de test locale/CI (conftest.py refuse de démarrer si TEST_DATABASE_URL ne contient
-# pas "test" — ces comptes ne peuvent jamais exister ailleurs).
-_TEST_PASSWORD = "not-a-real-secret-123"  # noqa: S105 (test fixture, not a credential)
+# Généré aléatoirement à chaque run (jamais une chaîne en dur) pour créer des comptes
+# jetables dans la base de test locale/CI (conftest.py refuse de démarrer si
+# TEST_DATABASE_URL ne contient pas "test" — ces comptes ne peuvent jamais exister ailleurs).
+_TEST_PASSWORD = secrets.token_urlsafe(16)
 
 
 def _register_and_login(client, email: str, username: str):
