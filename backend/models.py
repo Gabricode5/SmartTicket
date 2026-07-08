@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
@@ -45,6 +46,7 @@ class ChatMessage(Base):
     type_envoyeur = Column(String(10), nullable=False)
     contenu = Column(Text, nullable=False)
     feedback = Column(Integer, nullable=True)  # 1=👍, -1=👎, NULL=no feedback
+    source_kb_ids = Column(ARRAY(Integer), nullable=True)  # chunks knowledge_base utilisés pour cette réponse IA
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
 
 class AICallLog(Base):

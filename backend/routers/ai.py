@@ -3,6 +3,7 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy import text as sqltext
 from sqlalchemy.orm import Session
 
 import models
@@ -23,10 +24,31 @@ from dependencies import (
     rate_limit_key_by_user,
 )
 from mistral_client import embed_text, stream_text
+from rag_reranking import RERANK_FETCH_MULTIPLIER, rerank_chunks
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["IA"])
+
+
+def _fetch_feedback_by_kb_id(db: Session, candidate_ids: list[int]) -> dict[int, int]:
+    """Somme du feedback (1/-1) des messages IA ayant utilisé chaque chunk candidat."""
+    if not candidate_ids:
+        return {}
+    rows = db.execute(
+        sqltext("""
+            SELECT kb_id, SUM(feedback) AS net_feedback
+            FROM (
+                SELECT unnest(source_kb_ids) AS kb_id, feedback
+                FROM chat_messages
+                WHERE feedback IS NOT NULL AND source_kb_ids IS NOT NULL
+            ) sub
+            WHERE kb_id = ANY(:candidate_ids)
+            GROUP BY kb_id
+        """),
+        {"candidate_ids": candidate_ids},
+    ).mappings().all()
+    return {row["kb_id"]: int(row["net_feedback"]) for row in rows}
 
 
 @router.post(
@@ -67,13 +89,23 @@ def ask_question_stream(request: Request, payload: schemas.AskRequest, current_u
     context = ""
     rag_chunks_found = 0
     rag_context_chars = 0
+    selected_kb_ids: list[int] = []
     try:
         query_embedding = embed_text(question, model=EMBED_MODEL, timeout=REQUEST_TIMEOUT)
-        kb_rows = db.query(models.KnowledgeBase).order_by(models.KnowledgeBase.embedding.cosine_distance(query_embedding)).limit(KB_TOP_K).all()
-        if kb_rows:
-            context = "\n\n".join(r.contenu for r in kb_rows if r.contenu)[:KB_MAX_CONTEXT_CHARS]
-            rag_chunks_found = len(kb_rows)
-            rag_context_chars = len(context)
+        # On sur-échantillonne (KB_TOP_K * multiplicateur) puis on reclasse : la
+        # similarité cosinus seule ne tient pas compte du feedback utilisateur
+        # accumulé sur chaque chunk ni du recouvrement lexical avec la question.
+        candidates = db.query(models.KnowledgeBase).order_by(
+            models.KnowledgeBase.embedding.cosine_distance(query_embedding)
+        ).limit(KB_TOP_K * RERANK_FETCH_MULTIPLIER).all()
+        if candidates:
+            feedback_by_kb_id = _fetch_feedback_by_kb_id(db, [c.id for c in candidates])
+            kb_rows = rerank_chunks(question, candidates, feedback_by_kb_id, KB_TOP_K)
+            if kb_rows:
+                context = "\n\n".join(r.contenu for r in kb_rows if r.contenu)[:KB_MAX_CONTEXT_CHARS]
+                rag_chunks_found = len(kb_rows)
+                rag_context_chars = len(context)
+                selected_kb_ids = [r.id for r in kb_rows]
     except Exception as e:
         logger.warning("RAG context error: %s", e, exc_info=True)
         db.rollback()
@@ -82,7 +114,7 @@ def ask_question_stream(request: Request, payload: schemas.AskRequest, current_u
 
     if mode == "rag_only":
         ai_text = context or "Aucun contexte disponible."
-        db.add(models.ChatMessage(id_session=session_id, type_envoyeur="ai", contenu=ai_text))
+        db.add(models.ChatMessage(id_session=session_id, type_envoyeur="ai", contenu=ai_text, source_kb_ids=selected_kb_ids or None))
         db.commit()
         return StreamingResponse(iter([ai_text]), media_type="text/plain")
 
@@ -106,7 +138,7 @@ def ask_question_stream(request: Request, payload: schemas.AskRequest, current_u
         finally:
             latency_ms = int((time.perf_counter() - t_start) * 1000)
             ai_text = "".join(ai_chunks).strip() or "Réponse IA invalide"
-            db.add(models.ChatMessage(id_session=session_id, type_envoyeur="ai", contenu=ai_text))
+            db.add(models.ChatMessage(id_session=session_id, type_envoyeur="ai", contenu=ai_text, source_kb_ids=selected_kb_ids or None))
             try:
                 db.add(models.AICallLog(
                     id_session=session_id,

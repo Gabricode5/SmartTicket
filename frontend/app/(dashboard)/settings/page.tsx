@@ -1,11 +1,13 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
-import { Download } from "lucide-react"
+import { Download, Compass } from "lucide-react"
+import { onboardingStorageKey } from "@/components/onboarding/OnboardingModal"
 
 type Me = {
     id: number
@@ -18,12 +20,14 @@ type Me = {
 }
 
 export default function SettingsPage() {
+    const router = useRouter()
     const [loading, setLoading] = useState(true)
     const [savingProfile, setSavingProfile] = useState(false)
     const [savingPassword, setSavingPassword] = useState(false)
     const [exporting, setExporting] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
+    const [account, setAccount] = useState<{ id: number; role: string } | null>(null)
 
     const [profile, setProfile] = useState({
         username: "",
@@ -63,6 +67,7 @@ export default function SettingsPage() {
                     prenom: me.prenom || "",
                     nom: me.nom || "",
                 })
+                setAccount({ id: me.id, role: me.role })
             } catch (e) {
                 console.error("Erreur chargement profil:", e)
                 setError("Erreur réseau.")
@@ -137,6 +142,12 @@ export default function SettingsPage() {
         } finally {
             setExporting(false)
         }
+    }
+
+    const handleReplayOnboarding = () => {
+        if (!account) return
+        window.localStorage.removeItem(onboardingStorageKey(account.id, account.role))
+        router.push("/dashboard")
     }
 
     const handleSavePassword = async () => {
@@ -298,6 +309,20 @@ export default function SettingsPage() {
                     <Button variant="outline" onClick={handleExportData} disabled={exporting}>
                         <Download className="mr-2 h-4 w-4" />
                         {exporting ? "Préparation..." : "Télécharger mes données"}
+                    </Button>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Aide</CardTitle>
+                    <CardDescription>
+                        Revoir la présentation guidée de l&apos;application pour votre rôle.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <Button variant="outline" onClick={handleReplayOnboarding} disabled={!account}>
+                        <Compass className="mr-2 h-4 w-4" />
+                        Revoir la visite guidée
                     </Button>
                 </CardContent>
             </Card>

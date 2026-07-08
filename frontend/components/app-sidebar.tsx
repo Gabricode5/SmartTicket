@@ -29,7 +29,7 @@ interface Conversation {
     has_sav_reply?: boolean
 }
 
-type UserRole = "user" | "sav" | "admin"
+type UserRole = "user" | "sav" | "superviseur" | "admin"
 
 interface SidebarUser {
     username: string
@@ -46,7 +46,7 @@ const DEFAULT_USER: SidebarUser = {
 }
 
 function normalizeRole(role: string | null): UserRole {
-    if (role === "admin" || role === "sav") {
+    if (role === "admin" || role === "sav" || role === "superviseur") {
         return role
     }
     return "user"
@@ -69,7 +69,7 @@ export function AppSidebar() {
         role: normalizeRole(apiUser.role),
     } : DEFAULT_USER
 
-    const canManageKnowledgeBase = user.role === "admin" || user.role === "sav"
+    const canManageKnowledgeBase = user.role === "admin" || user.role === "sav" || user.role === "superviseur"
     const canAccessConversations = user.role === "user"
 
     const fetchConversations = async () => {
@@ -318,7 +318,7 @@ export function AppSidebar() {
                 </div>
                 )}
 
-                {(user.role === "admin" || user.role === "sav") && (
+                {(user.role === "admin" || user.role === "sav" || user.role === "superviseur") && (
                     <div>
                         <h3 className="px-4 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-2">
                             Analyses
@@ -361,6 +361,7 @@ export function AppSidebar() {
                         <p className="text-sm font-semibold leading-none truncate text-sidebar-foreground flex items-center gap-2">
                             {user.username}
                             {user.role === "admin" && <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded">Pro</span>}
+                            {user.role === "superviseur" && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1 rounded">Superviseur</span>}
                         </p>
                         <p className="text-[11px] text-sidebar-foreground/60 truncate mt-1">
                             {user.email}

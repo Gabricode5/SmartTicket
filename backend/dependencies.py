@@ -129,6 +129,15 @@ def get_user_by_email(db: Session, email: str):
 
 
 def is_admin_or_sav(user: models.Utilisateur | None) -> bool:
+    """Accès aux fonctionnalités agent (sessions transférées, KB, analytics...).
+    Un superviseur hérite de tout ce qu'un agent SAV peut faire."""
     if not user or not user.role:
         return False
-    return user.role.nom_role in ["admin", "sav"]
+    return user.role.nom_role in ["admin", "sav", "superviseur"]
+
+
+def can_manage_sav_team(user: models.Utilisateur | None) -> bool:
+    """Admin ou superviseur : peut promouvoir user->sav et sav->user, jamais admin."""
+    if not user or not user.role:
+        return False
+    return user.role.nom_role in ["admin", "superviseur"]

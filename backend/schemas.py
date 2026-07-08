@@ -105,6 +105,7 @@ class ChatMessageResponse(BaseModel):
     type_envoyeur: str
     contenu: str
     feedback: Optional[int] = None
+    source_kb_ids: Optional[list[int]] = None
     date_creation: datetime
 
     class Config:

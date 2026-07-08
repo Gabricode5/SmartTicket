@@ -52,7 +52,7 @@ def setup_database():
 
 def _seed_roles():
     with TestingSessionLocal() as session:
-        for role_name in ["user", "sav", "admin"]:
+        for role_name in ["user", "sav", "superviseur", "admin"]:
             if not session.query(models.Role).filter_by(nom_role=role_name).first():
                 session.add(models.Role(nom_role=role_name))
         session.commit()

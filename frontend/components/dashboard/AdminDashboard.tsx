@@ -20,6 +20,7 @@ import { renderSnippet } from "./searchSnippet"
 export default function AdminDashboard({ currentUserId }: { currentUserId: number }) {
     const [users, setUsers] = useState<UserItem[]>([])
     const [savUsers, setSavUsers] = useState<UserItem[]>([])
+    const [superviseurUsers, setSuperviseurUsers] = useState<UserItem[]>([])
     const [adminUsers, setAdminUsers] = useState<UserItem[]>([])
     const [selectedUser, setSelectedUser] = useState<UserItem | null>(null)
     const [sessions, setSessions] = useState<SessionItem[]>([])
@@ -42,6 +43,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
     const PAGE_SIZE = 8
     const [usersPage, setUsersPage] = useState(1)
     const [savPage, setSavPage] = useState(1)
+    const [superviseurPage, setSuperviseurPage] = useState(1)
     const [adminPage, setAdminPage] = useState(1)
     const [sessionsPage, setSessionsPage] = useState(1)
     const [transfersPage, setTransfersPage] = useState(1)
@@ -76,22 +78,24 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
         setIsLoading(true)
         setError(null)
         try {
-            const [usersRes, savRes, adminsRes, transferRes] = await Promise.all([
+            const [usersRes, savRes, superviseursRes, adminsRes, transferRes] = await Promise.all([
                 fetch("/api/users?role=user"),
                 fetch("/api/users?role=sav"),
+                fetch("/api/users?role=superviseur"),
                 fetch("/api/users?role=admin"),
                 fetch("/api/sessions/transferred"),
             ])
-            if ([usersRes, savRes, adminsRes].some((r) => r.status === 401)) {
+            if ([usersRes, savRes, superviseursRes, adminsRes].some((r) => r.status === 401)) {
                 setError("Session expirée. Veuillez vous reconnecter.")
                 return
             }
-            if (!usersRes.ok || !savRes.ok || !adminsRes.ok) {
+            if (!usersRes.ok || !savRes.ok || !superviseursRes.ok || !adminsRes.ok) {
                 setError("Impossible de charger les utilisateurs.")
                 return
             }
             setUsers(await usersRes.json())
             setSavUsers(await savRes.json())
+            setSuperviseurUsers(await superviseursRes.json())
             setAdminUsers(await adminsRes.json())
             if (transferRes.ok) setTransferredSessions(await transferRes.json())
         } catch {
@@ -244,7 +248,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                     </div>
                     <div className="flex items-center gap-1.5 bg-white border rounded-lg px-3 py-1.5 shadow-sm text-sm">
                         <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="font-medium text-slate-700">{users.length + savUsers.length + adminUsers.length}</span>
+                        <span className="font-medium text-slate-700">{users.length + savUsers.length + superviseurUsers.length + adminUsers.length}</span>
                         <span className="text-slate-500">utilisateurs</span>
                     </div>
                 </header>
@@ -257,7 +261,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                         </div>
                     )}
 
-                    <div className="grid gap-5 lg:grid-cols-4">
+                    <div className="grid gap-5 lg:grid-cols-5">
                         {/* Utilisateurs */}
                         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
                             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
@@ -370,6 +374,65 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                     </button>
                                     <span className="text-xs text-slate-400">{savPage} / {Math.ceil(savUsers.length / PAGE_SIZE)}</span>
                                     <button onClick={() => setSavPage(p => p + 1)} disabled={savPage >= Math.ceil(savUsers.length / PAGE_SIZE)} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        <ChevronRight className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Superviseurs */}
+                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+                            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
+                                        <Shield className="h-4 w-4 text-violet-600" />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-semibold text-slate-800">Superviseurs</p>
+                                        <p className="text-xs text-slate-400">Encadrement SAV</p>
+                                    </div>
+                                </div>
+                                <Badge className="bg-violet-50 text-violet-600 border-violet-100 text-xs font-semibold">{superviseurUsers.length}</Badge>
+                            </div>
+                            <div className="divide-y divide-slate-50">
+                                {isLoading ? (
+                                    <div className="px-5 py-8 text-center text-sm text-slate-400">Chargement...</div>
+                                ) : superviseurUsers.length === 0 ? (
+                                    <div className="px-5 py-8 text-center text-sm text-slate-400">Aucun superviseur</div>
+                                ) : superviseurUsers.slice((superviseurPage - 1) * PAGE_SIZE, superviseurPage * PAGE_SIZE).map((u) => (
+                                    <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "violet")}>
+                                        <button onClick={() => handleSelectUser(u)} className="w-full text-left flex items-center gap-3 mb-2.5">
+                                            <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0">
+                                                <span className="text-xs font-bold text-violet-600">{u.username.charAt(0).toUpperCase()}</span>
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="text-sm font-medium text-slate-800 truncate">{u.username}</div>
+                                                <div className="text-xs text-slate-400 truncate">{u.email}</div>
+                                            </div>
+                                            {selectedUser?.id === u.id && <ChevronRight className="h-4 w-4 text-violet-400 ml-auto flex-shrink-0" />}
+                                        </button>
+                                        <div className="flex items-center gap-1.5 pl-11">
+                                            <button onClick={() => handleChangeRole(u, "sav")} disabled={updatingRoleUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-200 transition-colors disabled:opacity-50">
+                                                <UserX className="h-3 w-3" />
+                                                {updatingRoleUserId === u.id ? "..." : "Retirer"}
+                                            </button>
+                                            <button onClick={() => handleEditUser(u)} disabled={updatingUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors disabled:opacity-50">
+                                                <Pencil className="h-3 w-3" />
+                                            </button>
+                                            <button onClick={() => handleDeleteUser(u)} disabled={updatingUserId === u.id || currentUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-red-50 text-red-500 hover:bg-red-100 border border-red-200 transition-colors disabled:opacity-50">
+                                                <Trash2 className="h-3 w-3" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            {Math.ceil(superviseurUsers.length / PAGE_SIZE) > 1 && (
+                                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
+                                    <button onClick={() => setSuperviseurPage(p => p - 1)} disabled={superviseurPage <= 1} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                        <ChevronLeft className="h-3.5 w-3.5" />
+                                    </button>
+                                    <span className="text-xs text-slate-400">{superviseurPage} / {Math.ceil(superviseurUsers.length / PAGE_SIZE)}</span>
+                                    <button onClick={() => setSuperviseurPage(p => p + 1)} disabled={superviseurPage >= Math.ceil(superviseurUsers.length / PAGE_SIZE)} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
                                         <ChevronRight className="h-3.5 w-3.5" />
                                     </button>
                                 </div>
@@ -697,6 +760,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 <SelectContent>
                                     <SelectItem value="user">Utilisateur</SelectItem>
                                     <SelectItem value="sav">Agent SAV</SelectItem>
+                                    <SelectItem value="superviseur">Superviseur</SelectItem>
                                     <SelectItem value="admin">Administrateur</SelectItem>
                                 </SelectContent>
                             </Select>

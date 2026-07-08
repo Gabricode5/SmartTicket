@@ -6,15 +6,15 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from database import get_db
-from dependencies import get_current_user, get_user_by_email
+from dependencies import can_manage_sav_team, get_current_user, get_user_by_email, is_admin_or_sav
 
 router = APIRouter(tags=["Utilisateurs"])
 
 
-@router.get("/users", response_model=list[schemas.UserListResponse], summary="Lister les utilisateurs (admin/sav)")
+@router.get("/users", response_model=list[schemas.UserListResponse], summary="Lister les utilisateurs (admin/sav/superviseur)")
 def list_users(role: str | None = None, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
     requester = get_user_by_email(db, current_user)
-    if not requester or not requester.role or requester.role.nom_role not in ["admin", "sav"]:
+    if not is_admin_or_sav(requester):
         raise HTTPException(status_code=403, detail="Accès refusé")
     query = db.query(models.Utilisateur).join(models.Role).filter(models.Utilisateur.deleted_at.is_(None))
     if role:
@@ -23,10 +23,10 @@ def list_users(role: str | None = None, current_user: str = Depends(get_current_
              "role": u.role.nom_role if u.role else "user"} for u in query.all()]
 
 
-@router.put("/users/{user_id}/role", response_model=schemas.UserListResponse, summary="Modifier le rôle d'un utilisateur (admin)")
+@router.put("/users/{user_id}/role", response_model=schemas.UserListResponse, summary="Modifier le rôle d'un utilisateur (admin, ou superviseur pour user<->sav)")
 def update_user_role(user_id: int, payload: schemas.UserRoleUpdateRequest, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
     requester = get_user_by_email(db, current_user)
-    if not requester or not requester.role or requester.role.nom_role != "admin":
+    if not can_manage_sav_team(requester):
         raise HTTPException(status_code=403, detail="Accès refusé")
     target = db.query(models.Utilisateur).filter(models.Utilisateur.id == user_id, models.Utilisateur.deleted_at.is_(None)).first()
     if not target:
@@ -34,8 +34,18 @@ def update_user_role(user_id: int, payload: schemas.UserRoleUpdateRequest, curre
     if requester.id == target.id:
         raise HTTPException(status_code=400, detail="Vous ne pouvez pas modifier votre propre rôle")
     new_role = payload.role.strip().lower()
-    if new_role not in ["user", "sav", "admin"]:
+    if new_role not in ["user", "sav", "superviseur", "admin"]:
         raise HTTPException(status_code=400, detail="Rôle invalide")
+
+    is_admin_requester = requester.role.nom_role == "admin"
+    if not is_admin_requester:
+        # Un superviseur ne peut ni toucher un compte admin, ni promouvoir vers admin —
+        # il ne gère que la bascule user <-> sav.
+        if target.role and target.role.nom_role == "admin":
+            raise HTTPException(status_code=403, detail="Un superviseur ne peut pas modifier un compte administrateur")
+        if new_role not in ["user", "sav"]:
+            raise HTTPException(status_code=403, detail="Un superviseur ne peut promouvoir que vers user ou sav")
+
     role_row = db.query(models.Role).filter(models.Role.nom_role == new_role).first()
     if not role_row:
         raise HTTPException(status_code=400, detail="Rôle introuvable")
@@ -72,7 +82,7 @@ def update_user_by_admin(user_id: int, payload: schemas.UserAdminUpdateRequest, 
         target.nom = payload.nom.strip() if payload.nom else None
     if payload.role is not None:
         next_role = payload.role.strip().lower()
-        if next_role not in ["user", "sav", "admin"]:
+        if next_role not in ["user", "sav", "superviseur", "admin"]:
             raise HTTPException(status_code=400, detail="Rôle invalide")
         if requester.id == target.id and next_role != "admin":
             raise HTTPException(status_code=400, detail="Vous ne pouvez pas retirer votre rôle admin")

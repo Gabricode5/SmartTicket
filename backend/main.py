@@ -82,6 +82,7 @@ def run_migrations() -> None:
     try:
         with _engine.connect() as conn:
             conn.execute(_text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS feedback INTEGER"))
+            conn.execute(_text("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS source_kb_ids INTEGER[]"))
             conn.execute(_text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS transfer_reason VARCHAR(50)"))
             conn.execute(_text("ALTER TABLE utilisateur ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"))
             conn.execute(_text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"))
@@ -94,7 +95,7 @@ def run_migrations() -> None:
         from database import SessionLocal as _SessionLocal
         from dependencies import pwd_context as _pwd
         with _SessionLocal() as session:
-            for role_name in ["user", "ai", "sav", "admin"]:
+            for role_name in ["user", "ai", "sav", "superviseur", "admin"]:
                 if not session.query(models.Role).filter_by(nom_role=role_name).first():
                     session.add(models.Role(nom_role=role_name))
             session.commit()
@@ -164,7 +165,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="CRM Intelligent API",
     description="API pour un gestionnaire de tickets avec intégration IA (Mistral AI + RAG sur pgvector).",
-    version="2.2.0",
+    version="2.4.0",
     lifespan=lifespan,
     openapi_tags=[
         {"name": "IA", "description": "Endpoints exposant le modèle Mistral AI et le pipeline RAG (Retrieval-Augmented Generation)."},
