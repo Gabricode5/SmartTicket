@@ -12,6 +12,29 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+## [2.6.0] - 2026-07-08
+
+### Ajouté
+- Notifications in-app : quand un agent SAV répond à un ticket, le client est notifié (+ email best-effort) ; quand un ticket est transféré, toute l'équipe SAV/superviseur/admin est notifiée. Nouveaux `GET /v1/notifications`, `GET /v1/notifications/unread-count`, `PATCH /v1/notifications/{id}/read`, `POST /v1/notifications/read-all`
+- Nouvelle table `notifications`, nouveau module `backend/notifications.py`
+- `NotificationBell` (`frontend/components/NotificationBell.tsx`) dans la sidebar : badge non-lues (polling 20s), liste déroulante, clic → session concernée
+
+---
+
+## [2.5.0] - 2026-07-08
+
+### Ajouté
+- Vérification de l'adresse email à l'inscription : `POST /v1/register` envoie désormais un lien de confirmation (JWT dédié, 48h), `GET /v1/verify-email` le valide, `POST /v1/resend-verification` permet de le renvoyer (limité à 3/heure, message générique anti-énumération). `POST /v1/login` refuse désormais un compte dont l'email n'est pas vérifié (`403`, code `email_not_verified`)
+- Nouveau `backend/email_utils.py` : envoi SMTP générique (compatible tout fournisseur — Brevo, SendGrid, Gmail...), avec repli sur un simple log si `SMTP_HOST` n'est pas configuré (dev local, tests, aucun compte SMTP requis)
+- Nouvelles pages frontend `/verify-email` (confirmation + renvoi si lien expiré) et écran "Vérifiez votre boîte mail" après inscription ; `/login` propose de renvoyer le lien si le compte n'est pas encore vérifié
+
+### Modifié
+- Changer son adresse email (`PUT /v1/me`) réinitialise `email_verified` et renvoie un nouveau lien de confirmation — on ne peut pas hériter de la confiance accordée à l'ancienne adresse
+- Les comptes admin (bootstrap au démarrage et `POST /v1/setup-admin`) sont automatiquement marqués comme vérifiés, n'étant jamais créés via l'inscription publique
+- Comptes déjà existants sur une base déjà déployée (ex: Render) automatiquement marqués comme vérifiés à la première migration suivant ce déploiement (grandfathering) — aucun utilisateur existant n'est verrouillé hors de son compte
+
+---
+
 ## [2.4.0] - 2026-07-07
 
 ### Ajouté
@@ -130,6 +153,8 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+[2.6.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.6.0
+[2.5.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.5.0
 [2.4.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.4.0
 [2.3.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.3.0
 [2.2.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.2.0

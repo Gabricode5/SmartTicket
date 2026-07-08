@@ -33,6 +33,7 @@ CREATE TABLE utilisateur (
     prenom VARCHAR(50),                                      -- Prénom optionnel
     nom VARCHAR(50),                                         -- Nom optionnel
     id_role INTEGER REFERENCES roles(id) DEFAULT 1,          -- Rôle par défaut = user
+    email_verified BOOLEAN NOT NULL DEFAULT FALSE,           -- Email confirmé via le lien envoyé à l'inscription
     date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Date de création
     deleted_at TIMESTAMP WITH TIME ZONE                      -- Soft-delete RGPD (NULL = compte actif)
 );
@@ -45,14 +46,15 @@ CREATE TABLE utilisateur (
 -- email: admin@admin.com
 -- mot de passe: admin (hashé via bcrypt avec pgcrypto)
 -- ON CONFLICT empêche un doublon si l'email existe déjà.
-INSERT INTO utilisateur (username, email, password_hash, prenom, nom, id_role)
+INSERT INTO utilisateur (username, email, password_hash, prenom, nom, id_role, email_verified)
 SELECT
     'admin',
     'admin@admin.com',
     crypt('admin', gen_salt('bf')),
     'Admin',
     'Local',
-    r.id
+    r.id,
+    TRUE
 FROM roles r
 WHERE r.nom_role = 'admin'
 ON CONFLICT (email) DO NOTHING;
@@ -118,3 +120,20 @@ CREATE TABLE knowledge_base (
 
 -- Index HNSW pour accélérer la recherche vectorielle (similarité cosinus)
 CREATE INDEX ON knowledge_base USING hnsw (embedding vector_cosine_ops);
+
+-- =========================================
+-- TABLE NOTIFICATIONS
+-- =========================================
+-- Notifications in-app (réponse SAV sur un ticket, ticket transféré vers l'équipe humaine).
+CREATE TABLE notifications (
+    id SERIAL PRIMARY KEY,                                    -- Identifiant notification
+    id_utilisateur INTEGER NOT NULL REFERENCES utilisateur(id) ON DELETE CASCADE, -- Destinataire
+    id_session INTEGER REFERENCES chat_sessions(id) ON DELETE CASCADE, -- Ticket concerné (optionnel)
+    type VARCHAR(30) NOT NULL,                                -- sav_reply | session_transferred
+    message VARCHAR(255) NOT NULL,                            -- Texte affiché
+    read_at TIMESTAMP WITH TIME ZONE,                         -- NULL = non lue
+    date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Accélère le badge "non lues" (requête la plus fréquente, en polling côté frontend)
+CREATE INDEX ON notifications (id_utilisateur, read_at);

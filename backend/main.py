@@ -17,7 +17,7 @@ from sqlalchemy import text as _text
 import models
 from database import engine as _engine
 from dependencies import limiter
-from routers import ai, analytics, auth, knowledge, messages, sessions, users
+from routers import ai, analytics, auth, knowledge, messages, notifications, sessions, users
 
 logging.basicConfig(
     level=logging.INFO,
@@ -86,6 +86,21 @@ def run_migrations() -> None:
             conn.execute(_text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS transfer_reason VARCHAR(50)"))
             conn.execute(_text("ALTER TABLE utilisateur ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"))
             conn.execute(_text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"))
+
+            # email_verified est nouveau : sur une base déjà déployée (comptes existants
+            # créés avant cette fonctionnalité), on ne peut pas leur demander de re-vérifier
+            # rétroactivement leur email. On ne "grandfather" (email_verified = true) que la
+            # toute première fois où la colonne est ajoutée ; les inscriptions suivantes
+            # gardent bien le défaut FALSE et doivent passer par le lien de vérification.
+            column_already_existed = conn.execute(_text(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_name = 'utilisateur' AND column_name = 'email_verified'"
+            )).first() is not None
+            conn.execute(_text("ALTER TABLE utilisateur ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false"))
+            if not column_already_existed:
+                conn.execute(_text("UPDATE utilisateur SET email_verified = true"))
+                _log.info("email_verified ajoutée : comptes existants marqués comme vérifiés (grandfathering)")
+
             conn.commit()
     except Exception as exc:
         _log.error("ALTER TABLE migration failed: %s", exc, exc_info=True)
@@ -116,6 +131,7 @@ def run_migrations() -> None:
                     existing_admin.password_hash = _pwd.hash(admin_password)
                     existing_admin.id_role = admin_role.id
                     existing_admin.deleted_at = None
+                    existing_admin.email_verified = True
                     if not existing_admin.prenom:
                         existing_admin.prenom = "Admin"
                     if not existing_admin.nom:
@@ -130,6 +146,7 @@ def run_migrations() -> None:
                         id_role=admin_role.id,
                         prenom="Admin",
                         nom="Admin",
+                        email_verified=True,
                     ))
                     session.commit()
                     _log.info("Compte admin créé : %s", admin_email)
@@ -165,7 +182,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="CRM Intelligent API",
     description="API pour un gestionnaire de tickets avec intégration IA (Mistral AI + RAG sur pgvector).",
-    version="2.4.0",
+    version="2.6.0",
     lifespan=lifespan,
     openapi_tags=[
         {"name": "IA", "description": "Endpoints exposant le modèle Mistral AI et le pipeline RAG (Retrieval-Augmented Generation)."},
@@ -175,6 +192,7 @@ app = FastAPI(
         {"name": "Authentification", "description": "Inscription, connexion et gestion du profil utilisateur."},
         {"name": "Utilisateurs", "description": "Administration des comptes utilisateurs (admin uniquement)."},
         {"name": "Analytics", "description": "Statistiques et indicateurs de performance du service IA."},
+        {"name": "Notifications", "description": "Notifications in-app (réponse SAV, ticket transféré)."},
     ],
 )
 
@@ -200,7 +218,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
-for _router in [auth.router, sessions.router, messages.router, ai.router, knowledge.router, users.router, analytics.router]:
+for _router in [auth.router, sessions.router, messages.router, ai.router, knowledge.router, users.router, analytics.router, notifications.router]:
     app.include_router(_router, prefix="/v1")
 
 

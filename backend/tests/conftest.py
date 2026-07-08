@@ -93,8 +93,22 @@ def db_session():
 
 
 @pytest.fixture
-def registered_user(client):
-    """Creates a standard user and returns their credentials."""
+def mark_verified():
+    """Bypasses the email verification flow directly in DB — tests that only care about
+    the behavior *after* login (sessions, permissions, etc.) don't need to extract a real
+    JWT verification link out of a logged/sent email for every fixture."""
+    def _mark(email: str) -> None:
+        with TestingSessionLocal() as session:
+            user = session.query(models.Utilisateur).filter_by(email=email).first()
+            if user:
+                user.email_verified = True
+                session.commit()
+    return _mark
+
+
+@pytest.fixture
+def registered_user(client, mark_verified):
+    """Creates a standard, pre-verified user and returns their credentials."""
     payload = {
         "username": "fixture_user",
         "email": "fixture@example.com",
@@ -103,6 +117,7 @@ def registered_user(client):
         "nom": "User",
     }
     client.post("/v1/register", json=payload)
+    mark_verified(payload["email"])
     return payload
 
 
