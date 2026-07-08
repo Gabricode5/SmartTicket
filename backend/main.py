@@ -101,6 +101,15 @@ def run_migrations() -> None:
                 conn.execute(_text("UPDATE utilisateur SET email_verified = true"))
                 _log.info("email_verified ajoutée : comptes existants marqués comme vérifiés (grandfathering)")
 
+            # tenant_id : préparation multi-tenant (cf. constants.DEFAULT_TENANT_ID). Une
+            # seule valeur fixe pour toutes les lignes, sur une base déjà déployée comme sur
+            # une neuve — pas de logique de grandfathering nécessaire ici, contrairement à
+            # email_verified.
+            _default_tenant = "'00000000-0000-0000-0000-000000000001'"
+            for _table in ["utilisateur", "chat_sessions", "chat_messages", "ai_call_logs", "knowledge_base", "notifications"]:
+                conn.execute(_text(f"ALTER TABLE {_table} ADD COLUMN IF NOT EXISTS tenant_id UUID NOT NULL DEFAULT {_default_tenant}"))
+                conn.execute(_text(f"CREATE INDEX IF NOT EXISTS ix_{_table}_tenant_id ON {_table} (tenant_id)"))
+
             conn.commit()
     except Exception as exc:
         _log.error("ALTER TABLE migration failed: %s", exc, exc_info=True)

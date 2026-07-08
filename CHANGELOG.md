@@ -9,6 +9,7 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ### Ajouté
 - Visite guidée au premier login, adaptée au rôle (`user`/`sav`/`superviseur`/`admin`) — modal léger sans dépendance externe (`frontend/components/onboarding/OnboardingModal.tsx`), rejouable depuis Paramètres → Aide
+- Colonne `tenant_id` (UUID, valeur fixe unique par instance) sur les 6 tables principales, en préparation d'une future architecture multi-tenant — aucun changement de comportement, colonne non exposée via l'API
 
 ### Corrigé
 - Envoi d'email : ajout d'un mode API HTTP Brevo (`BREVO_API_KEY`, prioritaire sur `SMTP_HOST`) en plus du SMTP générique — sur Render, le SMTP classique (port 587) était bloqué en sortie, puis rejeté par Brevo (`525 Unauthorized IP address`) faute d'IP de sortie fixe à whitelister. L'API HTTP passe par HTTPS classique et contourne ces deux limites
