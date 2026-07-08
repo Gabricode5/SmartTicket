@@ -101,7 +101,7 @@ export default function AiAssistantPage() {
     const username = currentUser?.username ?? "Utilisateur"
 
     useEffect(() => {
-        if (currentUser && (currentUser.role === "sav" || currentUser.role === "admin")) {
+        if (currentUser && ["sav", "admin", "superviseur"].includes(currentUser.role)) {
             router.replace("/dashboard")
         }
     }, [currentUser, router])

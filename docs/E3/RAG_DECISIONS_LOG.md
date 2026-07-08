@@ -106,6 +106,20 @@ Ce document trace les décisions techniques prises au cours du projet, déclench
 
 ---
 
+### 2026-07-07 — Reranking hybride + quarantaine des chunks à feedback négatif
+
+**Signal observé** : le retrieval ne s'appuyait que sur la distance cosinus brute (top-K pgvector direct). Aucun signal ne permettait de corriger un chunk sémantiquement proche de la question mais qui avait déjà généré des réponses mal notées par les utilisateurs (`chat_messages.feedback`) — le pipeline n'apprenait jamais de ce feedback après l'ingestion.
+
+**Hypothèse** : combiner le rang de similarité vectorielle avec (1) un recouvrement lexical simple entre la question et le contenu du chunk, et (2) le feedback net accumulé sur ce chunk, permet d'affiner le classement sans dépendre d'un modèle de reranking supplémentaire coûteux (cross-encoder). Un chunk au feedback très négatif doit être exclu (quarantaine), quelle que soit sa similarité — c'est exactement la piste « Quarantaine des chunks à feedback négatif répété » listée ci-dessous.
+
+**Action prise** : nouvelle colonne `chat_messages.source_kb_ids INTEGER[]` traçant les chunks utilisés pour générer chaque réponse IA. Nouveau module `backend/rag_reranking.py` (`rerank_chunks`) : sur-échantillonnage du retrieval pgvector (`KB_TOP_K * RERANK_FETCH_MULTIPLIER`, défaut ×3), puis reclassement par score composite `similarité (rang) + 0.3 × recouvrement lexical + 0.2 × feedback normalisé`, avec exclusion des chunks dont le feedback net ≤ `RERANK_QUARANTINE_THRESHOLD` (défaut -3, seuil configurable). Câblé dans `backend/routers/ai.py::ask_question_stream`.
+
+**Mesure d'impact** : `rag_chunks_found` (déjà suivi dans `ai_call_logs`) peut désormais être inférieur à `KB_TOP_K` même quand des candidats existent, signe visible que le filtrage qualité opère. Pas encore de mesure en production (fonctionnalité tout juste livrée) — à suivre via `avg_rag_chunks` et `no_context_rate` sur `/v1/analytics/ai-metrics` dans les semaines suivant le déploiement.
+
+**Statut** : Adopté — `backend/rag_reranking.py` / `backend/routers/ai.py`
+
+---
+
 ## Pistes identifiées pour V2 (non implémentées)
 
 Ces décisions sont **identifiées comme pertinentes** mais reportées faute de signal suffisant pour justifier leur priorité dans le périmètre actuel :
@@ -113,7 +127,6 @@ Ces décisions sont **identifiées comme pertinentes** mais reportées faute de 
 | Piste | Signal qui déclencherait l'implémentation | Impact attendu |
 |-------|------------------------------------------|----------------|
 | **Dédoublonnage par hash de contenu** sur `knowledge_base` | Taux de doublons > 5 % détecté via requête SQL sur `contenu` | Éviter la réingestion d'un même document, maintenir une base propre |
-| **Quarantaine des chunks à feedback négatif répété** | 3 messages successifs `feedback=-1` pointant le même chunk | Réduire la propagation de mauvaises réponses sourçées sur des chunks de mauvaise qualité |
 | **Alertes actives** (notification push) | Dashboard consulté < 1 fois par semaine par l'admin | Les alertes calculées dans le dashboard deviennent des notifications proactives |
 | **Index sur clés étrangères** (`id_utilisateur`, `id_session`) | Latence des requêtes JOIN > 100 ms en production | Amélioration des performances sur les jointures fréquentes |
 | **Évaluation automatique de la génération** (benchmark Q/R) | Base de connaissances > 500 chunks | Mesurer la qualité de génération de façon reproductible, indépendamment du feedback utilisateur |

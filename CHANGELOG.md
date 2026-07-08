@@ -7,6 +7,26 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ## [Non publié]
 
+### Ajouté
+- Visite guidée au premier login, adaptée au rôle (`user`/`sav`/`superviseur`/`admin`) — modal léger sans dépendance externe (`frontend/components/onboarding/OnboardingModal.tsx`), rejouable depuis Paramètres → Aide
+
+---
+
+## [2.4.0] - 2026-07-07
+
+### Ajouté
+- Reranking hybride du pipeline RAG (`backend/rag_reranking.py`) : sur-échantillonnage des candidats pgvector puis reclassement par similarité + recouvrement lexical + feedback utilisateur accumulé par chunk
+- Quarantaine automatique des chunks de la base de connaissances au feedback négatif répété
+- `chat_messages.source_kb_ids` : traçabilité des chunks utilisés pour générer chaque réponse IA (nécessaire au reranking par feedback)
+
+---
+
+## [2.3.0] - 2026-07-07
+
+### Ajouté
+- Nouveau rôle `superviseur` : hérite de tous les droits d'un agent SAV (sessions transférées, base de connaissances, analytics) et peut en plus promouvoir/rétrograder un compte entre `user` et `sav` — sans jamais pouvoir toucher aux comptes `admin` ni éditer/supprimer un profil utilisateur
+- `frontend/components/dashboard/SupervisorDashboard.tsx` : gestion de l'équipe SAV (promotion/rétrogradation) + file d'attente de tickets intégrée (réutilise `SavDashboard`)
+
 ---
 
 ## [2.2.0] - 2026-07-07
@@ -106,6 +126,8 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+[2.4.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.4.0
+[2.3.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.3.0
 [2.2.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.2.0
 [2.1.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.1.0
 [2.0.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.0.0

@@ -13,12 +13,12 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- Table de référence des rôles applicatifs.
 CREATE TABLE roles (
     id SERIAL PRIMARY KEY,                 -- Identifiant du rôle
-    nom_role VARCHAR(20) UNIQUE NOT NULL   -- Nom unique du rôle (user, ai, sav, admin)
+    nom_role VARCHAR(20) UNIQUE NOT NULL   -- Nom unique du rôle (user, ai, sav, superviseur, admin)
 );
 
 -- Rôles par défaut.
 -- ON CONFLICT évite l'erreur si le rôle existe déjà.
-INSERT INTO roles (nom_role) VALUES ('user'), ('ai'), ('sav'), ('admin')
+INSERT INTO roles (nom_role) VALUES ('user'), ('ai'), ('sav'), ('superviseur'), ('admin')
 ON CONFLICT (nom_role) DO NOTHING;
 
 -- =========================================
@@ -81,6 +81,7 @@ CREATE TABLE chat_messages (
     type_envoyeur VARCHAR(10) CHECK (type_envoyeur IN ('user', 'ai', 'sav')), -- Qui envoie
     contenu TEXT NOT NULL,                                   -- Texte du message
     feedback INTEGER,                                        -- Retour utilisateur sur une réponse IA (1=👍, -1=👎, NULL=aucun)
+    source_kb_ids INTEGER[],                                 -- Chunks knowledge_base.id utilisés pour générer cette réponse IA (reranking/feedback)
     date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP -- Date d'envoi
 );
 
