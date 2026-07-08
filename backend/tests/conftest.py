@@ -9,6 +9,10 @@ os.environ.setdefault("ADMIN_SETUP_KEY", "test-setup-key-for-ci-only")
 # _make_admin_client...) — on désactive la limite plutôt que de la contourner par test.
 os.environ.setdefault("LOGIN_RATE_LIMIT", "10000/minute")
 os.environ.setdefault("ASK_RATE_LIMIT", "10000/minute")
+# Idem pour /resend-verification (3/heure par défaut) : plusieurs tests de
+# TestResendVerification l'appellent depuis la même IP testclient et finissent par se
+# bloquer mutuellement (429) si la limite réelle reste active pendant la suite.
+os.environ.setdefault("RESEND_VERIFICATION_RATE_LIMIT", "10000/minute")
 
 # TEST_DATABASE_URL is intentionally separate from DATABASE_URL (the app's prod/dev DB).
 # Tests will refuse to run if this variable is not set or does not contain "test".
