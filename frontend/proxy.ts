@@ -10,6 +10,7 @@ export function proxy(request: NextRequest) {
         pathname === "/login" ||
         pathname === "/sign-up" ||
         pathname === "/forgot-password" ||
+        pathname === "/verify-email" ||
         pathname.startsWith("/_next") ||
         pathname === "/favicon.ico" ||
         pathname.startsWith("/static")
