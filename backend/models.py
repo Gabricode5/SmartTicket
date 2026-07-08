@@ -1,9 +1,17 @@
 from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
+from constants import DEFAULT_TENANT_ID
 from database import Base
+
+# Colonne posée sur chaque table principale en préparation d'un futur multi-tenant (cf.
+# DEFAULT_TENANT_ID dans constants.py) — une seule valeur fixe par instance aujourd'hui,
+# non exploitée dans les requêtes tant que le déploiement reste mono-tenant.
+def _tenant_id_column():
+    return Column(UUID(as_uuid=True), nullable=False, default=DEFAULT_TENANT_ID,
+                   server_default=str(DEFAULT_TENANT_ID), index=True)
 
 class Role(Base):
     __tablename__ = "roles"
@@ -23,6 +31,7 @@ class Utilisateur(Base):
     nom = Column(String(50))
     id_role = Column(Integer, ForeignKey("roles.id"), server_default="1")
     email_verified = Column(Boolean, nullable=False, server_default="false")
+    tenant_id = _tenant_id_column()
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     role = relationship("Role")
@@ -35,6 +44,7 @@ class ChatSession(Base):
     title = Column(String(255), nullable=True)
     status = Column(String(20), nullable=False, server_default="open")  # open | transferred | closed
     transfer_reason = Column(String(50), nullable=True)  # technique | complexe | sensible | autre
+    tenant_id = _tenant_id_column()
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     messages = relationship("ChatMessage", cascade="all, delete-orphan", passive_deletes=True)
@@ -48,6 +58,7 @@ class ChatMessage(Base):
     contenu = Column(Text, nullable=False)
     feedback = Column(Integer, nullable=True)  # 1=👍, -1=👎, NULL=no feedback
     source_kb_ids = Column(ARRAY(Integer), nullable=True)  # chunks knowledge_base utilisés pour cette réponse IA
+    tenant_id = _tenant_id_column()
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
 
 class Notification(Base):
@@ -59,6 +70,7 @@ class Notification(Base):
     type = Column(String(30), nullable=False)  # sav_reply | session_transferred
     message = Column(String(255), nullable=False)
     read_at = Column(DateTime(timezone=True), nullable=True)
+    tenant_id = _tenant_id_column()
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -74,6 +86,7 @@ class AICallLog(Base):
     rag_context_chars = Column(Integer, nullable=True)
     success = Column(Boolean, nullable=False, default=True)
     error_type = Column(String(100), nullable=True)
+    tenant_id = _tenant_id_column()
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -86,4 +99,5 @@ class KnowledgeBase(Base):
     embedding = Column(Vector(1024), nullable=False)
     category = Column(String(50), nullable=True)
     source = Column(String(500), nullable=True)
+    tenant_id = _tenant_id_column()
     date_creation = Column(DateTime(timezone=True), server_default=func.now())

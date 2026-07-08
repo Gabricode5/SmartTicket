@@ -34,9 +34,11 @@ CREATE TABLE utilisateur (
     nom VARCHAR(50),                                         -- Nom optionnel
     id_role INTEGER REFERENCES roles(id) DEFAULT 1,          -- Rôle par défaut = user
     email_verified BOOLEAN NOT NULL DEFAULT FALSE,           -- Email confirmé via le lien envoyé à l'inscription
+    tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001', -- Préparation multi-tenant (valeur fixe, une instance = un tenant aujourd'hui)
     date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Date de création
     deleted_at TIMESTAMP WITH TIME ZONE                      -- Soft-delete RGPD (NULL = compte actif)
 );
+CREATE INDEX ON utilisateur (tenant_id);
 
 -- =========================================
 -- COMPTE ADMIN PAR DEFAUT (ENV DEV)
@@ -69,9 +71,11 @@ CREATE TABLE chat_sessions (
     title VARCHAR(255),                                       -- Titre session
     status VARCHAR(20) NOT NULL DEFAULT 'open',               -- Statut (open/transferred/closed)
     transfer_reason VARCHAR(50),                              -- Raison du transfert (technique/complexe/sensible/autre)
+    tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001', -- Préparation multi-tenant
     date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Date de création
     deleted_at TIMESTAMP WITH TIME ZONE                       -- Soft-delete RGPD (NULL = session active)
 );
+CREATE INDEX ON chat_sessions (tenant_id);
 
 -- =========================================
 -- TABLE CHAT_MESSAGES
@@ -84,8 +88,10 @@ CREATE TABLE chat_messages (
     contenu TEXT NOT NULL,                                   -- Texte du message
     feedback INTEGER,                                        -- Retour utilisateur sur une réponse IA (1=👍, -1=👎, NULL=aucun)
     source_kb_ids INTEGER[],                                 -- Chunks knowledge_base.id utilisés pour générer cette réponse IA (reranking/feedback)
+    tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001', -- Préparation multi-tenant
     date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP -- Date d'envoi
 );
+CREATE INDEX ON chat_messages (tenant_id);
 
 -- =========================================
 -- TABLE AI_CALL_LOGS
@@ -101,8 +107,10 @@ CREATE TABLE ai_call_logs (
     rag_context_chars INTEGER,                                -- Taille du contexte RAG injecté (caractères)
     success BOOLEAN NOT NULL DEFAULT TRUE,                    -- Succès ou échec de l'appel
     error_type VARCHAR(100),                                  -- Type d'erreur si échec
+    tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001', -- Préparation multi-tenant
     date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP -- Date de l'appel
 );
+CREATE INDEX ON ai_call_logs (tenant_id);
 
 -- =========================================
 -- TABLE KNOWLEDGE_BASE
@@ -115,11 +123,13 @@ CREATE TABLE knowledge_base (
     embedding vector(1024) NOT NULL,                          -- Vecteur embedding (mistral-embed 1024)
     category VARCHAR(50),                                     -- Catégorie logique (ex: service-public)
     source VARCHAR(500),                                      -- Nom/fichier/source logique du document indexé
+    tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001', -- Préparation multi-tenant (table des chunks vectoriels — la plus sensible en cas de future bascule multi-tenant)
     date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP -- Date d'insertion
 );
 
 -- Index HNSW pour accélérer la recherche vectorielle (similarité cosinus)
 CREATE INDEX ON knowledge_base USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX ON knowledge_base (tenant_id);
 
 -- =========================================
 -- TABLE NOTIFICATIONS
@@ -132,8 +142,10 @@ CREATE TABLE notifications (
     type VARCHAR(30) NOT NULL,                                -- sav_reply | session_transferred
     message VARCHAR(255) NOT NULL,                            -- Texte affiché
     read_at TIMESTAMP WITH TIME ZONE,                         -- NULL = non lue
+    tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001', -- Préparation multi-tenant
     date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Accélère le badge "non lues" (requête la plus fréquente, en polling côté frontend)
 CREATE INDEX ON notifications (id_utilisateur, read_at);
+CREATE INDEX ON notifications (tenant_id);
