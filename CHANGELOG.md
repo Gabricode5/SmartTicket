@@ -12,6 +12,7 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ### Corrigé
 - Envoi d'email : ajout d'un mode API HTTP Brevo (`BREVO_API_KEY`, prioritaire sur `SMTP_HOST`) en plus du SMTP générique — sur Render, le SMTP classique (port 587) était bloqué en sortie, puis rejeté par Brevo (`525 Unauthorized IP address`) faute d'IP de sortie fixe à whitelister. L'API HTTP passe par HTTPS classique et contourne ces deux limites
+- `frontend/proxy.ts` (garde d'authentification) redirigeait `/verify-email` vers `/login` avant même que la page ne s'affiche — route absente de sa liste `isPublicPath`, alors qu'un visiteur n'y accède justement jamais authentifié. Le lien de vérification par email ne pouvait donc jamais fonctionner en production
 
 ---
 
