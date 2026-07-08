@@ -5,6 +5,7 @@ import models
 import schemas
 from database import get_db
 from dependencies import get_current_user, get_user_by_email, is_admin_or_sav
+from notifications import queue_sav_reply, send_sav_reply_email
 
 router = APIRouter(tags=["Messages"])
 
@@ -38,8 +39,16 @@ def create_message(message: schemas.ChatMessageCreate, current_user: str = Depen
         raise HTTPException(status_code=400, detail="Type d'envoyeur invalide")
     new_message = models.ChatMessage(id_session=message.id_session, type_envoyeur=message.type_envoyeur, contenu=message.contenu)
     db.add(new_message)
+    if message.type_envoyeur == "sav":
+        queue_sav_reply(db, session)
     db.commit()
     db.refresh(new_message)
+
+    if message.type_envoyeur == "sav":
+        owner = db.query(models.Utilisateur).filter(models.Utilisateur.id == session.id_utilisateur).first()
+        if owner:
+            send_sav_reply_email(owner.email, session.title)
+
     return new_message
 
 

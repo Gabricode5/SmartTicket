@@ -23,10 +23,15 @@ class UserResponse(BaseModel):
     prenom: Optional[str]
     nom: Optional[str]
     role: str
+    email_verified: bool = False
     date_creation: datetime
 
     class Config:
         from_attributes = True
+
+
+class ResendVerificationRequest(BaseModel):
+    email: EmailStr
 
 class UserListResponse(BaseModel):
     id: int
@@ -156,6 +161,7 @@ class MeResponse(BaseModel):
     prenom: Optional[str] = None
     nom: Optional[str] = None
     role: str
+    email_verified: bool = False
     date_creation: datetime
 
 class MeUpdateRequest(BaseModel):
@@ -167,6 +173,18 @@ class MeUpdateRequest(BaseModel):
 class MePasswordUpdateRequest(BaseModel):
     current_password: str
     new_password: str
+
+
+class NotificationResponse(BaseModel):
+    id: int
+    type: str
+    message: str
+    id_session: Optional[int] = None
+    read: bool
+    date_creation: datetime
+
+    class Config:
+        from_attributes = True
 
 
 class AskRequest(BaseModel):

@@ -8,16 +8,19 @@ import secrets
 _TEST_PASSWORD = secrets.token_urlsafe(16)
 
 
-def _register_and_login(client, email: str, username: str):
+def _register_and_login(client, email: str, username: str, mark_verified):
     client.post("/v1/register", json={
         "username": username, "email": email, "password": _TEST_PASSWORD, "prenom": "P", "nom": "N",
     })
+    mark_verified(email)
     resp = client.post("/v1/login", json={"email": email, "password": _TEST_PASSWORD})
     assert resp.status_code == 200, resp.json()
     return resp.json()["access_token"], resp.json()["user_id"]
 
 
 def _make_admin_token(client):
+    # /setup-admin marque déjà email_verified=True (compte de confiance, pas d'inscription
+    # publique) — pas besoin de mark_verified ici.
     client.post(
         "/v1/setup-admin",
         json={
@@ -31,10 +34,10 @@ def _make_admin_token(client):
     return resp.json()["access_token"]
 
 
-def _make_supervisor_client(client):
+def _make_supervisor_client(client, mark_verified):
     """Crée un utilisateur, le promeut superviseur via un admin temporaire, et
     authentifie `client` en tant que ce superviseur."""
-    supervisor_token, supervisor_id = _register_and_login(client, "sup_agent@example.com", "sup_agent")
+    supervisor_token, supervisor_id = _register_and_login(client, "sup_agent@example.com", "sup_agent", mark_verified)
     admin_token = _make_admin_token(client)
 
     promote_resp = client.put(
@@ -50,22 +53,22 @@ def _make_supervisor_client(client):
 
 
 class TestSupervisorTeamManagement:
-    def test_supervisor_can_list_users(self, client):
-        supervisor_client, _ = _make_supervisor_client(client)
+    def test_supervisor_can_list_users(self, client, mark_verified):
+        supervisor_client, _ = _make_supervisor_client(client, mark_verified)
         resp = supervisor_client.get("/v1/users", params={"role": "user"})
         assert resp.status_code == 200
 
-    def test_supervisor_can_promote_user_to_sav(self, client):
-        supervisor_client, _ = _make_supervisor_client(client)
-        _, agent_id = _register_and_login(client, "future_agent@example.com", "future_agent")
+    def test_supervisor_can_promote_user_to_sav(self, client, mark_verified):
+        supervisor_client, _ = _make_supervisor_client(client, mark_verified)
+        _, agent_id = _register_and_login(client, "future_agent@example.com", "future_agent", mark_verified)
 
         resp = supervisor_client.put(f"/v1/users/{agent_id}/role", json={"role": "sav"})
         assert resp.status_code == 200, resp.json()
         assert resp.json()["role"] == "sav"
 
-    def test_supervisor_can_demote_sav_to_user(self, client):
-        supervisor_client, _ = _make_supervisor_client(client)
-        _, agent_id = _register_and_login(client, "future_agent2@example.com", "future_agent2")
+    def test_supervisor_can_demote_sav_to_user(self, client, mark_verified):
+        supervisor_client, _ = _make_supervisor_client(client, mark_verified)
+        _, agent_id = _register_and_login(client, "future_agent2@example.com", "future_agent2", mark_verified)
 
         promote = supervisor_client.put(f"/v1/users/{agent_id}/role", json={"role": "sav"})
         assert promote.status_code == 200
@@ -74,31 +77,31 @@ class TestSupervisorTeamManagement:
         assert demote.status_code == 200, demote.json()
         assert demote.json()["role"] == "user"
 
-    def test_supervisor_cannot_promote_to_admin(self, client):
-        supervisor_client, _ = _make_supervisor_client(client)
-        _, target_id = _register_and_login(client, "wannabe_admin@example.com", "wannabe_admin")
+    def test_supervisor_cannot_promote_to_admin(self, client, mark_verified):
+        supervisor_client, _ = _make_supervisor_client(client, mark_verified)
+        _, target_id = _register_and_login(client, "wannabe_admin@example.com", "wannabe_admin", mark_verified)
 
         resp = supervisor_client.put(f"/v1/users/{target_id}/role", json={"role": "admin"})
         assert resp.status_code == 403
 
-    def test_supervisor_cannot_modify_admin_account(self, client):
-        supervisor_client, _ = _make_supervisor_client(client)
+    def test_supervisor_cannot_modify_admin_account(self, client, mark_verified):
+        supervisor_client, _ = _make_supervisor_client(client, mark_verified)
         admin_row = supervisor_client.get("/v1/users", params={"role": "admin"}).json()
         admin_id = admin_row[0]["id"]
 
         resp = supervisor_client.put(f"/v1/users/{admin_id}/role", json={"role": "sav"})
         assert resp.status_code == 403
 
-    def test_supervisor_cannot_delete_users(self, client):
-        supervisor_client, _ = _make_supervisor_client(client)
-        _, target_id = _register_and_login(client, "todelete@example.com", "todelete")
+    def test_supervisor_cannot_delete_users(self, client, mark_verified):
+        supervisor_client, _ = _make_supervisor_client(client, mark_verified)
+        _, target_id = _register_and_login(client, "todelete@example.com", "todelete", mark_verified)
 
         resp = supervisor_client.delete(f"/v1/users/{target_id}")
         assert resp.status_code == 403
 
-    def test_supervisor_cannot_edit_user_profile(self, client):
-        supervisor_client, _ = _make_supervisor_client(client)
-        _, target_id = _register_and_login(client, "toedit@example.com", "toedit")
+    def test_supervisor_cannot_edit_user_profile(self, client, mark_verified):
+        supervisor_client, _ = _make_supervisor_client(client, mark_verified)
+        _, target_id = _register_and_login(client, "toedit@example.com", "toedit", mark_verified)
 
         resp = supervisor_client.put(f"/v1/users/{target_id}", json={"username": "renamed"})
         assert resp.status_code == 403
@@ -107,12 +110,12 @@ class TestSupervisorTeamManagement:
 class TestSupervisorAgentAccess:
     """Un superviseur doit avoir accès à tout ce qu'un agent SAV a déjà."""
 
-    def test_supervisor_can_access_transferred_sessions(self, client):
-        supervisor_client, _ = _make_supervisor_client(client)
+    def test_supervisor_can_access_transferred_sessions(self, client, mark_verified):
+        supervisor_client, _ = _make_supervisor_client(client, mark_verified)
         resp = supervisor_client.get("/v1/sessions/transferred")
         assert resp.status_code == 200
 
-    def test_supervisor_can_access_analytics_stats(self, client):
-        supervisor_client, _ = _make_supervisor_client(client)
+    def test_supervisor_can_access_analytics_stats(self, client, mark_verified):
+        supervisor_client, _ = _make_supervisor_client(client, mark_verified)
         resp = supervisor_client.get("/v1/analytics/stats")
         assert resp.status_code == 200

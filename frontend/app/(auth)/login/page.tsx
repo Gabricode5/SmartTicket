@@ -14,14 +14,20 @@ function LoginForm() {
     const [error, setError] = useState("")
     const [isLoading, setIsLoading] = useState(false)
     const [showPassword, setShowPassword] = useState(false)
+    const [needsVerification, setNeedsVerification] = useState(false)
+    const [pendingEmail, setPendingEmail] = useState("")
+    const [isResending, setIsResending] = useState(false)
+    const [resendSent, setResendSent] = useState(false)
 
     async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
         event.preventDefault()
         setError("")
+        setNeedsVerification(false)
+        setResendSent(false)
         setIsLoading(true)
 
         const formData = new FormData(event.currentTarget)
-        const email = formData.get("email")
+        const email = formData.get("email") as string
         const password = formData.get("password")
 
         try {
@@ -35,22 +41,38 @@ function LoginForm() {
 
             if (response.ok) {
                 localStorage.setItem("username", data.username)
-                localStorage.setItem("user_email", email as string)
+                localStorage.setItem("user_email", email)
                 router.push("/dashboard")
                 router.refresh()
+            } else if (typeof data.detail === "object" && data.detail?.code === "email_not_verified") {
+                setNeedsVerification(true)
+                setPendingEmail(email)
+                setError(data.detail.message || "Adresse email non vérifiée.")
+            } else if (typeof data.detail === "string") {
+                setError(data.detail)
+            } else if (Array.isArray(data.detail)) {
+                setError(data.detail[0]?.msg || "Données invalides.")
             } else {
-                if (typeof data.detail === "string") {
-                    setError(data.detail)
-                } else if (Array.isArray(data.detail)) {
-                    setError(data.detail[0]?.msg || "Données invalides.")
-                } else {
-                    setError("Échec de la connexion.")
-                }
+                setError("Échec de la connexion.")
             }
         } catch {
             setError("Impossible de contacter le serveur.")
         } finally {
             setIsLoading(false)
+        }
+    }
+
+    async function handleResendVerification() {
+        setIsResending(true)
+        try {
+            await fetch("/api/resend-verification", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: pendingEmail }),
+            })
+        } finally {
+            setResendSent(true)
+            setIsResending(false)
         }
     }
 
@@ -93,9 +115,25 @@ function LoginForm() {
                         <form onSubmit={handleSubmit} className="space-y-5">
 
                             {error && (
-                                <div className="flex items-center gap-2 p-3 text-sm text-red-700 bg-red-50 border border-red-100 rounded-xl">
-                                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
-                                    {error}
+                                <div className="p-3 text-sm text-red-700 bg-red-50 border border-red-100 rounded-xl space-y-2">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
+                                        {error}
+                                    </div>
+                                    {needsVerification && (
+                                        resendSent ? (
+                                            <p className="text-xs text-red-600">Si un compte existe avec cet email, un nouveau lien vient d&apos;être envoyé.</p>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                onClick={handleResendVerification}
+                                                disabled={isResending}
+                                                className="text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:underline disabled:opacity-60"
+                                            >
+                                                {isResending ? "Envoi…" : "Renvoyer l'email de vérification"}
+                                            </button>
+                                        )
+                                    )}
                                 </div>
                             )}
 

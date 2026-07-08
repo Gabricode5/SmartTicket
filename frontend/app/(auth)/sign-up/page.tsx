@@ -2,8 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { useRouter } from "next/navigation"
-import { ArrowLeft, Eye, EyeOff } from "lucide-react"
+import { ArrowLeft, Eye, EyeOff, MailCheck } from "lucide-react"
 
 type Strength = { score: number; label: string; color: string; textColor: string }
 
@@ -24,7 +23,6 @@ function getStrength(password: string): Strength {
 }
 
 export default function SignUpPage() {
-    const router = useRouter()
     const [error, setError] = useState("")
     const [isLoading, setIsLoading] = useState(false)
     const [rgpdAccepted, setRgpdAccepted] = useState(false)
@@ -32,6 +30,7 @@ export default function SignUpPage() {
     const [confirmPassword, setConfirmPassword] = useState("")
     const [showPassword, setShowPassword] = useState(false)
     const [showConfirm, setShowConfirm] = useState(false)
+    const [registeredEmail, setRegisteredEmail] = useState("")
 
     const strength = getStrength(password)
     const passwordsMatch = confirmPassword === "" || password === confirmPassword
@@ -57,7 +56,8 @@ export default function SignUpPage() {
                 body: JSON.stringify(payload),
             })
             if (response.ok) {
-                router.push("/login")
+                const created = await response.json()
+                setRegisteredEmail(created.email ?? String(data.email))
             } else {
                 const errorData = await response.json()
                 setError(errorData.detail || "Une erreur est survenue")
@@ -91,7 +91,24 @@ export default function SignUpPage() {
             <div className="flex-1 flex items-center justify-center px-4 py-8">
                 <div className="w-full max-w-md">
                     <div className="bg-white rounded-2xl shadow-xl shadow-indigo-100/50 border border-slate-100 p-8">
-
+                    {registeredEmail ? (
+                        <div className="text-center">
+                            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-100 mb-4">
+                                <MailCheck className="h-6 w-6 text-emerald-600" />
+                            </div>
+                            <h1 className="text-2xl font-bold text-slate-900">Vérifiez votre boîte mail</h1>
+                            <p className="text-slate-500 text-sm mt-2">
+                                Un lien de confirmation a été envoyé à <strong>{registeredEmail}</strong>. Cliquez dessus pour activer votre compte avant de vous connecter.
+                            </p>
+                            <Link
+                                href="/login"
+                                className="mt-6 inline-block w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-colors"
+                            >
+                                Retour à la connexion
+                            </Link>
+                        </div>
+                    ) : (
+                    <>
                         {/* Title */}
                         <div className="text-center mb-7">
                             <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-600 mb-4">
@@ -244,6 +261,8 @@ export default function SignUpPage() {
                                 Se connecter
                             </Link>
                         </p>
+                    </>
+                    )}
                     </div>
                 </div>
             </div>

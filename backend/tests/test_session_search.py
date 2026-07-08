@@ -73,7 +73,7 @@ class TestSessionSearch:
         assert resp.status_code == 200
         assert resp.json() == []
 
-    def test_cannot_search_other_users_sessions(self, client):
+    def test_cannot_search_other_users_sessions(self, client, mark_verified):
         client.post("/v1/register", json={
             "username": "search_user_a", "email": "search_a@example.com",
             "password": _TEST_PASSWORD, "prenom": "A", "nom": "A",
@@ -82,6 +82,8 @@ class TestSessionSearch:
             "username": "search_user_b", "email": "search_b@example.com",
             "password": _TEST_PASSWORD, "prenom": "B", "nom": "B",
         })
+        mark_verified("search_a@example.com")
+        mark_verified("search_b@example.com")
         token_a = client.post("/v1/login", json={"email": "search_a@example.com", "password": _TEST_PASSWORD}).json()["access_token"]
         user_b_id = client.post("/v1/login", json={"email": "search_b@example.com", "password": _TEST_PASSWORD}).json()["user_id"]
 

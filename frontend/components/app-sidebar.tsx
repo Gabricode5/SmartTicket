@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
+import { NotificationBell } from "@/components/NotificationBell"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
@@ -175,11 +176,12 @@ export function AppSidebar() {
     return (
         <aside className="w-64 bg-sidebar text-sidebar-foreground border-r border-sidebar-border hidden md:flex flex-col h-full">
             {/* Logo Area */}
-            <div className="h-16 flex items-center px-6 border-b border-sidebar-border">
+            <div className="h-16 flex items-center justify-between px-6 border-b border-sidebar-border">
                 <div className="flex items-center gap-2 font-bold text-xl">
                     <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold">S</div>
                     <span>SmartTicket</span>
                 </div>
+                {apiUser && <NotificationBell />}
             </div>
 
             {/* Navigation & Historique */}

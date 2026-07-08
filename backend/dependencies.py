@@ -26,6 +26,9 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
 RATE_LIMIT_STORAGE_URI = os.getenv("RATE_LIMIT_STORAGE_URI", "memory://")
 LOGIN_RATE_LIMIT = os.getenv("LOGIN_RATE_LIMIT", "5/minute")
 ASK_RATE_LIMIT = os.getenv("ASK_RATE_LIMIT", "20/minute")
+RESEND_VERIFICATION_RATE_LIMIT = os.getenv("RESEND_VERIFICATION_RATE_LIMIT", "3/hour")
+
+EMAIL_VERIFICATION_EXPIRE_HOURS = int(os.getenv("EMAIL_VERIFICATION_EXPIRE_HOURS", "48"))
 
 limiter = Limiter(key_func=get_remote_address, storage_uri=RATE_LIMIT_STORAGE_URI)
 
@@ -101,6 +104,24 @@ def create_access_token(data: dict) -> str:
     expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def create_email_verification_token(user_id: int, email: str) -> str:
+    expire = datetime.utcnow() + timedelta(hours=EMAIL_VERIFICATION_EXPIRE_HOURS)
+    payload = {"sub": email, "user_id": user_id, "type": "email_verification", "exp": expire}
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_email_verification_token(token: str) -> dict:
+    """Décode un token de vérification d'email. Le claim `type` distingue ce token d'un
+    token d'accès JWT classique — un access_token ne doit jamais pouvoir vérifier un email."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Lien de vérification invalide ou expiré")
+    if payload.get("type") != "email_verification":
+        raise HTTPException(status_code=400, detail="Lien de vérification invalide ou expiré")
+    return payload
 
 
 def get_current_user(

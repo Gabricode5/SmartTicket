@@ -131,7 +131,7 @@ class TestSessions:
         assert list_resp.status_code == 200
         assert len(list_resp.json()) == 1
 
-    def test_cannot_access_other_users_sessions(self, client):
+    def test_cannot_access_other_users_sessions(self, client, mark_verified):
         # Create two users
         client.post("/v1/register", json={
             "username": "user_a", "email": "a@example.com",
@@ -141,6 +141,8 @@ class TestSessions:
             "username": "user_b", "email": "b@example.com",
             "password": "pass123", "prenom": "B", "nom": "B",
         })
+        mark_verified("a@example.com")
+        mark_verified("b@example.com")
         token_a = client.post("/v1/login", json={"email": "a@example.com", "password": "pass123"}).json()["access_token"]
         user_b_id = client.post("/v1/login", json={"email": "b@example.com", "password": "pass123"}).json()["user_id"]
 

@@ -9,6 +9,10 @@ os.environ.setdefault("ADMIN_SETUP_KEY", "test-setup-key-for-ci-only")
 # _make_admin_client...) — on désactive la limite plutôt que de la contourner par test.
 os.environ.setdefault("LOGIN_RATE_LIMIT", "10000/minute")
 os.environ.setdefault("ASK_RATE_LIMIT", "10000/minute")
+# Idem pour /resend-verification (3/heure par défaut) : plusieurs tests de
+# TestResendVerification l'appellent depuis la même IP testclient et finissent par se
+# bloquer mutuellement (429) si la limite réelle reste active pendant la suite.
+os.environ.setdefault("RESEND_VERIFICATION_RATE_LIMIT", "10000/minute")
 
 # TEST_DATABASE_URL is intentionally separate from DATABASE_URL (the app's prod/dev DB).
 # Tests will refuse to run if this variable is not set or does not contain "test".
@@ -93,8 +97,22 @@ def db_session():
 
 
 @pytest.fixture
-def registered_user(client):
-    """Creates a standard user and returns their credentials."""
+def mark_verified():
+    """Bypasses the email verification flow directly in DB — tests that only care about
+    the behavior *after* login (sessions, permissions, etc.) don't need to extract a real
+    JWT verification link out of a logged/sent email for every fixture."""
+    def _mark(email: str) -> None:
+        with TestingSessionLocal() as session:
+            user = session.query(models.Utilisateur).filter_by(email=email).first()
+            if user:
+                user.email_verified = True
+                session.commit()
+    return _mark
+
+
+@pytest.fixture
+def registered_user(client, mark_verified):
+    """Creates a standard, pre-verified user and returns their credentials."""
     payload = {
         "username": "fixture_user",
         "email": "fixture@example.com",
@@ -103,6 +121,7 @@ def registered_user(client):
         "nom": "User",
     }
     client.post("/v1/register", json=payload)
+    mark_verified(payload["email"])
     return payload
 
 

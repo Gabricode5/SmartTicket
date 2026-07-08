@@ -15,6 +15,7 @@ from dependencies import (
     chunk_text, get_current_user, get_user_by_email, is_admin_or_sav, sanitize_text,
 )
 from mistral_client import embed_text, generate_text
+from notifications import queue_session_transferred
 
 router = APIRouter(tags=["Sessions"])
 
@@ -221,7 +222,9 @@ def transfer_session(session_id: int, payload: schemas.TransferRequest, current_
         raise HTTPException(status_code=400, detail="Cette session ne peut pas être transférée.")
     session.status = "transferred"
     session.transfer_reason = payload.reason
-    db.add(models.ChatMessage(id_session=session_id, type_envoyeur="ai", contenu=f"Vous avez été mis en relation avec un agent humain. Raison : {REASON_LABELS.get(payload.reason, payload.reason)}."))
+    reason_label = REASON_LABELS.get(payload.reason, payload.reason)
+    db.add(models.ChatMessage(id_session=session_id, type_envoyeur="ai", contenu=f"Vous avez été mis en relation avec un agent humain. Raison : {reason_label}."))
+    queue_session_transferred(db, session, reason_label)
     db.commit()
     db.refresh(session)
     return {"id": session.id, "id_utilisateur": session.id_utilisateur, "title": session.title, "status": session.status, "transfer_reason": session.transfer_reason, "date_creation": session.date_creation}

@@ -22,6 +22,7 @@ class Utilisateur(Base):
     prenom = Column(String(50))
     nom = Column(String(50))
     id_role = Column(Integer, ForeignKey("roles.id"), server_default="1")
+    email_verified = Column(Boolean, nullable=False, server_default="false")
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     role = relationship("Role")
@@ -48,6 +49,18 @@ class ChatMessage(Base):
     feedback = Column(Integer, nullable=True)  # 1=👍, -1=👎, NULL=no feedback
     source_kb_ids = Column(ARRAY(Integer), nullable=True)  # chunks knowledge_base utilisés pour cette réponse IA
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, index=True)
+    id_utilisateur = Column(Integer, ForeignKey("utilisateur.id", ondelete="CASCADE"), nullable=False)
+    id_session = Column(Integer, ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=True)
+    type = Column(String(30), nullable=False)  # sav_reply | session_transferred
+    message = Column(String(255), nullable=False)
+    read_at = Column(DateTime(timezone=True), nullable=True)
+    date_creation = Column(DateTime(timezone=True), server_default=func.now())
+
 
 class AICallLog(Base):
     __tablename__ = "ai_call_logs"

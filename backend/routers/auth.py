@@ -11,12 +11,16 @@ from database import get_db
 from dependencies import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     LOGIN_RATE_LIMIT,
+    RESEND_VERIFICATION_RATE_LIMIT,
     create_access_token,
+    create_email_verification_token,
+    decode_email_verification_token,
     get_current_user,
     get_user_by_email,
     limiter,
     pwd_context,
 )
+from email_utils import send_verification_email
 from pdf_export import build_user_data_export_pdf
 
 router = APIRouter(tags=["Authentification"])
@@ -43,6 +47,7 @@ def setup_admin(
         existing.id_role = admin_role.id
         existing.password_hash = pwd_context.hash(payload.password)
         existing.deleted_at = None
+        existing.email_verified = True
         db.commit()
         return {"message": f"Compte promu admin : {existing.email}"}
     if db.query(models.Utilisateur).filter(models.Utilisateur.username == payload.username, models.Utilisateur.deleted_at.is_(None)).first():
@@ -54,6 +59,7 @@ def setup_admin(
         prenom=payload.prenom,
         nom=payload.nom,
         id_role=admin_role.id,
+        email_verified=True,
     )
     db.add(admin)
     db.commit()
@@ -79,8 +85,45 @@ def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
     role_name = db.query(models.Role.nom_role).filter(models.Role.id == new_user.id_role).scalar() or "user"
+
+    token = create_email_verification_token(new_user.id, new_user.email)
+    send_verification_email(new_user.email, new_user.username, token)
+
     return {"id": new_user.id, "username": new_user.username, "email": new_user.email,
-            "prenom": new_user.prenom, "nom": new_user.nom, "role": role_name, "date_creation": new_user.date_creation}
+            "prenom": new_user.prenom, "nom": new_user.nom, "role": role_name,
+            "email_verified": new_user.email_verified, "date_creation": new_user.date_creation}
+
+
+@router.get("/verify-email", summary="Confirmer une adresse email via le lien reçu par mail")
+def verify_email(token: str, db: Session = Depends(get_db)):
+    payload = decode_email_verification_token(token)
+    user = db.query(models.Utilisateur).filter(
+        models.Utilisateur.id == payload.get("user_id"),
+        models.Utilisateur.email == payload.get("sub"),
+        models.Utilisateur.deleted_at.is_(None),
+    ).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    if not user.email_verified:
+        user.email_verified = True
+        db.commit()
+    return {"message": "Adresse email vérifiée avec succès."}
+
+
+@router.post("/resend-verification", summary="Renvoyer l'email de vérification")
+@limiter.limit(RESEND_VERIFICATION_RATE_LIMIT)
+def resend_verification(request: Request, payload: schemas.ResendVerificationRequest, db: Session = Depends(get_db)):
+    # Message générique dans tous les cas (compte inexistant, déjà vérifié, ou envoi réel) —
+    # évite de laisser deviner par ce endpoint public si un email est déjà inscrit.
+    generic_response = {"message": "Si un compte existe avec cet email et n'est pas encore vérifié, un email vient d'être envoyé."}
+    user = db.query(models.Utilisateur).filter(
+        models.Utilisateur.email == payload.email.strip().lower(),
+        models.Utilisateur.deleted_at.is_(None),
+    ).first()
+    if user and not user.email_verified:
+        token = create_email_verification_token(user.id, user.email)
+        send_verification_email(user.email, user.username, token)
+    return generic_response
 
 
 @router.post("/login", summary="Se connecter et obtenir un token JWT")
@@ -89,6 +132,11 @@ def login(request: Request, user_credentials: schemas.UserLogin, db: Session = D
     user = db.query(models.Utilisateur).filter(models.Utilisateur.email == user_credentials.email, models.Utilisateur.deleted_at.is_(None)).first()
     if not user or not pwd_context.verify(user_credentials.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="L'email ou le mot de passe est incorrect")
+    if not user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "email_not_verified", "message": "Adresse email non vérifiée. Consultez votre boîte de réception."},
+        )
     role_name = user.role.nom_role if user.role else "user"
     access_token = create_access_token(data={"sub": user.email, "user_id": user.id, "role": role_name})
     response = JSONResponse(content={"access_token": access_token, "token_type": "bearer",
@@ -114,7 +162,8 @@ def read_me(current_user: str = Depends(get_current_user), db: Session = Depends
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
     role_name = user.role.nom_role if user.role else "user"
     return {"id": user.id, "username": user.username, "email": user.email,
-            "prenom": user.prenom, "nom": user.nom, "role": role_name, "date_creation": user.date_creation}
+            "prenom": user.prenom, "nom": user.nom, "role": role_name,
+            "email_verified": user.email_verified, "date_creation": user.date_creation}
 
 
 @router.put("/me", response_model=schemas.MeResponse, summary="Mettre à jour son profil")
@@ -129,20 +178,31 @@ def update_me(payload: schemas.MeUpdateRequest, current_user: str = Depends(get_
         if db.query(models.Utilisateur).filter(models.Utilisateur.username == new_username, models.Utilisateur.id != user.id).first():
             raise HTTPException(status_code=400, detail="Ce username est déjà utilisé")
         user.username = new_username
+    email_changed = False
     if payload.email is not None:
         new_email = payload.email.strip().lower()
         if db.query(models.Utilisateur).filter(models.Utilisateur.email == new_email, models.Utilisateur.id != user.id).first():
             raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
-        user.email = new_email
+        if new_email != user.email:
+            email_changed = True
+            user.email = new_email
+            # Une nouvelle adresse doit être re-vérifiée — on ne peut pas hériter de la
+            # confiance accordée à l'ancienne, sous peine de permettre de basculer vers
+            # une adresse qu'on ne possède pas réellement.
+            user.email_verified = False
     if payload.prenom is not None:
         user.prenom = payload.prenom.strip() if payload.prenom else None
     if payload.nom is not None:
         user.nom = payload.nom.strip() if payload.nom else None
     db.commit()
     db.refresh(user)
+    if email_changed:
+        token = create_email_verification_token(user.id, user.email)
+        send_verification_email(user.email, user.username, token)
     role_name = user.role.nom_role if user.role else "user"
     return {"id": user.id, "username": user.username, "email": user.email,
-            "prenom": user.prenom, "nom": user.nom, "role": role_name, "date_creation": user.date_creation}
+            "prenom": user.prenom, "nom": user.nom, "role": role_name,
+            "email_verified": user.email_verified, "date_creation": user.date_creation}
 
 
 @router.get("/me/export", summary="Exporter toutes ses données personnelles en PDF (RGPD Art. 15 et 20)")
