@@ -27,8 +27,10 @@ RATE_LIMIT_STORAGE_URI = os.getenv("RATE_LIMIT_STORAGE_URI", "memory://")
 LOGIN_RATE_LIMIT = os.getenv("LOGIN_RATE_LIMIT", "5/minute")
 ASK_RATE_LIMIT = os.getenv("ASK_RATE_LIMIT", "20/minute")
 RESEND_VERIFICATION_RATE_LIMIT = os.getenv("RESEND_VERIFICATION_RATE_LIMIT", "3/hour")
+FORGOT_PASSWORD_RATE_LIMIT = os.getenv("FORGOT_PASSWORD_RATE_LIMIT", "3/hour")
 
 EMAIL_VERIFICATION_EXPIRE_HOURS = int(os.getenv("EMAIL_VERIFICATION_EXPIRE_HOURS", "48"))
+PASSWORD_RESET_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "60"))
 
 limiter = Limiter(key_func=get_remote_address, storage_uri=RATE_LIMIT_STORAGE_URI)
 
@@ -121,6 +123,25 @@ def decode_email_verification_token(token: str) -> dict:
         raise HTTPException(status_code=400, detail="Lien de vérification invalide ou expiré")
     if payload.get("type") != "email_verification":
         raise HTTPException(status_code=400, detail="Lien de vérification invalide ou expiré")
+    return payload
+
+
+def create_password_reset_token(user_id: int, email: str) -> str:
+    expire = datetime.utcnow() + timedelta(minutes=PASSWORD_RESET_EXPIRE_MINUTES)
+    payload = {"sub": email, "user_id": user_id, "type": "password_reset", "exp": expire}
+    return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+
+
+def decode_password_reset_token(token: str) -> dict:
+    """Même principe que decode_email_verification_token : le claim `type` empêche un
+    access_token (ou un token de vérification d'email) d'être réutilisé pour réinitialiser
+    un mot de passe."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=400, detail="Lien de réinitialisation invalide ou expiré")
+    if payload.get("type") != "password_reset":
+        raise HTTPException(status_code=400, detail="Lien de réinitialisation invalide ou expiré")
     return payload
 
 

@@ -10,17 +10,20 @@ import schemas
 from database import get_db
 from dependencies import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    FORGOT_PASSWORD_RATE_LIMIT,
     LOGIN_RATE_LIMIT,
     RESEND_VERIFICATION_RATE_LIMIT,
     create_access_token,
     create_email_verification_token,
+    create_password_reset_token,
     decode_email_verification_token,
+    decode_password_reset_token,
     get_current_user,
     get_user_by_email,
     limiter,
     pwd_context,
 )
-from email_utils import send_verification_email
+from email_utils import send_password_reset_email, send_verification_email
 from pdf_export import build_user_data_export_pdf
 
 router = APIRouter(tags=["Authentification"])
@@ -124,6 +127,39 @@ def resend_verification(request: Request, payload: schemas.ResendVerificationReq
         token = create_email_verification_token(user.id, user.email)
         send_verification_email(user.email, user.username, token)
     return generic_response
+
+
+@router.post("/forgot-password", summary="Demander un lien de réinitialisation de mot de passe")
+@limiter.limit(FORGOT_PASSWORD_RATE_LIMIT)
+def forgot_password(request: Request, payload: schemas.ForgotPasswordRequest, db: Session = Depends(get_db)):
+    # Message générique dans tous les cas (compte inexistant ou envoi réel) — même logique
+    # anti-énumération que /resend-verification.
+    generic_response = {"message": "Si un compte existe avec cet email, un lien de réinitialisation vient d'être envoyé."}
+    user = db.query(models.Utilisateur).filter(
+        models.Utilisateur.email == payload.email.strip().lower(),
+        models.Utilisateur.deleted_at.is_(None),
+    ).first()
+    if user:
+        token = create_password_reset_token(user.id, user.email)
+        send_password_reset_email(user.email, user.username, token)
+    return generic_response
+
+
+@router.post("/reset-password", summary="Réinitialiser son mot de passe via le lien reçu par mail")
+def reset_password(payload: schemas.ResetPasswordRequest, db: Session = Depends(get_db)):
+    token_payload = decode_password_reset_token(payload.token)
+    if len(payload.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Le nouveau mot de passe doit contenir au moins 6 caractères")
+    user = db.query(models.Utilisateur).filter(
+        models.Utilisateur.id == token_payload.get("user_id"),
+        models.Utilisateur.email == token_payload.get("sub"),
+        models.Utilisateur.deleted_at.is_(None),
+    ).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    user.password_hash = pwd_context.hash(payload.new_password)
+    db.commit()
+    return {"message": "Mot de passe réinitialisé avec succès."}
 
 
 @router.post("/login", summary="Se connecter et obtenir un token JWT")

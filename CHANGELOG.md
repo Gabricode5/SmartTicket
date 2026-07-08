@@ -17,6 +17,13 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+## [2.7.0] - 2026-07-09
+
+### Ajouté
+- Réinitialisation de mot de passe : `POST /v1/forgot-password` envoie un lien de réinitialisation par email (JWT dédié, 1h, réponse générique anti-énumération, limité à 3/heure) ; `POST /v1/reset-password` valide le lien et met à jour le mot de passe. Nouvelles pages frontend `/forgot-password` (formulaire réel, remplace le stub non fonctionnel) et `/reset-password`
+
+---
+
 ## [2.6.0] - 2026-07-08
 
 ### Ajouté
@@ -158,6 +165,7 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+[2.7.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.7.0
 [2.6.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.6.0
 [2.5.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.5.0
 [2.4.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.4.0
