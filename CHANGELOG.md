@@ -10,6 +10,9 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 ### Ajouté
 - Visite guidée au premier login, adaptée au rôle (`user`/`sav`/`superviseur`/`admin`) — modal léger sans dépendance externe (`frontend/components/onboarding/OnboardingModal.tsx`), rejouable depuis Paramètres → Aide
 
+### Corrigé
+- Envoi d'email : ajout d'un mode API HTTP Brevo (`BREVO_API_KEY`, prioritaire sur `SMTP_HOST`) en plus du SMTP générique — sur Render, le SMTP classique (port 587) était bloqué en sortie, puis rejeté par Brevo (`525 Unauthorized IP address`) faute d'IP de sortie fixe à whitelister. L'API HTTP passe par HTTPS classique et contourne ces deux limites
+
 ---
 
 ## [2.6.0] - 2026-07-08
