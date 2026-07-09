@@ -9,7 +9,7 @@ import schemas
 from constants import REASON_LABELS, VALID_REASONS
 from database import get_db
 from dependencies import (
-    EMBED_MODEL, MISTRAL_MODEL, REQUEST_TIMEOUT,
+    EMBED_MODEL, INDEX_CLOSED_TICKETS, MISTRAL_MODEL, REQUEST_TIMEOUT,
     SUMMARY_MAX_CHARS, SUMMARY_MAX_MESSAGES,
     TRANSCRIPT_CHUNK_OVERLAP, TRANSCRIPT_CHUNK_SIZE, TRANSCRIPT_MAX_CHARS,
     chunk_text, get_current_user, get_user_by_email, is_admin_or_sav, sanitize_text,
@@ -164,41 +164,46 @@ def close_session(session_id: int, current_user: str = Depends(get_current_user)
     if getattr(session, "status", "open") == "closed":
         return session
 
-    messages = db.query(models.ChatMessage).filter(models.ChatMessage.id_session == session_id).order_by(models.ChatMessage.date_creation.asc()).limit(SUMMARY_MAX_MESSAGES).all()
-    transcript_parts = [sanitize_text(f"{m.type_envoyeur.upper()}: {m.contenu}") for m in messages if m.contenu]
-    transcript = "\n".join(transcript_parts)[:TRANSCRIPT_MAX_CHARS]
+    # Indexer le transcript/résumé d'un ticket clos dans la base de connaissances partagée
+    # expose son contenu (potentiellement des données personnelles du client final) aux
+    # futures questions de n'importe quel autre utilisateur — désactivé par défaut, cf.
+    # INDEX_CLOSED_TICKETS dans dependencies.py.
+    if INDEX_CLOSED_TICKETS:
+        messages = db.query(models.ChatMessage).filter(models.ChatMessage.id_session == session_id).order_by(models.ChatMessage.date_creation.asc()).limit(SUMMARY_MAX_MESSAGES).all()
+        transcript_parts = [sanitize_text(f"{m.type_envoyeur.upper()}: {m.contenu}") for m in messages if m.contenu]
+        transcript = "\n".join(transcript_parts)[:TRANSCRIPT_MAX_CHARS]
 
-    if not transcript:
-        summary_text = "Ticket clos sans message."
-    else:
-        summary_prompt = f"Tu es un agent SAV. Résume ce ticket en 5 à 8 lignes maximum.\nInclue: problème principal, actions tentées, solution finale (si connue).\n\nTRANSCRIPT:\n{transcript[:SUMMARY_MAX_CHARS]}"
-        summary_text = ""
+        if not transcript:
+            summary_text = "Ticket clos sans message."
+        else:
+            summary_prompt = f"Tu es un agent SAV. Résume ce ticket en 5 à 8 lignes maximum.\nInclue: problème principal, actions tentées, solution finale (si connue).\n\nTRANSCRIPT:\n{transcript[:SUMMARY_MAX_CHARS]}"
+            summary_text = ""
+            try:
+                summary_text = sanitize_text(generate_text(summary_prompt, model=MISTRAL_MODEL, timeout=REQUEST_TIMEOUT))
+            except Exception:
+                pass
+            if not summary_text:
+                first = transcript_parts[0] if transcript_parts else ""
+                last = transcript_parts[-1] if transcript_parts else ""
+                summary_text = sanitize_text("Résumé court du ticket:\n" + "\n".join(p for p in [first, last] if p))
+
         try:
-            summary_text = sanitize_text(generate_text(summary_prompt, model=MISTRAL_MODEL, timeout=REQUEST_TIMEOUT))
+            summary_embedding = embed_text(sanitize_text(summary_text), model=EMBED_MODEL, timeout=REQUEST_TIMEOUT)
+            db.add(models.KnowledgeBase(source_message_id=None, contenu=f"Résumé session #{session_id} (user_id={session.id_utilisateur})\n{summary_text}", embedding=summary_embedding, category="ticket_summary"))
         except Exception:
             pass
-        if not summary_text:
-            first = transcript_parts[0] if transcript_parts else ""
-            last = transcript_parts[-1] if transcript_parts else ""
-            summary_text = sanitize_text("Résumé court du ticket:\n" + "\n".join(p for p in [first, last] if p))
 
-    try:
-        summary_embedding = embed_text(sanitize_text(summary_text), model=EMBED_MODEL, timeout=REQUEST_TIMEOUT)
-        db.add(models.KnowledgeBase(source_message_id=None, contenu=f"Résumé session #{session_id} (user_id={session.id_utilisateur})\n{summary_text}", embedding=summary_embedding, category="ticket_summary"))
-    except Exception:
-        pass
-
-    if transcript:
-        try:
-            chunks = chunk_text(transcript, TRANSCRIPT_CHUNK_SIZE, TRANSCRIPT_CHUNK_OVERLAP)
-            for idx, chunk in enumerate(chunks, start=1):
-                chunk = sanitize_text(chunk)
-                if not chunk:
-                    continue
-                vector = embed_text(chunk, model=EMBED_MODEL, timeout=REQUEST_TIMEOUT)
-                db.add(models.KnowledgeBase(source_message_id=None, contenu=f"Transcript session #{session_id} (user_id={session.id_utilisateur}) [{idx}/{len(chunks)}]\n{chunk}", embedding=vector, category="ticket_transcript"))
-        except Exception:
-            pass
+        if transcript:
+            try:
+                chunks = chunk_text(transcript, TRANSCRIPT_CHUNK_SIZE, TRANSCRIPT_CHUNK_OVERLAP)
+                for idx, chunk in enumerate(chunks, start=1):
+                    chunk = sanitize_text(chunk)
+                    if not chunk:
+                        continue
+                    vector = embed_text(chunk, model=EMBED_MODEL, timeout=REQUEST_TIMEOUT)
+                    db.add(models.KnowledgeBase(source_message_id=None, contenu=f"Transcript session #{session_id} (user_id={session.id_utilisateur}) [{idx}/{len(chunks)}]\n{chunk}", embedding=vector, category="ticket_transcript"))
+            except Exception:
+                pass
 
     session.status = "closed"
     db.commit()

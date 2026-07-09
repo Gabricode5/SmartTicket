@@ -191,7 +191,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="CRM Intelligent API",
     description="API pour un gestionnaire de tickets avec intégration IA (Mistral AI + RAG sur pgvector).",
-    version="2.7.0",
+    version="2.8.0",
     lifespan=lifespan,
     openapi_tags=[
         {"name": "IA", "description": "Endpoints exposant le modèle Mistral AI et le pipeline RAG (Retrieval-Augmented Generation)."},

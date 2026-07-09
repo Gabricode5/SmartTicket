@@ -55,6 +55,14 @@ def rate_limit_key_by_user(request: Request) -> str:
     return get_remote_address(request)
 
 
+# Désactivé par défaut : indexer le transcript/résumé d'un ticket clos dans la base de
+# connaissances partagée expose le contenu d'une conversation (potentiellement des données
+# personnelles) aux futures questions de n'importe quel autre utilisateur — acceptable en
+# usage B2B interne (collègues de confiance), mais un vrai risque de fuite entre clients
+# finaux dans un contexte B2B2C (support public). À activer explicitement instance par
+# instance si le cas d'usage s'y prête.
+INDEX_CLOSED_TICKETS = os.getenv("INDEX_CLOSED_TICKETS", "false").lower() == "true"
+
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "10"))
 KB_TOP_K = int(os.getenv("KB_TOP_K", "10"))
 KB_MAX_CONTEXT_CHARS = int(os.getenv("KB_MAX_CONTEXT_CHARS", "3000"))
