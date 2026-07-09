@@ -21,6 +21,7 @@ dependencies = [
   "email-validator>=2.0.0",
   "python-dotenv",
   "slowapi",
+  "redis",
   "fpdf2",
   "langchain-community",
   "beautifulsoup4",

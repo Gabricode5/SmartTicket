@@ -19,10 +19,15 @@ ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 60))
 
 # Stockage des compteurs de rate limiting. "memory://" fonctionne out-of-the-box mais
-# est local à chaque instance et se réinitialise à chaque redémarrage — suffisant pour
-# une seule instance (ex: plan Render gratuit/starter). Si l'app est scalée sur plusieurs
-# instances, pointer RATE_LIMIT_STORAGE_URI vers le Redis déjà présent dans docker-compose
-# (ex: "redis://redis:6379") pour un comptage partagé.
+# est local à chaque instance et se réinitialise à chaque redémarrage — suffisant tant
+# que l'app tourne sur une seule instance (cas actuel : plan Render gratuit, qui ne
+# permet de toute façon pas le scaling horizontal). Le jour où l'app passe sur plusieurs
+# instances, procédure de bascule (aucun changement de code requis, seulement de config) :
+#   1. Provisionner un Redis accessible depuis Render (le `redis` du docker-compose local
+#      ne sert qu'en dev — en prod il faut un Redis managé, ex. Render Key Value ou Upstash)
+#   2. Définir RATE_LIMIT_STORAGE_URI=redis://<host>:<port> dans les env vars Render
+# Le client Python `redis` est déjà une dépendance (cf. pyproject.toml) précisément pour
+# que cette bascule n'exige qu'un changement de variable d'environnement, pas de déploiement.
 RATE_LIMIT_STORAGE_URI = os.getenv("RATE_LIMIT_STORAGE_URI", "memory://")
 LOGIN_RATE_LIMIT = os.getenv("LOGIN_RATE_LIMIT", "5/minute")
 ASK_RATE_LIMIT = os.getenv("ASK_RATE_LIMIT", "20/minute")
