@@ -150,8 +150,8 @@ def ask_question_stream(request: Request, payload: schemas.AskRequest, current_u
                     success=success,
                     error_type=error_type,
                 ))
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning("AICallLog insert error: %s", e, exc_info=True)
             db.commit()
 
     return StreamingResponse(stream_tokens(), media_type="text/plain")
