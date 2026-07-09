@@ -21,7 +21,7 @@ docs/       Documents de projet
 ### 1. Pré-requis
 
 - Docker et Docker Compose
-- un fichier `.env` à la racine pour le backend
+- un fichier `.env` à la racine (copie `.env.example` → `.env` et choisis ton propre `POSTGRES_PASSWORD` — aucun mot de passe par défaut n'est fourni dans le code)
 
 ### 2. Lancer le projet
 
@@ -73,9 +73,9 @@ Paramètres de connexion pour `pgAdmin` ou un client SQL :
 |---|---|
 | Host | `postgres` |
 | Port | `5432` |
-| Database | `ticketdb` |
-| Username | `admin` |
-| Password | `Password1234` |
+| Database | `ticketdb` (ou la valeur de `POSTGRES_DB` dans ton `.env`) |
+| Username | `admin` (ou la valeur de `POSTGRES_USER` dans ton `.env`) |
+| Password | la valeur de `POSTGRES_PASSWORD` dans ton `.env` |
 
 Le nom de connexion affiché dans votre client peut être choisi librement.
 
