@@ -4,9 +4,12 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-# 1. L'adresse de ta base (récupérée de Docker ou en local par défaut)
-# On utilise les identifiants que tu as configurés dans ton docker-compose
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://admin:Password1234@postgres/ticketdb")
+# 1. L'adresse de ta base — aucune valeur par défaut avec un mot de passe en dur : DATABASE_URL
+# doit être défini explicitement (via .env en local, cf. .env.example, ou par l'hébergeur en
+# prod), même pattern que SECRET_KEY dans main.py.
+DATABASE_URL = os.getenv("DATABASE_URL")
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL manquante. Définis-la dans l'environnement (voir .env.example).")
 
 # 2. Création du moteur de connexion
 engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=300)

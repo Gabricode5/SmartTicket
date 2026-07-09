@@ -18,9 +18,9 @@ services:
     image: pgvector/pgvector:pg18
     container_name: ticket-ai-postgres
     environment:
-      POSTGRES_DB: ticketdb
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: Password1234
+      POSTGRES_DB: ${POSTGRES_DB:-ticketdb}
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Définis POSTGRES_PASSWORD dans .env (copie .env.example)}
     ports:
       - "5432:5432"
     volumes:
@@ -75,7 +75,7 @@ services:
       - .env
     environment:
       - CORS_ORIGINS=http://localhost:3005
-      - DATABASE_URL=postgresql://admin:Password1234@postgres:5432/ticketdb
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:?Définis POSTGRES_PASSWORD dans .env (copie .env.example)}@postgres:5432/${POSTGRES_DB:-ticketdb}
     volumes:
       - ./backend:/app
     depends_on:
