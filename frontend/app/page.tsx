@@ -63,6 +63,12 @@ export default function LandingPage() {
                             <Link href="/login">J&apos;ai déjà un compte</Link>
                         </Button>
                     </div>
+                    <p className="mt-5 text-sm text-slate-400">
+                        Juste envie de tester l&apos;assistant IA ?{" "}
+                        <Link href="/chat" className="text-indigo-600 font-medium hover:underline">
+                            Discuter maintenant, sans compte
+                        </Link>
+                    </p>
                 </div>
 
                 {/* Preview card */}

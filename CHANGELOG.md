@@ -24,6 +24,15 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+## [2.10.0] - 2026-07-09
+
+### Ajouté
+- Chat IA anonyme (B2B2C) : `POST /v1/sessions/guest` crée un compte "invité" silencieusement (aucune inscription requise) et démarre directement une conversation ; `POST /v1/me/claim` permet ensuite de transformer ce compte en compte réel (email + mot de passe) sans connaître de mot de passe existant. Nouvelle page publique `/chat` (démarre une session invité et redirige vers le chat) et bandeau "Créer un compte" affiché aux visiteurs anonymes dans `/ai-assistant/[id]`
+- Purge automatique des comptes invités jamais réclamés après `GUEST_ACCOUNT_TTL_DAYS` (défaut 7 jours), intégrée au scheduler RGPD existant
+- `GET /v1/users` exclut désormais les comptes invités des listes d'administration
+
+---
+
 ## [2.8.0] - 2026-07-09
 
 ### Sécurité
@@ -179,6 +188,7 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+[2.10.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.10.0
 [2.9.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.9.0
 [2.8.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.8.0
 [2.7.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.7.0

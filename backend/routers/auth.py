@@ -21,6 +21,7 @@ from dependencies import (
     decode_password_reset_token,
     get_current_user,
     get_user_by_email,
+    is_guest_email,
     limiter,
     pwd_context,
 )
@@ -204,7 +205,8 @@ def read_me(current_user: str = Depends(get_current_user), db: Session = Depends
     role_name = user.role.nom_role if user.role else "user"
     return {"id": user.id, "username": user.username, "email": user.email,
             "prenom": user.prenom, "nom": user.nom, "role": role_name,
-            "email_verified": user.email_verified, "date_creation": user.date_creation}
+            "email_verified": user.email_verified, "is_guest": is_guest_email(user.email),
+            "date_creation": user.date_creation}
 
 
 @router.put("/me", response_model=schemas.MeResponse, summary="Mettre à jour son profil")
@@ -243,7 +245,8 @@ def update_me(payload: schemas.MeUpdateRequest, current_user: str = Depends(get_
     role_name = user.role.nom_role if user.role else "user"
     return {"id": user.id, "username": user.username, "email": user.email,
             "prenom": user.prenom, "nom": user.nom, "role": role_name,
-            "email_verified": user.email_verified, "date_creation": user.date_creation}
+            "email_verified": user.email_verified, "is_guest": is_guest_email(user.email),
+            "date_creation": user.date_creation}
 
 
 @router.get("/me/export", summary="Exporter toutes ses données personnelles en PDF (RGPD Art. 15 et 20)")
@@ -297,3 +300,46 @@ def update_my_password(payload: schemas.MePasswordUpdateRequest, current_user: s
     user.password_hash = pwd_context.hash(payload.new_password)
     db.commit()
     return {"message": "Mot de passe mis à jour"}
+
+
+@router.post("/me/claim", summary="Réclamer un compte invité (lui donner un vrai email et mot de passe)")
+def claim_guest_account(payload: schemas.ClaimAccountRequest, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    user = get_user_by_email(db, current_user)
+    if not user:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+    if not is_guest_email(user.email):
+        raise HTTPException(status_code=400, detail="Ce compte n'est pas un compte invité à réclamer.")
+    if len(payload.password) < 6:
+        raise HTTPException(status_code=400, detail="Le mot de passe doit contenir au moins 6 caractères")
+    new_email = payload.email.strip().lower()
+    if db.query(models.Utilisateur).filter(models.Utilisateur.email == new_email, models.Utilisateur.id != user.id).first():
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé")
+
+    # Un compte invité n'a pas de mot de passe connaissable (généré aléatoirement à la
+    # création) — on ne demande donc pas le mot de passe actuel ici, contrairement à
+    # /me/password. La possession d'une session valide pour ce compte précis (le cookie)
+    # tient lieu de preuve, exactement comme pour n'importe quelle autre action de /me.
+    user.email = new_email
+    user.password_hash = pwd_context.hash(payload.password)
+    user.email_verified = False
+    db.commit()
+    db.refresh(user)
+
+    token = create_email_verification_token(user.id, user.email)
+    send_verification_email(user.email, user.username, token)
+
+    # Le JWT existant contient l'ancien email dans son claim `sub` — get_current_user ne
+    # le retrouverait plus en base après ce changement. On réémet un cookie immédiatement
+    # pour que la session en cours continue de fonctionner sans déconnexion surprise.
+    role_name = user.role.nom_role if user.role else "user"
+    access_token = create_access_token(data={"sub": user.email, "user_id": user.id, "role": role_name})
+    response = JSONResponse(content={
+        "id": user.id, "username": user.username, "email": user.email,
+        "prenom": user.prenom, "nom": user.nom, "role": role_name,
+        "email_verified": user.email_verified, "is_guest": False,
+        "date_creation": user.date_creation.isoformat(),
+    })
+    cookie_secure = os.getenv("COOKIE_SECURE", "false").lower() == "true"
+    response.set_cookie(key="auth_token", value=access_token, httponly=True, samesite="strict",
+                        secure=cookie_secure, max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60, path="/")
+    return response

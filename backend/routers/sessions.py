@@ -1,6 +1,11 @@
+import os
+import secrets
+import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
@@ -9,10 +14,12 @@ import schemas
 from constants import REASON_LABELS, VALID_REASONS
 from database import get_db
 from dependencies import (
-    EMBED_MODEL, INDEX_CLOSED_TICKETS, MISTRAL_MODEL, REQUEST_TIMEOUT,
+    ACCESS_TOKEN_EXPIRE_MINUTES, EMBED_MODEL, GUEST_EMAIL_DOMAIN, GUEST_SESSION_RATE_LIMIT,
+    INDEX_CLOSED_TICKETS, MISTRAL_MODEL, REQUEST_TIMEOUT,
     SUMMARY_MAX_CHARS, SUMMARY_MAX_MESSAGES,
     TRANSCRIPT_CHUNK_OVERLAP, TRANSCRIPT_CHUNK_SIZE, TRANSCRIPT_MAX_CHARS,
-    chunk_text, get_current_user, get_user_by_email, is_admin_or_sav, sanitize_text,
+    chunk_text, create_access_token, get_current_user, get_user_by_email,
+    is_admin_or_sav, limiter, pwd_context, sanitize_text,
 )
 from mistral_client import embed_text, generate_text
 from notifications import queue_session_transferred
@@ -39,6 +46,50 @@ def create_session(session_data: schemas.ChatSessionCreate, user_id: int, curren
     db.commit()
     db.refresh(new_session)
     return new_session
+
+
+@router.post("/sessions/guest", summary="Démarrer une conversation anonyme (compte invité créé silencieusement)")
+# Callable plutôt que la chaîne directement, comme /register — voir le commentaire associé
+# dans routers/auth.py (slowapi fige sinon la valeur au chargement du module).
+@limiter.limit(lambda: GUEST_SESSION_RATE_LIMIT)
+def create_guest_session(request: Request, db: Session = Depends(get_db)):
+    """Chat public B2B2C sans inscription préalable : crée un compte "fantôme" (email
+    factice sous GUEST_EMAIL_DOMAIN, mot de passe aléatoire jamais communiqué, auto-vérifié
+    puisqu'il n'y a pas de vrai email à confirmer) et une session, puis authentifie
+    directement le navigateur — identique du point de vue du reste du code à un compte
+    normal (aucune vérification d'ownership à adapter ailleurs). Le visiteur peut plus tard
+    "réclamer" ce compte via POST /v1/me/claim pour lui donner un vrai email/mot de passe."""
+    default_role = db.query(models.Role).filter(models.Role.nom_role == "user").first()
+    if not default_role:
+        raise HTTPException(status_code=500, detail="Rôle par défaut introuvable")
+
+    suffix = uuid.uuid4().hex[:12]
+    guest = models.Utilisateur(
+        username=f"guest_{suffix}",
+        email=f"guest-{suffix}{GUEST_EMAIL_DOMAIN}",
+        password_hash=pwd_context.hash(secrets.token_urlsafe(32)),
+        id_role=default_role.id,
+        email_verified=True,
+    )
+    db.add(guest)
+    db.commit()
+    db.refresh(guest)
+
+    new_session = models.ChatSession(id_utilisateur=guest.id, title="Nouvelle conversation")
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+
+    access_token = create_access_token(data={"sub": guest.email, "user_id": guest.id, "role": "user"})
+    response = JSONResponse(content={
+        "access_token": access_token, "token_type": "bearer",
+        "username": guest.username, "user_id": guest.id, "nom_role": "user",
+        "session": jsonable_encoder(schemas.ChatSessionResponse.model_validate(new_session)),
+    })
+    cookie_secure = os.getenv("COOKIE_SECURE", "false").lower() == "true"
+    response.set_cookie(key="auth_token", value=access_token, httponly=True, samesite="strict",
+                        secure=cookie_secure, max_age=ACCESS_TOKEN_EXPIRE_MINUTES * 60, path="/")
+    return response
 
 
 @router.get("/sessions", response_model=list[schemas.ChatSessionResponse], summary="Lister les sessions d'un utilisateur")
