@@ -16,7 +16,7 @@ from sqlalchemy import text as _text
 
 import models
 from database import engine as _engine
-from dependencies import limiter
+from dependencies import GUEST_ACCOUNT_TTL_DAYS, GUEST_EMAIL_DOMAIN, limiter
 from routers import ai, analytics, auth, knowledge, messages, notifications, sessions, users
 
 logging.basicConfig(
@@ -57,6 +57,36 @@ def purge_soft_deleted(retention_days: int = PURGE_RETENTION_DAYS) -> None:
                 )
     except Exception as exc:
         _log.error("RGPD purge failed: %s", exc, exc_info=True)
+
+
+def purge_unclaimed_guests(ttl_days: int = GUEST_ACCOUNT_TTL_DAYS) -> None:
+    """Soft-delete les comptes invités (chat anonyme B2B2C) jamais réclamés au-delà de
+    ttl_days — ils rejoignent ensuite le cycle de purge RGPD normal ci-dessus (hard-delete
+    après PURGE_RETENTION_DAYS)."""
+    from database import SessionLocal as _SessionLocal
+    cutoff = datetime.utcnow() - timedelta(days=ttl_days)
+    now = datetime.utcnow()
+    try:
+        with _SessionLocal() as db:
+            guest_ids = [row[0] for row in db.query(models.Utilisateur.id).filter(
+                models.Utilisateur.email.like(f"%{GUEST_EMAIL_DOMAIN}"),
+                models.Utilisateur.deleted_at.is_(None),
+                models.Utilisateur.date_creation < cutoff,
+            ).all()]
+            if guest_ids:
+                db.query(models.ChatSession).filter(
+                    models.ChatSession.id_utilisateur.in_(guest_ids),
+                    models.ChatSession.deleted_at.is_(None),
+                ).update({"deleted_at": now}, synchronize_session=False)
+                db.query(models.Utilisateur).filter(models.Utilisateur.id.in_(guest_ids)).update(
+                    {"deleted_at": now}, synchronize_session=False)
+                db.commit()
+                _log.info(
+                    "Comptes invités non réclamés soft-deleted : %d (TTL %d j)",
+                    len(guest_ids), ttl_days,
+                )
+    except Exception as exc:
+        _log.error("Guest purge failed: %s", exc, exc_info=True)
 
 
 def run_migrations() -> None:
@@ -169,10 +199,12 @@ def start_purge_scheduler():
         scheduler = BackgroundScheduler()
         # Purge quotidienne à 03:00 UTC
         scheduler.add_job(purge_soft_deleted, "cron", hour=3, minute=0, id="rgpd_purge")
+        scheduler.add_job(purge_unclaimed_guests, "cron", hour=3, minute=15, id="guest_purge")
         scheduler.start()
         _log.info("Scheduler RGPD démarré — purge quotidienne à 03:00 UTC (rétention %d j)", PURGE_RETENTION_DAYS)
         # Purge immédiate au démarrage pour traiter les enregistrements déjà expirés
         purge_soft_deleted()
+        purge_unclaimed_guests()
         return scheduler
     except Exception as exc:
         _log.error("Scheduler startup failed: %s", exc, exc_info=True)
@@ -191,7 +223,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="CRM Intelligent API",
     description="API pour un gestionnaire de tickets avec intégration IA (Mistral AI + RAG sur pgvector).",
-    version="2.9.0",
+    version="2.10.0",
     lifespan=lifespan,
     openapi_tags=[
         {"name": "IA", "description": "Endpoints exposant le modèle Mistral AI et le pipeline RAG (Retrieval-Augmented Generation)."},

@@ -10,6 +10,7 @@ export type CurrentUser = {
     prenom?: string | null
     nom?: string | null
     role: string
+    is_guest?: boolean
 }
 
 export function useCurrentUser() {

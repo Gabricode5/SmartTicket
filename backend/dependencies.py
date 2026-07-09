@@ -66,6 +66,18 @@ def rate_limit_key_by_user(request: Request) -> str:
 # instance si le cas d'usage s'y prête.
 INDEX_CLOSED_TICKETS = os.getenv("INDEX_CLOSED_TICKETS", "false").lower() == "true"
 
+# Chat anonyme B2B2C : un visiteur public peut discuter sans créer de compte au préalable
+# (POST /v1/sessions/guest crée un compte "fantôme" silencieusement, cf. routers/sessions.py).
+# Détecté par ce domaine d'email réservé plutôt qu'une colonne dédiée — pas de migration de
+# schéma nécessaire, un compte fantôme est un Utilisateur normal aux yeux du reste du code.
+GUEST_EMAIL_DOMAIN = "@guest.smartticket.local"
+GUEST_SESSION_RATE_LIMIT = os.getenv("GUEST_SESSION_RATE_LIMIT", "10/hour")
+GUEST_ACCOUNT_TTL_DAYS = int(os.getenv("GUEST_ACCOUNT_TTL_DAYS", "7"))
+
+
+def is_guest_email(email: str) -> bool:
+    return email.endswith(GUEST_EMAIL_DOMAIN)
+
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "10"))
 KB_TOP_K = int(os.getenv("KB_TOP_K", "10"))
 KB_MAX_CONTEXT_CHARS = int(os.getenv("KB_MAX_CONTEXT_CHARS", "3000"))

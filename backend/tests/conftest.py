@@ -17,6 +17,7 @@ os.environ.setdefault("ASK_RATE_LIMIT", "10000/minute")
 os.environ.setdefault("RESEND_VERIFICATION_RATE_LIMIT", "10000/minute")
 os.environ.setdefault("FORGOT_PASSWORD_RATE_LIMIT", "10000/minute")
 os.environ.setdefault("REGISTER_RATE_LIMIT", "10000/minute")
+os.environ.setdefault("GUEST_SESSION_RATE_LIMIT", "10000/minute")
 
 # TEST_DATABASE_URL is intentionally separate from DATABASE_URL (the app's prod/dev DB).
 # Tests will refuse to run if this variable is not set or does not contain "test".

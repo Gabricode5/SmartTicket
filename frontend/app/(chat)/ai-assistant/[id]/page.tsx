@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
+import { GuestClaimBanner } from "@/components/GuestClaimBanner"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -313,6 +314,8 @@ export default function AiAssistantPage() {
                     <Button variant="ghost" size="icon" className="text-slate-400" aria-label="Plus d'options"><MoreVertical className="h-4 w-4" /></Button>
                 </div>
             </header>
+
+            {currentUser?.is_guest && <GuestClaimBanner />}
 
             <div className="flex-1 overflow-y-auto p-6" aria-live="polite" aria-busy={isSending}>
                 {messages.length === 0 ? (

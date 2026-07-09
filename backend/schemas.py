@@ -171,7 +171,12 @@ class MeResponse(BaseModel):
     nom: Optional[str] = None
     role: str
     email_verified: bool = False
+    is_guest: bool = False
     date_creation: datetime
+
+class ClaimAccountRequest(BaseModel):
+    email: EmailStr
+    password: str
 
 class MeUpdateRequest(BaseModel):
     username: Optional[str] = None

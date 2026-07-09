@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from database import get_db
-from dependencies import can_manage_sav_team, get_current_user, get_user_by_email, is_admin_or_sav
+from dependencies import GUEST_EMAIL_DOMAIN, can_manage_sav_team, get_current_user, get_user_by_email, is_admin_or_sav
 
 router = APIRouter(tags=["Utilisateurs"])
 
@@ -16,7 +16,13 @@ def list_users(role: str | None = None, current_user: str = Depends(get_current_
     requester = get_user_by_email(db, current_user)
     if not is_admin_or_sav(requester):
         raise HTTPException(status_code=403, detail="Accès refusé")
-    query = db.query(models.Utilisateur).join(models.Role).filter(models.Utilisateur.deleted_at.is_(None))
+    # Comptes invités (chat anonyme B2B2C, cf. POST /v1/sessions/guest) exclus de la
+    # gestion des utilisateurs — ce sont des comptes techniques éphémères, pas des comptes
+    # à administrer, et ils peuvent être nombreux avant leur purge automatique.
+    query = db.query(models.Utilisateur).join(models.Role).filter(
+        models.Utilisateur.deleted_at.is_(None),
+        ~models.Utilisateur.email.like(f"%{GUEST_EMAIL_DOMAIN}"),
+    )
     if role:
         query = query.filter(models.Role.nom_role == role)
     return [{"id": u.id, "username": u.username, "email": u.email, "prenom": u.prenom, "nom": u.nom,
