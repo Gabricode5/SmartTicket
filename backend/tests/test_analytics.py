@@ -1,8 +1,11 @@
 """Tests des endpoints /v1/analytics/stats et /v1/analytics/ai-metrics."""
 import os
+import secrets
 from datetime import datetime, timedelta
 
 import models
+
+_TEST_PASSWORD = secrets.token_urlsafe(16)
 
 
 # ---------------------------------------------------------------------------
@@ -16,7 +19,7 @@ def _make_admin_client(client):
         json={
             "username": "test_admin",
             "email": "admin_test@example.com",
-            "password": "admin_password123",
+            "password": _TEST_PASSWORD,
             "prenom": "Admin",
             "nom": "Test",
         },
@@ -24,7 +27,7 @@ def _make_admin_client(client):
     )
     resp = client.post("/v1/login", json={
         "email": "admin_test@example.com",
-        "password": "admin_password123",
+        "password": _TEST_PASSWORD,
     })
     assert resp.status_code == 200, f"Login admin échoué : {resp.json()}"
     token = resp.json()["access_token"]

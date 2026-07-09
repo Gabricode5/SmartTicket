@@ -1,4 +1,7 @@
 """Integration tests for FastAPI endpoints."""
+import secrets
+
+_TEST_PASSWORD = secrets.token_urlsafe(16)
 
 
 class TestRoot:
@@ -13,7 +16,7 @@ class TestRegister:
         resp = client.post("/v1/register", json={
             "username": "alice",
             "email": "alice@example.com",
-            "password": "password123",
+            "password": _TEST_PASSWORD,
             "prenom": "Alice",
             "nom": "Dupont",
         })
@@ -29,7 +32,7 @@ class TestRegister:
         payload = {
             "username": "bob",
             "email": "bob@example.com",
-            "password": "password123",
+            "password": _TEST_PASSWORD,
             "prenom": "Bob",
             "nom": "Martin",
         }
@@ -41,14 +44,14 @@ class TestRegister:
         client.post("/v1/register", json={
             "username": "sameuser",
             "email": "first@example.com",
-            "password": "password123",
+            "password": _TEST_PASSWORD,
             "prenom": "A",
             "nom": "B",
         })
         resp = client.post("/v1/register", json={
             "username": "sameuser",
             "email": "second@example.com",
-            "password": "password123",
+            "password": _TEST_PASSWORD,
             "prenom": "A",
             "nom": "B",
         })
@@ -76,7 +79,7 @@ class TestLogin:
     def test_unknown_email_returns_403(self, client):
         resp = client.post("/v1/login", json={
             "email": "nobody@example.com",
-            "password": "password123",
+            "password": _TEST_PASSWORD,
         })
         assert resp.status_code == 403
 
@@ -135,16 +138,16 @@ class TestSessions:
         # Create two users
         client.post("/v1/register", json={
             "username": "user_a", "email": "a@example.com",
-            "password": "pass123", "prenom": "A", "nom": "A",
+            "password": _TEST_PASSWORD, "prenom": "A", "nom": "A",
         })
         client.post("/v1/register", json={
             "username": "user_b", "email": "b@example.com",
-            "password": "pass123", "prenom": "B", "nom": "B",
+            "password": _TEST_PASSWORD, "prenom": "B", "nom": "B",
         })
         mark_verified("a@example.com")
         mark_verified("b@example.com")
-        token_a = client.post("/v1/login", json={"email": "a@example.com", "password": "pass123"}).json()["access_token"]
-        user_b_id = client.post("/v1/login", json={"email": "b@example.com", "password": "pass123"}).json()["user_id"]
+        token_a = client.post("/v1/login", json={"email": "a@example.com", "password": _TEST_PASSWORD}).json()["access_token"]
+        user_b_id = client.post("/v1/login", json={"email": "b@example.com", "password": _TEST_PASSWORD}).json()["user_id"]
 
         resp = client.get(
             "/v1/sessions",
