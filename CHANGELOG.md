@@ -17,6 +17,13 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+## [2.8.0] - 2026-07-09
+
+### Sécurité
+- `POST /v1/sessions/{id}/close` n'indexe plus automatiquement le transcript/résumé du ticket dans la base de connaissances partagée — **rupture de comportement** : ce contenu (potentiellement des données personnelles d'un client final) pouvait auparavant remonter dans les réponses IA données à n'importe quel autre utilisateur. Comportement désormais opt-in via `INDEX_CLOSED_TICKETS=true` (défaut `false`), pertinent uniquement en usage B2B interne où tous les utilisateurs sont des collègues de confiance — jamais en support public B2B2C
+
+---
+
 ## [2.7.0] - 2026-07-09
 
 ### Ajouté
@@ -165,6 +172,7 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+[2.8.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.8.0
 [2.7.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.7.0
 [2.6.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.6.0
 [2.5.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.5.0
