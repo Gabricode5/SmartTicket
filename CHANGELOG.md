@@ -17,6 +17,13 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+## [2.9.0] - 2026-07-09
+
+### Sécurité
+- `POST /v1/register` n'avait aucun rate limiting, contrairement à `/login`/`/resend-verification`/`/forgot-password` — porte ouverte au spam de comptes jetables en inscription publique (contexte B2B2C). Ajout de `REGISTER_RATE_LIMIT` (défaut `5/hour`, configurable)
+
+---
+
 ## [2.8.0] - 2026-07-09
 
 ### Sécurité
@@ -172,6 +179,7 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+[2.9.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.9.0
 [2.8.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.8.0
 [2.7.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.7.0
 [2.6.0]: https://github.com/guerygabriel/SmartTicket/releases/tag/v2.6.0

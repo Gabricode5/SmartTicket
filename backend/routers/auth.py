@@ -12,6 +12,7 @@ from dependencies import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
     FORGOT_PASSWORD_RATE_LIMIT,
     LOGIN_RATE_LIMIT,
+    REGISTER_RATE_LIMIT,
     RESEND_VERIFICATION_RATE_LIMIT,
     create_access_token,
     create_email_verification_token,
@@ -71,7 +72,11 @@ def setup_admin(
 
 
 @router.post("/register", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED, summary="Créer un compte utilisateur")
-def register_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
+# Callable plutôt que la chaîne directement : slowapi l'appelle à chaque requête au lieu
+# de figer la valeur une fois pour toutes au chargement du module, ce qui permet de tester
+# réellement le comportement "limite dépassée" (monkeypatch de REGISTER_RATE_LIMIT).
+@limiter.limit(lambda: REGISTER_RATE_LIMIT)
+def register_user(request: Request, user: schemas.UserCreate, db: Session = Depends(get_db)):
     if db.query(models.Utilisateur).filter(models.Utilisateur.email == user.email, models.Utilisateur.deleted_at.is_(None)).first():
         raise HTTPException(status_code=400, detail="Cet email est déjà utilisé.")
     if db.query(models.Utilisateur).filter(models.Utilisateur.username == user.username, models.Utilisateur.deleted_at.is_(None)).first():
