@@ -7,9 +7,7 @@ similarité sémantique. Ce module affine ce classement en combinant trois signa
   3. le feedback utilisateur accumulé sur ce chunk (via chat_messages.source_kb_ids).
 
 Un chunk dont le feedback net devient trop négatif est mis en quarantaine : il est
-exclu du contexte quelle que soit sa similarité vectorielle. C'est la réalisation
-de la piste « Quarantaine des chunks à feedback négatif répété » identifiée dans
-docs/E3/RAG_DECISIONS_LOG.md.
+exclu du contexte quelle que soit sa similarité vectorielle.
 """
 import os
 import re
