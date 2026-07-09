@@ -3,7 +3,13 @@
     "allow": [
       "Bash(git commit -m ' *)",
       "Bash(dir \"c:\\\\Users\\\\gguery\\\\Documents\\\\perso\\\\SmartTicket\\\\frontend\" /b)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(git checkout -b *)",
+      "Bash(git add *)",
+      "Bash(git push *)",
+      "Bash(git checkout *)",
+      "Bash(git pull *)",
+      "Bash(git fetch *)"
     ]
   }
 }
