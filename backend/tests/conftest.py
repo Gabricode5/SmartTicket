@@ -1,5 +1,8 @@
 import os
+import secrets
 import pytest
+
+_TEST_PASSWORD = secrets.token_urlsafe(16)
 
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-ci-only")
 os.environ.setdefault("ALGORITHM", "HS256")
@@ -121,7 +124,7 @@ def registered_user(client, mark_verified):
     payload = {
         "username": "fixture_user",
         "email": "fixture@example.com",
-        "password": "password123",
+        "password": _TEST_PASSWORD,
         "prenom": "Fixture",
         "nom": "User",
     }
