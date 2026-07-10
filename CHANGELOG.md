@@ -20,6 +20,13 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+## [2.12.0] - 2026-07-10
+
+### Ajouté
+- Coupe-circuit d'abonnement pour le modèle "flotte d'instances" : `GET`/`PUT /v1/instance/subscription-status`, protégés par un secret `VENDOR_KEY` distinct du rôle admin classique (le client dont le compte pourrait ne plus être payé ne doit pas pouvoir se réactiver lui-même). Un middleware bloque le reste de l'API (`402 Payment Required`) tant que l'instance est marquée `suspended`, à l'exception du health check et de l'endpoint de statut lui-même. Sans `VENDOR_KEY` défini, le coupe-circuit reste inopérant (comportement par défaut inchangé, fail-open)
+
+---
+
 ## [2.11.0] - 2026-07-10
 
 ### Ajouté
