@@ -21,6 +21,14 @@ describe("proxy", () => {
     }
   );
 
+  it.each(["/logo_smartticket.png", "/favicon.ico", "/robots.txt", "/some-font.woff2"])(
+    "allows unauthenticated access to any static asset path %s (extension-based, not name-based)",
+    (path) => {
+      const response = proxy(makeRequest(path, false));
+      expect(response.status).not.toBe(307);
+    }
+  );
+
   it("redirects an unauthenticated visitor away from a protected path to /login", () => {
     const response = proxy(makeRequest("/dashboard", false));
     expect(response.status).toBe(307);
