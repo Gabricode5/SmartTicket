@@ -31,6 +31,14 @@ class Utilisateur(Base):
     nom = Column(String(50))
     id_role = Column(Integer, ForeignKey("roles.id"), server_default="1")
     email_verified = Column(Boolean, nullable=False, server_default="false")
+    # Amorçage admin sans mot de passe transmis en clair (flotte d'instances, cf.
+    # ops/provision_client.py) : posé uniquement à la création du compte quand
+    # ADMIN_SETUP_TOKEN est fourni (main.py::run_migrations), jamais régénéré ensuite.
+    # admin_setup_token n'est JAMAIS exposé dans un schéma Pydantic — c'est un secret
+    # transitoire, à usage unique (used_at) et expirant (expires_at).
+    admin_setup_token = Column(String(64), nullable=True)
+    admin_setup_token_expires_at = Column(DateTime(timezone=True), nullable=True)
+    admin_setup_token_used_at = Column(DateTime(timezone=True), nullable=True)
     tenant_id = _tenant_id_column()
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at = Column(DateTime(timezone=True), nullable=True)

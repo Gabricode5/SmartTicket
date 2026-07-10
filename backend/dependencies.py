@@ -39,6 +39,11 @@ REGISTER_RATE_LIMIT = os.getenv("REGISTER_RATE_LIMIT", "5/hour")
 
 EMAIL_VERIFICATION_EXPIRE_HOURS = int(os.getenv("EMAIL_VERIFICATION_EXPIRE_HOURS", "48"))
 PASSWORD_RESET_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_EXPIRE_MINUTES", "60"))
+# Lien d'amorçage du compte admin envoyé par ops/provision_client.py (cf. models.Utilisateur
+# .admin_setup_token) — durée volontairement plus longue que les autres liens de ce fichier,
+# le destinataire n'est pas forcément prêt à finaliser la configuration le jour même.
+ADMIN_SETUP_TOKEN_EXPIRE_HOURS = int(os.getenv("ADMIN_SETUP_TOKEN_EXPIRE_HOURS", "48"))
+ADMIN_SETUP_RATE_LIMIT = os.getenv("ADMIN_SETUP_RATE_LIMIT", "10/hour")
 
 limiter = Limiter(key_func=get_remote_address, storage_uri=RATE_LIMIT_STORAGE_URI)
 

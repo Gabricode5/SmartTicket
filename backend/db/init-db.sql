@@ -34,6 +34,9 @@ CREATE TABLE utilisateur (
     nom VARCHAR(50),                                         -- Nom optionnel
     id_role INTEGER REFERENCES roles(id) DEFAULT 1,          -- Rôle par défaut = user
     email_verified BOOLEAN NOT NULL DEFAULT FALSE,           -- Email confirmé via le lien envoyé à l'inscription
+    admin_setup_token VARCHAR(64),                           -- Amorçage admin flotte (jamais exposé en API)
+    admin_setup_token_expires_at TIMESTAMP WITH TIME ZONE,
+    admin_setup_token_used_at TIMESTAMP WITH TIME ZONE,
     tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001', -- Préparation multi-tenant (valeur fixe, une instance = un tenant aujourd'hui)
     date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Date de création
     deleted_at TIMESTAMP WITH TIME ZONE                      -- Soft-delete RGPD (NULL = compte actif)
