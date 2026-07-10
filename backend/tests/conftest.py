@@ -8,6 +8,7 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-for-ci-only")
 os.environ.setdefault("ALGORITHM", "HS256")
 os.environ.setdefault("MISTRAL_API_KEY", "dummy")
 os.environ.setdefault("ADMIN_SETUP_KEY", "test-setup-key-for-ci-only")
+os.environ.setdefault("VENDOR_KEY", "test-vendor-key-for-ci-only")
 # La suite de tests fait largement plus de 5 logins/minute (fixtures auth_client,
 # _make_admin_client...) — on désactive la limite plutôt que de la contourner par test.
 os.environ.setdefault("LOGIN_RATE_LIMIT", "10000/minute")
@@ -46,7 +47,7 @@ engine = create_engine(TEST_DB_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 _TRUNCATE_SQL = text(
-    "TRUNCATE TABLE knowledge_base, chat_messages, chat_sessions, utilisateur RESTART IDENTITY CASCADE"
+    "TRUNCATE TABLE knowledge_base, chat_messages, chat_sessions, utilisateur, instance_subscription RESTART IDENTITY CASCADE"
 )
 
 

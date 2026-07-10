@@ -149,3 +149,17 @@ CREATE TABLE notifications (
 -- Accélère le badge "non lues" (requête la plus fréquente, en polling côté frontend)
 CREATE INDEX ON notifications (id_utilisateur, read_at);
 CREATE INDEX ON notifications (tenant_id);
+
+-- =========================================
+-- TABLE INSTANCE_SUBSCRIPTION
+-- =========================================
+-- Ligne unique (id=1) : coupe-circuit d'abonnement pour le modèle "flotte d'instances"
+-- (l'opérateur héberge/paye Render pour chaque client, doit pouvoir couper l'accès si un
+-- client ne paye plus, sans dépendre des identifiants admin de ce client). Pas de tenant_id
+-- ici, contrairement aux autres tables : cette table EST déjà scopée à l'instance entière.
+CREATE TABLE instance_subscription (
+    id SERIAL PRIMARY KEY,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',             -- active | suspended
+    reason TEXT,                                              -- Motif affiché au client si suspendu
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
