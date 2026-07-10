@@ -107,8 +107,6 @@ Plan détaillé (décisions à trancher, provisioning + sous-domaine + mise à j
 
 ### À faire — avant de pouvoir vendre (ordre de priorité réel)
 - [ ] Relecture juridique du DPA/CGV/politique de confidentialité/mentions légales par un avocat spécialisé RGPD/SaaS avant tout usage contractuel réel + complétion des placeholders `[À COMPLÉTER]` (identité légale) une fois l'entité enregistrée — brouillons déjà rédigés, cf. "Fait" ci-dessus (`DPA.md` + les 3 pages publiques)
-- [ ] DPA (Data Processing Agreement) — non négociable pour vendre du RGPD-sensible en B2B France, un DPO qualifié refuse le contrat sans ça
-- [ ] Relecture juridique des CGV/politique de confidentialité/mentions légales par un avocat spécialisé SaaS avant tout usage contractuel réel + complétion des placeholders `[À COMPLÉTER]` (identité légale) une fois l'entité enregistrée — brouillons déjà en ligne, cf. "Fait" ci-dessus
 - [ ] Facturation automatisée (Stripe Billing, gestion TVA FR/UE) — pas de facturation manuelle dès le 3e client
 - [ ] SLA écrit même basique (ex: 99% uptime, réponse support sous 24h) — demandé par les PME françaises dès qu'il y a du support client en jeu
 - [ ] Process d'onboarding documenté et chronométré sur le premier client pilote : ingestion initiale de la base de connaissances, configuration des rôles, formation SAV — souvent le vrai facteur limitant de scale, pas la techno
