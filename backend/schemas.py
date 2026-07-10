@@ -56,6 +56,16 @@ class UserListResponse(BaseModel):
 class UserRoleUpdateRequest(BaseModel):
     role: str
 
+class CsvImportSkippedRow(BaseModel):
+    row: int
+    email: str
+    reason: str
+
+class CsvImportResponse(BaseModel):
+    total_rows: int
+    created: int
+    skipped: list[CsvImportSkippedRow]
+
 class UserAdminUpdateRequest(BaseModel):
     username: Optional[str] = None
     email: Optional[EmailStr] = None
