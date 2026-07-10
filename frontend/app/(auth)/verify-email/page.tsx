@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
+import Image from "next/image"
 import Link from "next/link"
 import { ArrowLeft, CheckCircle2, XCircle, Loader2 } from "lucide-react"
 
@@ -68,7 +69,7 @@ function VerifyEmailContent() {
                     Retour à l&apos;accueil
                 </Link>
                 <div className="flex items-center gap-2 font-bold text-slate-800">
-                    <div className="h-7 w-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">S</div>
+                    <Image src="/logo_smartticket.png" alt="SmartTicket" width={28} height={28} className="h-7 w-7" />
                     <span>SmartTicket</span>
                 </div>
             </header>
