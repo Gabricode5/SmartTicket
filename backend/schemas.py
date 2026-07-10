@@ -207,6 +207,15 @@ class NotificationResponse(BaseModel):
     read: bool
     date_creation: datetime
 
+class SubscriptionStatusResponse(BaseModel):
+    status: str
+    reason: Optional[str] = None
+    updated_at: Optional[datetime] = None
+
+class SubscriptionStatusUpdateRequest(BaseModel):
+    status: str
+    reason: Optional[str] = None
+
     class Config:
         from_attributes = True
 
