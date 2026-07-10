@@ -49,10 +49,17 @@ client.
 
 ## Phase 1 — Modèle de données du panel interne
 
-- [ ] Nouvelle base Postgres dédiée au panel (indépendante de toute base client) avec une
-  table `instances` : `id`, `client_name`, `slug`, `render_backend_service_id`,
-  `render_frontend_service_id`, `render_database_id`, `subdomain`, `plan_tarifaire`,
-  `date_creation`, `date_facturation`, `statut` (`provisioning` / `active` / `suspendue`)
+- [x] **Écart assumé par rapport au plan initial** : table `instances` créée dans **SQLite**
+  (`ops/instances.db`, schéma dans `ops/db.py`), pas dans un Postgres dédié comme envisagé
+  ici. À l'échelle visée (1-5 clients, gestion en CLI + une requête SQL, zéro interface
+  graphique — cf. "Étape A" ci-dessous), payer et administrer un Postgres managé rien que
+  pour une poignée de lignes est disproportionné. Un fichier local, jamais versionné,
+  sauvegardable en copiant un fichier. Migration vers Postgres réenvisageable plus tard si
+  le volume ou un besoin d'accès concurrent le justifie. Colonnes : `id`, `client_name`,
+  `slug`, `render_backend_service_id`, `render_frontend_service_id`, `render_database_id`,
+  `backend_url`, `frontend_url`, `subdomain`, `vendor_key`, `admin_setup_key`,
+  `plan_tarifaire`, `statut` (`provisioning`/`active`/`suspendue`/`supprimee`),
+  `date_creation`, `date_facturation`, `notes`
 - [ ] Table `usage_mensuel` (`instance_id`, `tokens_consommes`, `mois`) — **nécessaire dès
   que `MISTRAL_API_KEY` est partagée entre clients**, sinon impossible de savoir quel
   client consomme le budget avant la facture Mistral de fin de mois. Implique d'abord que
@@ -75,10 +82,16 @@ faux résultat).
   managé, création de service web Docker lié à un repo GitHub + branche + `dockerfilePath`,
   ajout de variables d'environnement, ajout d'un custom domain) — à valider avec un appel
   de test avant d'écrire le script complet, la doc publique ne suffit pas toujours à
-  connaître les contraintes réelles
+  connaître les contraintes réelles. **`ops/render_client.py` écrit à partir de la doc
+  publique mais encore non exécuté contre un vrai compte** — cette case reste à cocher
+  seulement après un premier appel réel réussi (cf. avertissement en tête de `ops/README.md`)
 - [ ] Prérequis DNS : posséder un nom de domaine dédié et configurer un enregistrement
-  wildcard (`*.smartticket.fr` ou équivalent) pointant vers Render
-- [ ] Écrire `provision_client.py --name "Client X" --slug client-x` qui, dans l'ordre :
+  wildcard (`*.smartticket.fr` ou équivalent) pointant vers Render — pas encore fait, décision
+  vendeur hors scope du code
+- [x] Écrire `provision_client.py --name "Client X" --slug client-x` — `ops/provision_client.py`,
+  suit les 7 étapes ci-dessous. **Code écrit et testé en `--dry-run`/erreurs (plan `free`
+  refusé, idempotence) uniquement — jamais exécuté contre un vrai compte Render (Phase 4 du
+  plan reste à faire avant tout client réel)** :
   1. Crée la base Postgres managée (équivalent du bloc `databases:` de `render.yaml`)
   2. Crée le service backend Docker avec les env vars générées (`SECRET_KEY` aléatoire,
      `DATABASE_URL` de la DB créée à l'étape 1, `ADMIN_SETUP_KEY` aléatoire propre à
@@ -87,24 +100,31 @@ faux résultat).
   3. Crée le service frontend Docker avec `NEXT_PUBLIC_API_URL` pointant vers le backend
      créé à l'étape 2
   4. Attache le custom domain `{slug}.smartticket.fr` au service frontend via l'API Render
-  5. Attend que les deux déploiements soient "live" **et** que le certificat TLS du custom
-     domain soit émis (comportement auto de Render, à confirmer sur un premier essai réel
-     plutôt qu'à supposer) avant de considérer l'instance prête
-  6. Enregistre l'instance dans la table `instances` du panel interne (Phase 1)
-  7. Génère le lien d'amorçage admin (cf. ci-dessous) et l'affiche/l'envoie au vendeur —
-     jamais de mot de passe en clair dans les logs du script
+     (si `--domain` fourni ; sans lui, reste sur les URLs `*.onrender.com`)
+  5. Attend que les deux déploiements soient "live" (`render_client.wait_for_deploy_live`,
+     polling avec timeout) — attente du certificat TLS du custom domain **non implémentée
+     séparément**, à vérifier lors du premier essai réel si Render ne le fait pas de façon
+     transparente
+  6. Enregistre l'instance dans la table `instances` (SQLite, cf. Phase 1)
+  7. Affiche `VENDOR_KEY` et un mot de passe admin temporaire une seule fois en console (pas
+     écrit sur disque, pas loggé) — cf. point suivant, ce n'est pas encore le lien
+     d'amorçage sans mot de passe envisagé initialement
 - [ ] **Amorçage du compte admin sans mot de passe en clair** : le backend expose déjà
   `POST /v1/setup-admin`, protégé par le header `X-Setup-Key` (= `ADMIN_SETUP_KEY`, unique
   par instance, généré à l'étape 2) — pas besoin d'inventer un nouveau système de token.
-  Il manque seulement une page frontend `/setup?key=...` (nouvelle, à créer, même famille
+  Il manque toujours une page frontend `/setup?key=...` (nouvelle, à créer, même famille
   que `/verify-email`/`/reset-password`) qui laisse le client choisir lui-même son
-  username/email/mot de passe admin et appelle `/v1/setup-admin` avec la clé. Le script de
-  provisioning envoie au client un lien `https://{slug}.smartticket.fr/setup?key=xxx` —
-  zéro mot de passe généré côté vendeur qui transite par email
-- [ ] Gérer l'idempotence : que fait le script si on le relance avec un `slug` déjà utilisé ?
-  (refuser proprement plutôt que dupliquer les ressources)
-- [ ] Documenter la procédure de **suppression** d'une instance (offboarding client) —
-  symétrique du provisioning, à ne pas négliger
+  username/email/mot de passe admin et appelle `/v1/setup-admin` avec la clé. **Non construite
+  dans cette étape** (hors scope explicite : "Étape A" ne couvrait que les scripts CLI + la
+  table instances) — `provision_client.py` génère en attendant un mot de passe admin
+  temporaire affiché une fois, à faire changer immédiatement par le client
+- [x] Gérer l'idempotence : que fait le script si on le relance avec un `slug` déjà utilisé ?
+  `provision_client.py` refuse (vérifié réellement : relance sur un slug déjà présent dans
+  `instances.db` → erreur explicite, code de sortie 1, aucun appel Render déclenché)
+- [x] Documenter la procédure de **suppression** d'une instance (offboarding client) —
+  `ops/delete_client.py` (symétrique du provisioning : supprime backend/frontend/Postgres
+  côté Render, retire ou archive la ligne `instances.db`, confirmation interactive requise
+  sauf `--yes`), documenté dans `ops/README.md`
 
 ## Phase 2 bis — Mise à jour de masse de la flotte
 
@@ -113,13 +133,16 @@ client) mais la propagation d'un correctif ou d'une nouvelle fonctionnalité aux
 instances existantes. Sans ça, dès le 5e client, chaque fix de bug devient un redéploiement
 manuel répété N fois sur le dashboard Render.
 
-- [ ] `update_all_instances.py` qui boucle sur la table `instances` (statut `active`) et
+- [x] `update_all_instances.py` qui boucle sur la table `instances` (statut `active`) et
   déclenche un redeploy via l'API Render (`POST /deploys` sur chaque
   `render_backend_service_id`/`render_frontend_service_id`) — cohérent avec la décision
   mono-branche : toutes les instances déploient la même branche `main`, donc un redeploy
-  suffit, pas de merge/rebase par client
-- [ ] Mode `--dry-run` (liste ce qui serait redéployé sans le faire) et mode
-  `--only slug1,slug2` (rollout progressif : tester sur 1-2 clients avant tout le monde)
+  suffit, pas de merge/rebase par client. **Code écrit, jamais exécuté contre un vrai compte
+  Render** (même statut que `provision_client.py` ci-dessus)
+- [x] Mode `--dry-run` (liste ce qui serait redéployé sans le faire) et mode
+  `--only slug1,slug2` (rollout progressif : tester sur 1-2 clients avant tout le monde) —
+  les deux implémentés et vérifiés réellement (liste vide, filtrage par slugs, slugs
+  inconnus signalés sans faire échouer le reste)
 
 ## Phase 3 — Panel interne (UI)
 
