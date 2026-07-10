@@ -87,8 +87,6 @@ _Rien en cours actuellement._
 ## À faire
 
 ### Sécurité
-- [ ] `GET /v1/knowledge-base/ingest-status` et `GET /v1/knowledge-base/robots-check` ne vérifient que `get_current_user` (n'importe quel compte connecté), contrairement au reste du router `knowledge.py` qui exige `is_admin_or_sav` — un simple compte `user` peut donc faire sonder n'importe quelle URL externe par le backend via `robots-check` (SSRF-adjacent). Aligner sur le même contrôle de rôle que `ingest-url`/`ingest-file`/`delete-source`
-- [ ] Vérification d'unicité de l'email à l'inscription (`POST /v1/register`) ne filtre que sur les comptes actifs (`deleted_at IS NULL`), mais la contrainte `UNIQUE` en base s'applique à toutes les lignes y compris les comptes soft-deleted (RGPD, purgés après 30j). Un email déjà utilisé par un compte supprimé mais pas encore purgé provoque donc une erreur 500 (violation de contrainte SQL) au lieu du message 400 propre "Cet email est déjà utilisé." — identifié en conversation le 2026-07-08, jamais corrigé
 - [ ] Dépendances Python non pinnées dans `backend/pyproject.toml` (`fastapi`, `uvicorn`, `sqlalchemy`, `slowapi`... sans version fixée, contrairement à `lxml==6.0.2`/`pypdf==6.9.2`/`bcrypt==4.0.1`) — un rebuild Docker/Render peut silencieusement installer une version majeure différente entre deux déploiements
 
 ### Fonctionnel / produit
