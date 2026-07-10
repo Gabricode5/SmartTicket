@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { ArrowLeft, MailCheck } from "lucide-react"
 
@@ -46,7 +47,7 @@ export default function ForgotPasswordPage() {
                     Retour à l&apos;accueil
                 </Link>
                 <div className="flex items-center gap-2 font-bold text-slate-800">
-                    <div className="h-7 w-7 rounded-lg bg-indigo-600 flex items-center justify-center text-white text-xs font-bold">S</div>
+                    <Image src="/logo_smartticket.png" alt="SmartTicket" width={28} height={28} className="h-7 w-7" />
                     <span>SmartTicket</span>
                 </div>
             </header>
@@ -73,8 +74,8 @@ export default function ForgotPasswordPage() {
                         ) : (
                             <>
                                 <div className="text-center mb-7">
-                                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-indigo-600 mb-4">
-                                        <span className="text-white text-xl font-bold">S</span>
+                                    <div className="inline-flex items-center justify-center w-12 h-12 mb-4">
+                                        <Image src="/logo_smartticket.png" alt="SmartTicket" width={48} height={48} className="w-12 h-12" />
                                     </div>
                                     <h1 className="text-2xl font-bold text-slate-900">Mot de passe oublié ?</h1>
                                     <p className="text-slate-500 text-sm mt-1">Entrez votre email pour recevoir un lien de réinitialisation</p>
