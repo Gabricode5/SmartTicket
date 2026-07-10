@@ -44,22 +44,32 @@ le fichier) : elle contient les `VENDOR_KEY`/`ADMIN_SETUP_KEY` de toutes les ins
 ### `provision_client.py` — créer une instance
 
 ```bash
-python provision_client.py --name "Acme Corp" --slug acme-corp --postgres-plan starter --dry-run
-python provision_client.py --name "Acme Corp" --slug acme-corp --postgres-plan starter
+python provision_client.py --name "Acme Corp" --slug acme-corp --admin-email admin@acme.com --postgres-plan starter --dry-run
+python provision_client.py --name "Acme Corp" --slug acme-corp --admin-email admin@acme.com --postgres-plan starter
 ```
 
 - `--postgres-plan` ne peut jamais être `free` (aucun backup automatique sur ce plan,
   décision actée dans le plan — refusé explicitement par le script).
+- `--admin-email` : email du compte admin du client, utilisé pour `ADMIN_EMAIL` sur
+  l'instance et comme destinataire du lien de setup.
 - `--domain` (optionnel) attache un sous-domaine personnalisé (`{slug}.{domain}`) — suppose
   un domaine déjà possédé avec un enregistrement DNS wildcard pointant vers Render (Phase 0
   du plan, pas automatisé ici). Sans `--domain`, l'instance reste sur ses URLs
   `*.onrender.com`.
 - Idempotent par rejet : refuse de continuer si le `--slug` existe déjà dans `instances.db`
   plutôt que de dupliquer les ressources.
-- Affiche une fois, en fin d'exécution, `VENDOR_KEY` (coupe-circuit d'abonnement, à
-  conserver) et un mot de passe admin temporaire (à communiquer au client de façon sécurisée
-  et à faire changer immédiatement — la page `/setup?key=...` qui éliminerait ce mot de
-  passe temporaire, décrite en Phase 2 du plan, n'est pas encore construite).
+- La logique métier vit dans `provision(...)`, une fonction pure (sans `input()`/`print()`
+  comme moyen de retour) appelable directement — `main()` n'est qu'un mince wrapper CLI.
+- **Aucun mot de passe en clair** : le compte admin est créé avec un mot de passe aléatoire
+  jamais communiqué, en attente d'un `ADMIN_SETUP_TOKEN` à usage unique et expirant (défaut
+  48h). Le script affiche une fois, en fin d'exécution, `VENDOR_KEY` (coupe-circuit
+  d'abonnement, à conserver) et le lien `.../setup?token=...`.
+- **Email de bienvenue automatique** (`notify.py`, API Brevo) : envoyé au client une fois
+  l'instance active, avec le lien de setup. Si `BREVO_API_KEY` est absente ou que l'appel
+  échoue, un WARNING/ERROR visible s'affiche et le lien reste de toute façon imprimé en
+  console par `provision_client.py` — à transmettre manuellement dans ce cas. `notify.py`
+  est volontairement indépendant de `backend/email_utils.py` (pas de dépendance `ops/` →
+  `backend/`), au prix d'une petite duplication de l'appel HTTP à Brevo.
 
 ### `update_all_instances.py` — propager un correctif à toute la flotte
 
@@ -96,8 +106,8 @@ sqlite3 ops/instances.db "SELECT slug, client_name, statut, frontend_url, date_c
 - **Panel graphique** (Phase 3 du plan) — explicitement hors scope tant que la gestion en
   CLI + SQL reste confortable (1-5 clients). À reconsidérer seulement si cette limite
   commence réellement à peser.
-- **Page `/setup?key=...`** (amorçage admin sans mot de passe transmis) — Phase 2 du plan,
-  pas encore construite. Pour l'instant, `provision_client.py` génère un mot de passe
-  temporaire affiché une seule fois.
+- **Rollback automatique sur échec partiel du provisioning** — si une étape échoue après la
+  création de la base Postgres, les ressources déjà créées ne sont pas détruites
+  automatiquement (nettoyage manuel requis pour l'instant).
 - **Métering d'usage Mistral par client** (`usage_mensuel`, Phase 1 du plan) — nécessaire
   avant de pouvoir facturer/plafonner un client à fort usage, pas encore implémenté.

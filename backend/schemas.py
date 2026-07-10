@@ -42,6 +42,12 @@ class ResetPasswordRequest(BaseModel):
     token: str
     new_password: str
 
+class AdminSetupRequest(BaseModel):
+    token: str
+    username: str
+    email: EmailStr
+    password: str
+
 class UserListResponse(BaseModel):
     id: int
     username: str

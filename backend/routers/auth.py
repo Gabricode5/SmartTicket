@@ -10,6 +10,7 @@ import schemas
 from database import get_db
 from dependencies import (
     ACCESS_TOKEN_EXPIRE_MINUTES,
+    ADMIN_SETUP_RATE_LIMIT,
     FORGOT_PASSWORD_RATE_LIMIT,
     LOGIN_RATE_LIMIT,
     REGISTER_RATE_LIMIT,
@@ -170,6 +171,62 @@ def reset_password(payload: schemas.ResetPasswordRequest, db: Session = Depends(
     user.password_hash = pwd_context.hash(payload.new_password)
     db.commit()
     return {"message": "Mot de passe réinitialisé avec succès."}
+
+
+# Volontairement plus strict que le reste de l'app (6 caractères ailleurs — /reset-password,
+# /me/password, /me/claim) : ce mot de passe protège le compte admin d'une instance client
+# entière, jamais le contraire. Uniquement la longueur (pas de règle de complexité — usine à
+# gaz inutile) + un filtre sur une poignée de mots de passe très communs.
+ADMIN_SETUP_MIN_PASSWORD_LENGTH = 12
+_COMMON_PASSWORDS = frozenset({
+    "password", "password123", "administrator", "changeme123",
+    "azertyuiop", "qwertyuiop123", "smartticket", "welcome123",
+    "motdepasse", "motdepasse123", "letmein12345", "changeme123!",
+})
+
+
+@router.post("/setup", summary="Finaliser la configuration du compte admin via un lien de setup à usage unique")
+@limiter.limit(ADMIN_SETUP_RATE_LIMIT)
+def setup_account(request: Request, payload: schemas.AdminSetupRequest, db: Session = Depends(get_db)):
+    """Amorçage d'un compte admin provisionné via ops/provision_client.py (flotte
+    d'instances) : le client choisit lui-même son mot de passe, aucun mot de passe n'a
+    jamais transité en clair côté opérateur. Le token (admin_setup_token) est distinct du
+    JWT applicatif — un secret stocké en base, à usage unique (admin_setup_token_used_at)
+    et expirant (admin_setup_token_expires_at), jamais renvoyé par aucune route de l'API."""
+    if len(payload.password) < ADMIN_SETUP_MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Le mot de passe doit contenir au moins {ADMIN_SETUP_MIN_PASSWORD_LENGTH} caractères")
+    if payload.password.lower() in _COMMON_PASSWORDS:
+        raise HTTPException(status_code=400, detail="Ce mot de passe est trop commun, choisis-en un autre.")
+
+    user = db.query(models.Utilisateur).filter(models.Utilisateur.admin_setup_token == payload.token).first()
+    if not user:
+        raise HTTPException(status_code=400, detail={"code": "invalid_token", "message": "Lien de configuration invalide."})
+    if user.admin_setup_token_used_at is not None:
+        raise HTTPException(status_code=400, detail={"code": "token_already_used", "message": "Ce lien a déjà été utilisé."})
+    if user.admin_setup_token_expires_at and user.admin_setup_token_expires_at.replace(tzinfo=None) < datetime.utcnow():
+        raise HTTPException(status_code=400, detail={"code": "token_expired", "message": "Ce lien a expiré. Contactez votre fournisseur SmartTicket pour en recevoir un nouveau."})
+
+    new_username = payload.username.strip()
+    new_email = payload.email.strip().lower()
+    if not new_username:
+        raise HTTPException(status_code=400, detail="Le nom d'utilisateur ne peut pas être vide.")
+    if db.query(models.Utilisateur).filter(models.Utilisateur.username == new_username, models.Utilisateur.id != user.id).first():
+        raise HTTPException(status_code=400, detail="Ce nom d'utilisateur est déjà utilisé.")
+    if db.query(models.Utilisateur).filter(models.Utilisateur.email == new_email, models.Utilisateur.id != user.id).first():
+        raise HTTPException(status_code=400, detail="Cet email est déjà utilisé.")
+
+    # Consommation du token et écriture du mot de passe posées sur le même objet `user` en
+    # mémoire puis persistées par un unique db.commit() ci-dessous : une seule transaction
+    # SQL, un seul UPDATE. Impossible d'obtenir "token consommé sans mot de passe posé" ou
+    # l'inverse — soit les deux sont écrits ensemble, soit rien ne l'est (rollback implicite
+    # de SQLAlchemy si le commit échoue).
+    user.username = new_username
+    user.email = new_email
+    user.password_hash = pwd_context.hash(payload.password)
+    user.email_verified = True
+    user.admin_setup_token_used_at = datetime.utcnow()
+    db.commit()
+    return {"message": "Configuration terminée. Vous pouvez maintenant vous connecter."}
 
 
 @router.post("/login", summary="Se connecter et obtenir un token JWT")

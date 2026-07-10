@@ -1,5 +1,6 @@
 import logging
 import os
+import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 
@@ -17,7 +18,7 @@ from sqlalchemy import text as _text
 
 import models
 from database import engine as _engine
-from dependencies import GUEST_ACCOUNT_TTL_DAYS, GUEST_EMAIL_DOMAIN, limiter
+from dependencies import ADMIN_SETUP_TOKEN_EXPIRE_HOURS, GUEST_ACCOUNT_TTL_DAYS, GUEST_EMAIL_DOMAIN, limiter
 from routers import ai, analytics, auth, instance, knowledge, messages, notifications, sessions, users
 
 logging.basicConfig(
@@ -117,6 +118,9 @@ def run_migrations() -> None:
             conn.execute(_text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS transfer_reason VARCHAR(50)"))
             conn.execute(_text("ALTER TABLE utilisateur ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"))
             conn.execute(_text("ALTER TABLE chat_sessions ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"))
+            conn.execute(_text("ALTER TABLE utilisateur ADD COLUMN IF NOT EXISTS admin_setup_token VARCHAR(64)"))
+            conn.execute(_text("ALTER TABLE utilisateur ADD COLUMN IF NOT EXISTS admin_setup_token_expires_at TIMESTAMPTZ"))
+            conn.execute(_text("ALTER TABLE utilisateur ADD COLUMN IF NOT EXISTS admin_setup_token_used_at TIMESTAMPTZ"))
 
             # email_verified est nouveau : sur une base déjà déployée (comptes existants
             # créés avant cette fonctionnalité), on ne peut pas leur demander de re-vérifier
@@ -159,16 +163,20 @@ def run_migrations() -> None:
             if admin_role:
                 admin_email = os.getenv("ADMIN_EMAIL", "admin@smartticket.app")
                 admin_username = os.getenv("ADMIN_USERNAME", "admin")
-                admin_password = os.getenv("ADMIN_PASSWORD", "ChangeMe123!")
                 # Cherche par email d'abord, puis par username en fallback
                 existing_admin = (
                     session.query(models.Utilisateur).filter_by(email=admin_email).first()
                     or session.query(models.Utilisateur).filter_by(username=admin_username).first()
                 )
                 if existing_admin:
+                    # IMPORTANT : ne jamais toucher password_hash ici, quel que soit l'état
+                    # du setup. Un compte existant a déjà un mot de passe (choisi par le
+                    # client via /setup, ou déjà en usage) — le réécrire à chaque redémarrage
+                    # de l'app écraserait silencieusement ce mot de passe et rouvrirait
+                    # l'accès avec la valeur par défaut ADMIN_PASSWORD/"ChangeMe123!" (bug
+                    # trouvé lors de l'introduction du flux de setup par token).
                     existing_admin.email = admin_email
                     existing_admin.username = admin_username
-                    existing_admin.password_hash = _pwd.hash(admin_password)
                     existing_admin.id_role = admin_role.id
                     existing_admin.deleted_at = None
                     existing_admin.email_verified = True
@@ -177,19 +185,38 @@ def run_migrations() -> None:
                     if not existing_admin.nom:
                         existing_admin.nom = "Admin"
                     session.commit()
-                    _log.info("Compte admin synchronisé : %s", admin_email)
+                    _log.info("Compte admin synchronisé (mot de passe inchangé) : %s", admin_email)
                 else:
+                    # Deux façons de créer le tout premier compte admin :
+                    #   1. ADMIN_SETUP_TOKEN fourni (instance provisionnée via ops/, cf.
+                    #      provision_client.py) : mot de passe aléatoire jamais communiqué,
+                    #      le client le choisit lui-même via POST /v1/setup (routers/auth.py)
+                    #      avec ce token, à usage unique et expirant.
+                    #   2. Sinon (dev local, docker-compose, démo) : comportement historique
+                    #      inchangé, ADMIN_PASSWORD/"ChangeMe123!" utilisable directement.
+                    admin_setup_token = os.getenv("ADMIN_SETUP_TOKEN")
+                    if admin_setup_token:
+                        password_hash = _pwd.hash(secrets.token_urlsafe(32))
+                        token_expires_at = datetime.utcnow() + timedelta(hours=ADMIN_SETUP_TOKEN_EXPIRE_HOURS)
+                    else:
+                        password_hash = _pwd.hash(os.getenv("ADMIN_PASSWORD", "ChangeMe123!"))
+                        token_expires_at = None
                     session.add(models.Utilisateur(
                         username=admin_username,
                         email=admin_email,
-                        password_hash=_pwd.hash(admin_password),
+                        password_hash=password_hash,
                         id_role=admin_role.id,
                         prenom="Admin",
                         nom="Admin",
                         email_verified=True,
+                        admin_setup_token=admin_setup_token,
+                        admin_setup_token_expires_at=token_expires_at,
                     ))
                     session.commit()
-                    _log.info("Compte admin créé : %s", admin_email)
+                    _log.info(
+                        "Compte admin créé : %s (%s)", admin_email,
+                        "en attente de setup via token" if admin_setup_token else "mot de passe direct",
+                    )
     except Exception as exc:
         _log.error("Roles/admin setup failed: %s", exc, exc_info=True)
 

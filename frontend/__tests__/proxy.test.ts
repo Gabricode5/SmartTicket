@@ -13,7 +13,7 @@ function makeRequest(pathname: string, hasAuthToken: boolean) {
 }
 
 describe("proxy", () => {
-  it.each(["/", "/login", "/sign-up", "/forgot-password", "/verify-email", "/reset-password", "/chat", "/mentions-legales", "/politique-confidentialite", "/cgv"])(
+  it.each(["/", "/login", "/sign-up", "/forgot-password", "/verify-email", "/reset-password", "/setup", "/chat", "/mentions-legales", "/politique-confidentialite", "/cgv"])(
     "allows unauthenticated access to the public path %s",
     (path) => {
       const response = proxy(makeRequest(path, false));
