@@ -1,168 +1,55 @@
-
 # SmartTicket
 
-Application de gestion de tickets avec :
+SmartTicket est une plateforme de support client B2B2C : une entreprise cliente (le B2B) l'installe pour que **ses propres clients finaux** (le B2C — vos utilisateurs, sans compte préalable) puissent obtenir de l'aide via un assistant IA branché sur sa base de connaissances, avec transfert transparent vers un agent humain quand l'IA atteint ses limites.
 
-- un frontend `Next.js`
-- un backend `FastAPI`
-- une base `PostgreSQL` avec `pgvector`
-- des services Docker pour l'environnement local
+## Pourquoi
 
-## Structure
+Le support client se heurte souvent au même compromis : un chatbot générique qui ne connaît pas vraiment l'entreprise, ou une équipe humaine débordée par des questions répétitives. SmartTicket vise l'entre-deux : une IA qui répond en s'appuyant *uniquement* sur la documentation réelle de l'entreprise (RAG), avec un vrai filet de sécurité — transfert vers un agent SAV dès que la question sort du périmètre ou que le client le demande.
+
+## Fonctionnalités
+
+**Côté client final (public, B2C)**
+- Chat IA sans compte préalable (visiteur anonyme) — la conversation peut être transformée en compte réel à tout moment sans rien perdre de l'historique
+- Réponses générées par Mistral AI, contextualisées via une recherche vectorielle (pgvector) sur la base de connaissances de l'entreprise, avec reranking par pertinence + feedback utilisateur
+- Transfert fluide vers un agent humain, avec le contexte de la conversation
+
+**Côté équipe support (B2B)**
+- Rôles à granularité fine : `user` (client), `sav` (agent), `superviseur` (gestion d'équipe), `admin`
+- Dashboards Analytics & Monitoring IA (taux de résolution, latence, qualité de la base de connaissances), export PDF/CSV
+- Recherche full-text dans l'historique des conversations
+- Notifications in-app + email (réponse SAV, transfert de ticket)
+- Base de connaissances alimentée par URL (scraping avec respect de `robots.txt`), fichiers (PDF/DOCX/TXT), avec recherche et filtres par catégorie
+- Visite guidée à l'onboarding, adaptée au rôle de chaque utilisateur
+
+**Sécurité & conformité**
+- Authentification JWT, rate limiting sur les endpoints sensibles (login, inscription, chat)
+- Guardrails anti prompt-injection sur le prompt système de l'IA
+- RGPD : export des données personnelles (PDF), droit à l'effacement en cascade, purge automatique différée des comptes supprimés
+- Colonne `tenant_id` posée en préparation d'une future bascule multi-tenant (architecture actuelle : une instance dédiée par client, cf. `ROADMAP.md`)
+
+## Stack technique
+
+| Couche | Techno |
+|---|---|
+| Frontend | Next.js 16 (App Router), React 19, Tailwind CSS, shadcn/ui |
+| Backend | FastAPI, SQLAlchemy |
+| Base de données | PostgreSQL + `pgvector` (recherche vectorielle) |
+| IA | Mistral AI (génération de texte + embeddings) |
+| Infra locale | Docker Compose |
+| Déploiement | Render (cf. `render.yaml`) |
+
+## Structure du dépôt
 
 ```text
 frontend/   Interface utilisateur Next.js
-backend/    API FastAPI, modèles et ingestion
+backend/    API FastAPI, modèles, RAG et ingestion de la base de connaissances
 docs/       Documents de projet
 ```
 
-## Démarrage rapide
+## Démarrer le projet
 
-### 1. Pré-requis
+Voir [`INSTALLATION.MD`](./INSTALLATION.MD) pour le démarrage avec Docker Compose, les variables d'environnement, les services disponibles en local et le déploiement sur Render.
 
-- Docker et Docker Compose
-- un fichier `.env` à la racine (copie `.env.example` → `.env` et choisis ton propre `POSTGRES_PASSWORD` — aucun mot de passe par défaut n'est fourni dans le code)
+## Suivi du projet
 
-### 2. Lancer le projet
-
-```bash
-docker compose up -d --build
-```
-
-Pour suivre les logs :
-
-```bash
-docker compose up
-```
-
-Pour arrêter les services :
-
-```bash
-docker compose down
-```
-
-Pour arrêter les services et supprimer les données persistantes :
-
-```bash
-docker compose down -v
-```
-
-Attention : `docker compose down -v` supprime notamment les données PostgreSQL persistées.
-
-## Services disponibles
-
-| Service | URL | Description |
-|---|---|---|
-| Frontend | [http://localhost:3005](http://localhost:3005) | Interface utilisateur |
-| Backend API | [http://localhost:8000](http://localhost:8000) | API FastAPI |
-| Swagger | [http://localhost:8000/docs](http://localhost:8000/docs) | Documentation interactive |
-| Open WebUI | [http://localhost:3002](http://localhost:3002) | Interface de test pour Ollama |
-| pgAdmin | [http://localhost:5050](http://localhost:5050) | Administration PostgreSQL |
-| Ollama | [http://localhost:11434](http://localhost:11434) | API du moteur LLM |
-
-Identifiants `pgAdmin` par défaut :
-
-- email : `admin@admin.com`
-- mot de passe : `admin`
-
-## Base de données PostgreSQL
-
-Paramètres de connexion pour `pgAdmin` ou un client SQL :
-
-| Paramètre | Valeur |
-|---|---|
-| Host | `postgres` |
-| Port | `5432` |
-| Database | `ticketdb` (ou la valeur de `POSTGRES_DB` dans ton `.env`) |
-| Username | `admin` (ou la valeur de `POSTGRES_USER` dans ton `.env`) |
-| Password | la valeur de `POSTGRES_PASSWORD` dans ton `.env` |
-
-Le nom de connexion affiché dans votre client peut être choisi librement.
-
-## Commandes utiles
-
-Reconstruire les images :
-
-```bash
-docker compose up -d --build
-```
-
-Lister les modèles Ollama installés :
-
-```bash
-docker exec -it ticket-ai-ollama ollama list
-```
-
-Relancer uniquement le service Ollama :
-
-```bash
-docker compose up -d --force-recreate ollama
-```
-
-## Développement frontend
-
-Si vous travaillez directement dans `frontend/` sans Docker :
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-## Déploiement
-
-Le dépôt contient un fichier [`render.yaml`](./render.yaml) pour le déploiement des services.
-
-### Compte administrateur par défaut
-
-Un compte admin est créé automatiquement au premier démarrage du backend. Les identifiants par défaut (si les variables d'environnement ne sont pas définies) sont :
-
-| Variable | Valeur par défaut |
-|---|---|
-| `ADMIN_EMAIL` | `admin@smartticket.app` |
-| `ADMIN_USERNAME` | `admin` |
-| `ADMIN_PASSWORD` | `ChangeMe123!` |
-
-Ces valeurs sont surchargées par les variables d'environnement `ADMIN_EMAIL`, `ADMIN_USERNAME` et `ADMIN_PASSWORD`. Sur Render, ces variables sont marquées `sync: false` et doivent être renseignées manuellement dans le dashboard.
-
-## Notes
-
-- Le frontend écoute sur le port `3005` en local.
-- Le backend écoute sur le port `8000`.
-- L'initialisation de la base est gérée par [`backend/db/init-db.sql`](./backend/db/init-db.sql).
-
-## Conformité RGPD
-
-### Données collectées
-
-| Donnée | Table | Finalité |
-|---|---|---|
-| Email | `utilisateur` | Authentification, identifiant unique |
-| Username | `utilisateur` | Affichage, identification interne |
-| Prénom / Nom | `utilisateur` | Optionnels, personnalisation de l'interface |
-| Mot de passe | `utilisateur` | Hashé (bcrypt) — jamais stocké en clair |
-| Messages de chat | `chat_messages` | Historique de la conversation SAV |
-
-Aucune donnée n'est transmise à des tiers, à l'exception des messages envoyés à l'API Mistral pour la génération de réponses IA.
-
-### Mesures de sécurité techniques
-
-| Mesure | Implémentation |
-|---|---|
-| Hachage des mots de passe | bcrypt via `passlib` (backend) et `pgcrypto` (SQL) |
-| Token d'authentification | JWT signé avec expiration configurable (`ACCESS_TOKEN_EXPIRE_MINUTES`) |
-| Cookie sécurisé | `httpOnly`, `SameSite=strict` — protège contre le vol de session (XSS) |
-| Suppression en cascade | `ON DELETE CASCADE` sur toutes les clés étrangères — la suppression d'un compte efface toutes ses données |
-| Contrôle d'accès | Rôles `user` / `sav` / `admin` — chaque route vérifie les droits avant d'exécuter |
-| Secrets externalisés | Variables d'environnement via `.env` (non commité dans git) |
-
-### Droits des utilisateurs
-
-- **Droit d'accès** : `GET /me` retourne les données du compte connecté.
-- **Droit de rectification** : `PUT /me` permet de modifier username, email, prénom, nom.
-- **Droit à l'effacement** : `DELETE /users/{id}` supprime le compte et toutes ses données associées (messages, sessions) grâce aux cascades SQL.
-- **Consentement** : case à cocher obligatoire lors de l'inscription.
-
-### Conservation des données
-
-Les données sont conservées tant que le compte utilisateur existe. Aucune suppression automatique n'est configurée. La suppression du compte (`DELETE /users/{id}`) efface immédiatement toutes les données associées.
+L'avancement technique et fonctionnel (fait / en cours / à faire) est suivi dans [`ROADMAP.md`](./ROADMAP.md), et l'historique des changements dans [`CHANGELOG.md`](./CHANGELOG.md).
