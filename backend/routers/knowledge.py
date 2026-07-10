@@ -42,14 +42,20 @@ def ingest_knowledge_base(payload: schemas.KnowledgeIngestRequest, background_ta
 
 
 @router.get("/knowledge-base/ingest-status", summary="Vérifier le statut d'un job d'indexation")
-def ingest_status(job_id: str, current_user: str = Depends(get_current_user)):
+def ingest_status(job_id: str, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    requester = get_user_by_email(db, current_user)
+    if not requester or not is_admin_or_sav(requester):
+        raise HTTPException(status_code=403, detail="Accès refusé")
     if job_id not in INGEST_JOBS:
         raise HTTPException(status_code=404, detail="Job introuvable")
     return INGEST_JOBS[job_id]
 
 
 @router.get("/knowledge-base/robots-check", summary="Analyser le robots.txt et le sitemap d'un domaine")
-def robots_check(url: str, current_user: str = Depends(get_current_user)):
+def robots_check(url: str, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    requester = get_user_by_email(db, current_user)
+    if not requester or not is_admin_or_sav(requester):
+        raise HTTPException(status_code=403, detail="Accès refusé")
     from ingest_postgres import analyze_robots_and_sitemap
     try:
         return analyze_robots_and_sitemap(url)
