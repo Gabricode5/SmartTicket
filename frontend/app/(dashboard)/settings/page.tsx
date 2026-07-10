@@ -16,6 +16,7 @@ type Me = {
     prenom?: string | null
     nom?: string | null
     role: string
+    email_verified: boolean
     date_creation: string
 }
 
@@ -28,6 +29,9 @@ export default function SettingsPage() {
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
     const [account, setAccount] = useState<{ id: number; role: string } | null>(null)
+    const [emailVerified, setEmailVerified] = useState(true)
+    const [resendingVerification, setResendingVerification] = useState(false)
+    const [verificationResent, setVerificationResent] = useState(false)
 
     const [profile, setProfile] = useState({
         username: "",
@@ -68,6 +72,7 @@ export default function SettingsPage() {
                     nom: me.nom || "",
                 })
                 setAccount({ id: me.id, role: me.role })
+                setEmailVerified(me.email_verified)
             } catch (e) {
                 console.error("Erreur chargement profil:", e)
                 setError("Erreur réseau.")
@@ -110,6 +115,8 @@ export default function SettingsPage() {
 
             localStorage.setItem("username", data.username)
             localStorage.setItem("user_email", data.email)
+            setEmailVerified(data.email_verified)
+            setVerificationResent(false)
             setSuccess("Profil mis à jour.")
         } catch (e) {
             console.error("Erreur sauvegarde profil:", e)
@@ -141,6 +148,20 @@ export default function SettingsPage() {
             setError("Erreur réseau.")
         } finally {
             setExporting(false)
+        }
+    }
+
+    const handleResendVerification = async () => {
+        setResendingVerification(true)
+        try {
+            await fetch("/api/resend-verification", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ email: profile.email }),
+            })
+        } finally {
+            setVerificationResent(true)
+            setResendingVerification(false)
         }
     }
 
@@ -205,6 +226,23 @@ export default function SettingsPage() {
 
             {error && <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
             {success && <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{success}</div>}
+            {!loading && !emailVerified && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 flex flex-wrap items-center justify-between gap-2">
+                    <span>Confirmez votre nouvelle adresse email — un lien de confirmation vous a été envoyé.</span>
+                    {verificationResent ? (
+                        <span className="text-xs font-medium">Email renvoyé.</span>
+                    ) : (
+                        <button
+                            type="button"
+                            onClick={handleResendVerification}
+                            disabled={resendingVerification}
+                            className="text-xs font-semibold underline underline-offset-2 disabled:opacity-60"
+                        >
+                            {resendingVerification ? "Envoi…" : "Renvoyer l'email"}
+                        </button>
+                    )}
+                </div>
+            )}
 
             <Card>
                 <CardHeader>
