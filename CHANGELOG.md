@@ -20,6 +20,14 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
+## [2.11.0] - 2026-07-10
+
+### Ajouté
+- Import en masse d'utilisateurs par CSV (admin) : `POST /v1/users/import-csv` accepte un fichier avec les colonnes `email`/`username`/`prenom`/`nom` (export type ERP d'entreprise), crée un compte `user` par ligne valide et envoie un email d'invitation ("créez votre mot de passe") à chacun via le mécanisme de réinitialisation de mot de passe existant. Lignes invalides, doublons (dans le fichier ou déjà en base) et erreurs individuelles sont rapportés sans bloquer le reste de l'import. Plafonné à `MAX_CSV_IMPORT_ROWS` (défaut 500) par import
+- Nouveau bouton "Importer un CSV" dans l'espace admin (`frontend/components/dashboard/CsvImportDialog.tsx`)
+
+---
+
 ## [2.9.0] - 2026-07-09
 
 ### Sécurité

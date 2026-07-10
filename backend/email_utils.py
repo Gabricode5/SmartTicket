@@ -89,6 +89,25 @@ def send_verification_email(to_email: str, username: str, token: str) -> None:
     send_email(to_email, "Confirmez votre adresse email — SmartTicket", text_body, html_body)
 
 
+def send_account_invitation_email(to_email: str, username: str, token: str) -> None:
+    """Compte créé en masse par un admin (import CSV, cf. routers/users.py::import_users_csv) —
+    même lien/token que la réinitialisation de mot de passe (password_reset), seul le texte
+    change puisque l'utilisateur n'a jamais eu de mot de passe à "réinitialiser"."""
+    link = f"{FRONTEND_URL}/reset-password?token={token}"
+    text_body = (
+        f"Bonjour {username},\n\n"
+        f"Un compte SmartTicket vient d'être créé pour vous. Cliquez sur ce lien pour choisir votre mot de passe et vous connecter :\n{link}\n\n"
+        "Ce lien expire dans 1 heure. Passé ce délai, utilisez \"Mot de passe oublié\" sur la page de connexion pour en recevoir un nouveau."
+    )
+    html_body = (
+        f"<p>Bonjour {username},</p>"
+        f"<p>Un compte SmartTicket vient d'être créé pour vous. Cliquez sur ce lien pour choisir votre mot de passe et vous connecter :</p>"
+        f'<p><a href="{link}">Choisir mon mot de passe</a></p>'
+        "<p>Ce lien expire dans 1 heure. Passé ce délai, utilisez \"Mot de passe oublié\" sur la page de connexion pour en recevoir un nouveau.</p>"
+    )
+    send_email(to_email, "Bienvenue sur SmartTicket — créez votre mot de passe", text_body, html_body)
+
+
 def send_password_reset_email(to_email: str, username: str, token: str) -> None:
     link = f"{FRONTEND_URL}/reset-password?token={token}"
     text_body = (

@@ -16,6 +16,7 @@ import {
 import Link from "next/link"
 import { REASON_LABELS, REASON_STYLES, type SessionItem, type SessionSearchResult, type TransferredSession, type UserItem } from "./types"
 import { renderSnippet } from "./searchSnippet"
+import { CsvImportDialog } from "./CsvImportDialog"
 
 export default function AdminDashboard({ currentUserId }: { currentUserId: number }) {
     const [users, setUsers] = useState<UserItem[]>([])
@@ -246,10 +247,13 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                             <Shield className="h-3 w-3" /> Administrateur
                         </Badge>
                     </div>
-                    <div className="flex items-center gap-1.5 bg-white border rounded-lg px-3 py-1.5 shadow-sm text-sm">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="font-medium text-slate-700">{users.length + savUsers.length + superviseurUsers.length + adminUsers.length}</span>
-                        <span className="text-slate-500">utilisateurs</span>
+                    <div className="flex items-center gap-3">
+                        <CsvImportDialog onImported={loadAll} />
+                        <div className="flex items-center gap-1.5 bg-white border rounded-lg px-3 py-1.5 shadow-sm text-sm">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            <span className="font-medium text-slate-700">{users.length + savUsers.length + superviseurUsers.length + adminUsers.length}</span>
+                            <span className="text-slate-500">utilisateurs</span>
+                        </div>
                     </div>
                 </header>
 

@@ -83,6 +83,14 @@ GUEST_ACCOUNT_TTL_DAYS = int(os.getenv("GUEST_ACCOUNT_TTL_DAYS", "7"))
 def is_guest_email(email: str) -> bool:
     return email.endswith(GUEST_EMAIL_DOMAIN)
 
+
+# Import CSV d'utilisateurs par un admin (annuaire d'entreprise exporté depuis un ERP,
+# cf. routers/users.py::import_users_csv). Plafond bas volontairement : c'est un import
+# manuel ponctuel, pas un pipeline de masse — au-delà, mieux vaut découper le fichier
+# côté client plutôt que de risquer une requête qui traîne en longueur (une ligne = un
+# INSERT + un envoi d'email).
+MAX_CSV_IMPORT_ROWS = int(os.getenv("MAX_CSV_IMPORT_ROWS", "500"))
+
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "10"))
 KB_TOP_K = int(os.getenv("KB_TOP_K", "10"))
 KB_MAX_CONTEXT_CHARS = int(os.getenv("KB_MAX_CONTEXT_CHARS", "3000"))
