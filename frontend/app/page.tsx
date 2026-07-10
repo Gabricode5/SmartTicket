@@ -271,6 +271,11 @@ export default function LandingPage() {
                         <span className="font-semibold">SmartTicket</span>
                         <span className="text-slate-400 text-sm ml-2">— Support client intelligent</span>
                     </div>
+                    <nav className="flex items-center gap-4 text-xs text-slate-400">
+                        <Link href="/mentions-legales" className="hover:text-slate-600 hover:underline">Mentions légales</Link>
+                        <Link href="/politique-confidentialite" className="hover:text-slate-600 hover:underline">Confidentialité</Link>
+                        <Link href="/cgv" className="hover:text-slate-600 hover:underline">CGV</Link>
+                    </nav>
                     <div className="flex items-center gap-2 text-xs text-slate-400">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                         Propulsé par Mistral AI
