@@ -7,8 +7,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -17,7 +18,7 @@ from sqlalchemy import text as _text
 import models
 from database import engine as _engine
 from dependencies import GUEST_ACCOUNT_TTL_DAYS, GUEST_EMAIL_DOMAIN, limiter
-from routers import ai, analytics, auth, knowledge, messages, notifications, sessions, users
+from routers import ai, analytics, auth, instance, knowledge, messages, notifications, sessions, users
 
 logging.basicConfig(
     level=logging.INFO,
@@ -192,6 +193,18 @@ def run_migrations() -> None:
     except Exception as exc:
         _log.error("Roles/admin setup failed: %s", exc, exc_info=True)
 
+    # 5. Ligne unique du coupe-circuit d'abonnement (cf. models.InstanceSubscription) —
+    # créée proactivement à "active" pour qu'une instance neuve ne soit jamais bloquée par
+    # défaut.
+    try:
+        from database import SessionLocal as _SessionLocal
+        with _SessionLocal() as session:
+            if not session.query(models.InstanceSubscription).filter_by(id=1).first():
+                session.add(models.InstanceSubscription(id=1, status="active"))
+                session.commit()
+    except Exception as exc:
+        _log.error("Subscription status seed failed: %s", exc, exc_info=True)
+
 
 def start_purge_scheduler():
     try:
@@ -223,7 +236,7 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(
     title="CRM Intelligent API",
     description="API pour un gestionnaire de tickets avec intégration IA (Mistral AI + RAG sur pgvector).",
-    version="2.11.0",
+    version="2.12.0",
     lifespan=lifespan,
     openapi_tags=[
         {"name": "IA", "description": "Endpoints exposant le modèle Mistral AI et le pipeline RAG (Retrieval-Augmented Generation)."},
@@ -234,6 +247,7 @@ app = FastAPI(
         {"name": "Utilisateurs", "description": "Administration des comptes utilisateurs (admin uniquement)."},
         {"name": "Analytics", "description": "Statistiques et indicateurs de performance du service IA."},
         {"name": "Notifications", "description": "Notifications in-app (réponse SAV, ticket transféré)."},
+        {"name": "Instance", "description": "Coupe-circuit d'abonnement (opérateur de la flotte d'instances uniquement, protégé par VENDOR_KEY)."},
     ],
 )
 
@@ -259,7 +273,34 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
-for _router in [auth.router, sessions.router, messages.router, ai.router, knowledge.router, users.router, analytics.router, notifications.router]:
+# Chemins exemptés du coupe-circuit d'abonnement ci-dessous : le health check (sinon Render
+# tue le conteneur d'une instance suspendue) et l'endpoint de statut lui-même (sinon
+# l'opérateur ne pourrait plus jamais réactiver l'instance une fois suspendue).
+_SUBSCRIPTION_GATE_EXEMPT_PATHS = {"/", "/v1/instance/subscription-status"}
+
+
+@app.middleware("http")
+async def enforce_subscription_status(request: Request, call_next):
+    if request.url.path in _SUBSCRIPTION_GATE_EXEMPT_PATHS or not request.url.path.startswith("/v1/"):
+        return await call_next(request)
+    try:
+        from database import SessionLocal as _SessionLocal
+        with _SessionLocal() as db:
+            row = db.query(models.InstanceSubscription).filter_by(id=1).first()
+            if row and row.status == "suspended":
+                return JSONResponse(
+                    status_code=402,
+                    content={"detail": row.reason or "Ce service est suspendu. Contactez votre fournisseur SmartTicket."},
+                )
+    except Exception as exc:
+        # Fail-open : une erreur transitoire sur cette vérification ne doit jamais bloquer
+        # un client à jour de paiement (un blocage global vaut bien pire qu'un contrôle
+        # manqué ponctuellement).
+        _log.warning("Subscription status check failed, failing open: %s", exc, exc_info=True)
+    return await call_next(request)
+
+
+for _router in [auth.router, sessions.router, messages.router, ai.router, knowledge.router, users.router, analytics.router, notifications.router, instance.router]:
     app.include_router(_router, prefix="/v1")
 
 

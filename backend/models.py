@@ -74,6 +74,22 @@ class Notification(Base):
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class InstanceSubscription(Base):
+    """Ligne unique (id=1) par instance — coupe-circuit d'abonnement pour le modèle
+    "flotte d'instances" (cf. ROADMAP.md, section commercialisation) : l'opérateur héberge
+    et paye Render pour chaque instance client, donc a besoin d'un moyen de couper l'accès
+    si un client cesse de payer, sans dépendre des identifiants admin de ce client (qui sont
+    justement contrôlés par la partie qui pourrait ne plus payer). Basculé exclusivement via
+    un secret propre à l'opérateur (VENDOR_KEY, cf. dependencies.py), jamais via le rôle
+    admin classique."""
+    __tablename__ = "instance_subscription"
+
+    id = Column(Integer, primary_key=True)
+    status = Column(String(20), nullable=False, default="active")  # active | suspended
+    reason = Column(Text, nullable=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class AICallLog(Base):
     __tablename__ = "ai_call_logs"
 
