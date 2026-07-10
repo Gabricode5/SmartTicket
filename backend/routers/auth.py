@@ -78,9 +78,13 @@ def setup_admin(
 # réellement le comportement "limite dépassée" (monkeypatch de REGISTER_RATE_LIMIT).
 @limiter.limit(lambda: REGISTER_RATE_LIMIT)
 def register_user(request: Request, user: schemas.UserCreate, db: Session = Depends(get_db)):
-    if db.query(models.Utilisateur).filter(models.Utilisateur.email == user.email, models.Utilisateur.deleted_at.is_(None)).first():
+    # Pas de filtre deleted_at ici : la contrainte UNIQUE en base porte sur email/username
+    # sur toutes les lignes, y compris les comptes soft-deleted (RGPD, purgés après 30j).
+    # Filtrer sur deleted_at IS NULL laisserait passer ce cas jusqu'au commit, qui échouerait
+    # alors avec une IntegrityError non gérée (500) au lieu de ce message 400 propre.
+    if db.query(models.Utilisateur).filter(models.Utilisateur.email == user.email).first():
         raise HTTPException(status_code=400, detail="Cet email est déjà utilisé.")
-    if db.query(models.Utilisateur).filter(models.Utilisateur.username == user.username, models.Utilisateur.deleted_at.is_(None)).first():
+    if db.query(models.Utilisateur).filter(models.Utilisateur.username == user.username).first():
         raise HTTPException(status_code=400, detail="Ce username est déjà utilisé.")
     default_role = db.query(models.Role).filter(models.Role.nom_role == "user").first()
     if not default_role:

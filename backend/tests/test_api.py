@@ -1,5 +1,8 @@
 """Integration tests for FastAPI endpoints."""
 import secrets
+from datetime import datetime
+
+import models
 
 _TEST_PASSWORD = secrets.token_urlsafe(16)
 
@@ -56,6 +59,42 @@ class TestRegister:
             "nom": "B",
         })
         assert resp.status_code == 400
+
+    def test_email_of_soft_deleted_account_returns_400_not_500(self, client, db_session):
+        """La contrainte UNIQUE en base porte sur email/username pour toutes les lignes,
+        y compris les comptes soft-deleted (RGPD, purgés après 30j) — sans ce test, une
+        régression du filtre applicatif ferait remonter une IntegrityError (500) au lieu
+        d'un message 400 propre."""
+        client.post("/v1/register", json={
+            "username": "ghost", "email": "ghost@example.com",
+            "password": _TEST_PASSWORD, "prenom": "G", "nom": "H",
+        })
+        user = db_session.query(models.Utilisateur).filter_by(email="ghost@example.com").first()
+        user.deleted_at = datetime.utcnow()
+        db_session.commit()
+
+        resp = client.post("/v1/register", json={
+            "username": "ghost2", "email": "ghost@example.com",
+            "password": _TEST_PASSWORD, "prenom": "G", "nom": "H",
+        })
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Cet email est déjà utilisé."
+
+    def test_username_of_soft_deleted_account_returns_400_not_500(self, client, db_session):
+        client.post("/v1/register", json={
+            "username": "ghostuser", "email": "ghostuser@example.com",
+            "password": _TEST_PASSWORD, "prenom": "G", "nom": "H",
+        })
+        user = db_session.query(models.Utilisateur).filter_by(username="ghostuser").first()
+        user.deleted_at = datetime.utcnow()
+        db_session.commit()
+
+        resp = client.post("/v1/register", json={
+            "username": "ghostuser", "email": "other@example.com",
+            "password": _TEST_PASSWORD, "prenom": "G", "nom": "H",
+        })
+        assert resp.status_code == 400
+        assert resp.json()["detail"] == "Ce username est déjà utilisé."
 
 
 class TestLogin:
