@@ -92,6 +92,17 @@ TRANSCRIPT_MAX_CHARS = int(os.getenv("TRANSCRIPT_MAX_CHARS", "12000"))
 TRANSCRIPT_CHUNK_SIZE = int(os.getenv("TRANSCRIPT_CHUNK_SIZE", "1000"))
 TRANSCRIPT_CHUNK_OVERLAP = int(os.getenv("TRANSCRIPT_CHUNK_OVERLAP", "150"))
 
+# Suivi du statut des jobs d'ingestion de la base de connaissances (routers/knowledge.py),
+# déclenchés via FastAPI BackgroundTasks. Volontairement en mémoire du process, pas dans
+# Redis/Postgres : contrairement au rate limiting (un simple compteur), un job d'ingestion
+# EST la tâche BackgroundTasks elle-même, exécutée dans ce process — un redémarrage tue le
+# job en cours, pas seulement son statut. Déplacer ce dict vers un stockage partagé ne
+# rendrait donc pas les jobs résilients à un redémarrage ; ça remplacerait juste un 404
+# propre ("Job introuvable") par un statut bloqué à "running" indéfiniment. Une vraie
+# résilience (reprise après redémarrage, fonctionnement multi-instance) demanderait une
+# vraie file de tâches (table Postgres + worker de reprise) — hors scope tant que l'app
+# tourne en single-instance (plan Render gratuit) et que les redémarrages en pleine
+# ingestion ne sont pas un problème vécu.
 INGEST_JOBS: dict[str, dict] = {}
 
 
