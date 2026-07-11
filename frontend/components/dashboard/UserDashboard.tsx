@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Search, MessageSquare, Zap, Clock, Star, TrendingUp, Bot, Headphones, ChevronLeft, ChevronRight } from "lucide-react"
 import type { SessionItem, SessionSearchResult } from "./types"
 import { renderSnippet } from "./searchSnippet"
+import { groupByDate } from "./dateGrouping"
 
 export default function UserDashboard({ userId }: { userId: number }) {
     const router = useRouter()
@@ -227,73 +228,80 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                 ) : userSessions.length === 0 ? (
                                     <div className="text-sm text-muted-foreground">Aucune conversation.</div>
                                 ) : (
-                                    userSessions.slice((sessionsPage - 1) * PAGE_SIZE, sessionsPage * PAGE_SIZE).map((session) => (
-                                        <div
-                                            key={session.id}
-                                            role="button"
-                                            tabIndex={0}
-                                            onClick={() => router.push(`/ai-assistant/${session.id}`)}
-                                            onKeyDown={(e) => {
-                                                if (e.key === "Enter" || e.key === " ") {
-                                                    e.preventDefault()
-                                                    router.push(`/ai-assistant/${session.id}`)
-                                                }
-                                            }}
-                                            className="w-full flex items-center justify-between rounded-md border border-transparent hover:border-muted hover:bg-muted/30 px-3 py-2 transition cursor-pointer"
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <Avatar className="h-10 w-10 border">
-                                                    <AvatarFallback>
-                                                        {(session.title || "NC").substring(0, 2).toUpperCase()}
-                                                    </AvatarFallback>
-                                                </Avatar>
-                                                <div className="text-left">
-                                                    <p className="text-sm font-medium leading-none">
-                                                        {session.title || "Nouvelle conversation"}
-                                                    </p>
-                                                    <p className="text-sm text-muted-foreground line-clamp-1 mt-1">
-                                                        Session #{session.id}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-col items-end gap-1">
-                                                <span className="text-xs text-muted-foreground whitespace-nowrap">
-                                                    {session.date_creation
-                                                        ? new Date(session.date_creation).toLocaleDateString("fr-FR")
-                                                        : "—"}
-                                                </span>
-                                                <Badge variant="secondary" className={`${
-                                                    session.status === "closed" ? "bg-slate-200 text-slate-700"
-                                                    : session.status === "transferred" ? "bg-amber-100 text-amber-700"
-                                                    : "bg-emerald-100 text-emerald-700"
-                                                } border-0`}>
-                                                    {session.status === "closed" ? "Clôturée" : session.status === "transferred" ? "Transférée" : "Ouverte"}
-                                                </Badge>
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={(e) => { e.stopPropagation(); handleCloseSession(session) }}
-                                                    disabled={closingSessionId === session.id || session.status === "closed"}
+                                    groupByDate(userSessions.slice((sessionsPage - 1) * PAGE_SIZE, sessionsPage * PAGE_SIZE)).map((group) => (
+                                        <div key={group.label} className="space-y-1">
+                                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-3 pb-1">
+                                                {group.label}
+                                            </p>
+                                            {group.items.map((session) => (
+                                                <div
+                                                    key={session.id}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    onClick={() => router.push(`/ai-assistant/${session.id}`)}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === "Enter" || e.key === " ") {
+                                                            e.preventDefault()
+                                                            router.push(`/ai-assistant/${session.id}`)
+                                                        }
+                                                    }}
+                                                    className="w-full flex items-center justify-between rounded-md border border-transparent hover:border-muted hover:bg-muted/30 px-3 py-2 transition cursor-pointer"
                                                 >
-                                                    {closingSessionId === session.id ? "..." : "Clôturer"}
-                                                </Button>
-                                                {session.status === "transferred" && session.has_sav_reply ? (
-                                                    <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-0">
-                                                        <Headphones className="h-3 w-3 mr-1" />
-                                                        Agent SAV a répondu
-                                                    </Badge>
-                                                ) : session.status === "transferred" ? (
-                                                    <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-0">
-                                                        <Headphones className="h-3 w-3 mr-1" />
-                                                        En attente SAV
-                                                    </Badge>
-                                                ) : (
-                                                    <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/15 border-0">
-                                                        <Bot className="h-3 w-3 mr-1" />
-                                                        IA Autonome
-                                                    </Badge>
-                                                )}
-                                            </div>
+                                                    <div className="flex items-center gap-4">
+                                                        <Avatar className="h-10 w-10 border">
+                                                            <AvatarFallback>
+                                                                {(session.title || "NC").substring(0, 2).toUpperCase()}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                        <div className="text-left">
+                                                            <p className="text-sm font-medium leading-none">
+                                                                {session.title || "Nouvelle conversation"}
+                                                            </p>
+                                                            <p className="text-sm text-muted-foreground line-clamp-1 mt-1">
+                                                                Session #{session.id}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-col items-end gap-1">
+                                                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                                            {session.date_creation
+                                                                ? new Date(session.date_creation).toLocaleDateString("fr-FR")
+                                                                : "—"}
+                                                        </span>
+                                                        <Badge variant="secondary" className={`${
+                                                            session.status === "closed" ? "bg-slate-200 text-slate-700"
+                                                            : session.status === "transferred" ? "bg-amber-100 text-amber-700"
+                                                            : "bg-emerald-100 text-emerald-700"
+                                                        } border-0`}>
+                                                            {session.status === "closed" ? "Clôturée" : session.status === "transferred" ? "Transférée" : "Ouverte"}
+                                                        </Badge>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={(e) => { e.stopPropagation(); handleCloseSession(session) }}
+                                                            disabled={closingSessionId === session.id || session.status === "closed"}
+                                                        >
+                                                            {closingSessionId === session.id ? "..." : "Clôturer"}
+                                                        </Button>
+                                                        {session.status === "transferred" && session.has_sav_reply ? (
+                                                            <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-0">
+                                                                <Headphones className="h-3 w-3 mr-1" />
+                                                                Agent SAV a répondu
+                                                            </Badge>
+                                                        ) : session.status === "transferred" ? (
+                                                            <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-0">
+                                                                <Headphones className="h-3 w-3 mr-1" />
+                                                                En attente SAV
+                                                            </Badge>
+                                                        ) : (
+                                                            <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/15 border-0">
+                                                                <Bot className="h-3 w-3 mr-1" />
+                                                                IA Autonome
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
                                     ))
                                 )}
