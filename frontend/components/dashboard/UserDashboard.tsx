@@ -12,6 +12,18 @@ import type { SessionItem, SessionSearchResult } from "./types"
 import { renderSnippet } from "./searchSnippet"
 import { groupByDate } from "./dateGrouping"
 
+type StatusFilter = "all" | "open" | "transferred" | "closed"
+
+const sessionStatusKey = (session: SessionItem): "open" | "transferred" | "closed" =>
+    session.status === "closed" ? "closed" : session.status === "transferred" ? "transferred" : "open"
+
+const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+    { key: "all", label: "Toutes" },
+    { key: "open", label: "Ouvertes" },
+    { key: "transferred", label: "Transférées" },
+    { key: "closed", label: "Clôturées" },
+]
+
 export default function UserDashboard({ userId }: { userId: number }) {
     const router = useRouter()
     const [userSessions, setUserSessions] = useState<SessionItem[]>([])
@@ -20,6 +32,7 @@ export default function UserDashboard({ userId }: { userId: number }) {
     const [error, setError] = useState<string | null>(null)
     const [closingSessionId, setClosingSessionId] = useState<number | null>(null)
     const [sessionsPage, setSessionsPage] = useState(1)
+    const [statusFilter, setStatusFilter] = useState<StatusFilter>("all")
     const [searchResults, setSearchResults] = useState<SessionSearchResult[] | null>(null)
     const [isSearching, setIsSearching] = useState(false)
 
@@ -88,9 +101,19 @@ export default function UserDashboard({ userId }: { userId: number }) {
     const isSearchMode = userQuery.trim().length > 0
 
     const totalSessions = userSessions.length
-    const closedSessions = userSessions.filter((s) => s.status === "closed").length
-    const openSessions = totalSessions - closedSessions
+    const closedSessions = userSessions.filter((s) => sessionStatusKey(s) === "closed").length
+    const transferredSessions = userSessions.filter((s) => sessionStatusKey(s) === "transferred").length
+    const openSessions = totalSessions - closedSessions - transferredSessions
     const closureRate = totalSessions > 0 ? `${Math.round((closedSessions / totalSessions) * 100)}%` : "0%"
+    const statusCounts: Record<StatusFilter, number> = {
+        all: totalSessions,
+        open: openSessions,
+        transferred: transferredSessions,
+        closed: closedSessions,
+    }
+    const filteredSessions = statusFilter === "all"
+        ? userSessions
+        : userSessions.filter((s) => sessionStatusKey(s) === statusFilter)
     const lastSessionDate = userSessions
         .map((s) => s.date_creation)
         .filter((d): d is string => Boolean(d))
@@ -176,6 +199,23 @@ export default function UserDashboard({ userId }: { userId: number }) {
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-6">
+                                {!isSearchMode && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {STATUS_FILTERS.map((f) => (
+                                            <button
+                                                key={f.key}
+                                                onClick={() => { setStatusFilter(f.key); setSessionsPage(1) }}
+                                                className={`text-xs font-medium px-3 py-1.5 rounded-full border transition ${
+                                                    statusFilter === f.key
+                                                        ? "bg-primary text-primary-foreground border-primary"
+                                                        : "bg-muted/30 text-muted-foreground border-transparent hover:bg-muted/60"
+                                                }`}
+                                            >
+                                                {f.label} ({statusCounts[f.key]})
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                                 {isSearchMode ? (
                                     isSearching ? (
                                         <div className="text-sm text-muted-foreground">Recherche...</div>
@@ -225,10 +265,12 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                     )
                                 ) : isLoading ? (
                                     <div className="text-sm text-muted-foreground">Chargement...</div>
-                                ) : userSessions.length === 0 ? (
-                                    <div className="text-sm text-muted-foreground">Aucune conversation.</div>
+                                ) : filteredSessions.length === 0 ? (
+                                    <div className="text-sm text-muted-foreground">
+                                        {statusFilter === "all" ? "Aucune conversation." : "Aucune conversation ne correspond à ce filtre."}
+                                    </div>
                                 ) : (
-                                    groupByDate(userSessions.slice((sessionsPage - 1) * PAGE_SIZE, sessionsPage * PAGE_SIZE)).map((group) => (
+                                    groupByDate(filteredSessions.slice((sessionsPage - 1) * PAGE_SIZE, sessionsPage * PAGE_SIZE)).map((group) => (
                                         <div key={group.label} className="space-y-1">
                                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-3 pb-1">
                                                 {group.label}
@@ -305,7 +347,7 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                         </div>
                                     ))
                                 )}
-                                {!isSearchMode && Math.ceil(userSessions.length / PAGE_SIZE) > 1 && (
+                                {!isSearchMode && Math.ceil(filteredSessions.length / PAGE_SIZE) > 1 && (
                                     <div className="flex items-center justify-between pt-2 border-t">
                                         <button
                                             onClick={() => setSessionsPage(p => p - 1)}
@@ -315,11 +357,11 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                             <ChevronLeft className="h-4 w-4" /> Précédent
                                         </button>
                                         <span className="text-sm text-muted-foreground">
-                                            {sessionsPage} / {Math.ceil(userSessions.length / PAGE_SIZE)}
+                                            {sessionsPage} / {Math.ceil(filteredSessions.length / PAGE_SIZE)}
                                         </span>
                                         <button
                                             onClick={() => setSessionsPage(p => p + 1)}
-                                            disabled={sessionsPage >= Math.ceil(userSessions.length / PAGE_SIZE)}
+                                            disabled={sessionsPage >= Math.ceil(filteredSessions.length / PAGE_SIZE)}
                                             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                                         >
                                             Suivant <ChevronRight className="h-4 w-4" />
@@ -327,6 +369,33 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                     </div>
                                 )}
                             </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="col-span-4 lg:col-span-2">
+                        <CardHeader>
+                            <CardTitle>Répartition</CardTitle>
+                            <CardDescription>Par statut</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            {[
+                                { label: "Ouvertes", count: openSessions, color: "bg-emerald-500" },
+                                { label: "Transférées", count: transferredSessions, color: "bg-amber-500" },
+                                { label: "Clôturées", count: closedSessions, color: "bg-slate-400" },
+                            ].map((s) => (
+                                <div key={s.label}>
+                                    <div className="flex items-center justify-between text-sm mb-1">
+                                        <span className="text-muted-foreground">{s.label}</span>
+                                        <span className="font-medium">{s.count}</span>
+                                    </div>
+                                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                                        <div
+                                            className={`h-full ${s.color}`}
+                                            style={{ width: totalSessions > 0 ? `${(s.count / totalSessions) * 100}%` : "0%" }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
                         </CardContent>
                     </Card>
                 </div>

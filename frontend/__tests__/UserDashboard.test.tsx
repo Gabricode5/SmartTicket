@@ -12,6 +12,11 @@ const sessions = [
   { id: 2, title: "Facture erronée", date_creation: "2026-01-01T10:00:00Z", status: "closed" },
 ];
 
+const sessionsWithTransfer = [
+  ...sessions,
+  { id: 3, title: "Litige commande", date_creation: "2026-01-03T10:00:00Z", status: "transferred" },
+];
+
 beforeEach(() => {
   jest.spyOn(window, "confirm").mockReturnValue(true);
 });
@@ -128,5 +133,39 @@ describe("UserDashboard", () => {
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith("/api/sessions/1/close", { method: "POST" });
     });
+  });
+
+  it("filters conversations by status and shows the breakdown panel", async () => {
+    mockFetch((url) =>
+      url.startsWith("/api/sessions?user_id=") ? jsonResponse(sessionsWithTransfer) : jsonResponse({}, 404)
+    );
+
+    render(<UserDashboard userId={42} />);
+    await screen.findByText("Problème de connexion");
+
+    // Breakdown panel: 1 open, 1 transferred, 1 closed.
+    expect(screen.getByText("Répartition")).toBeInTheDocument();
+    expect(screen.getByText("Ouvertes (1)")).toBeInTheDocument();
+    expect(screen.getByText("Transférées (1)")).toBeInTheDocument();
+    expect(screen.getByText("Clôturées (1)")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Clôturées (1)"));
+
+    expect(screen.getByText("Facture erronée")).toBeInTheDocument();
+    expect(screen.queryByText("Problème de connexion")).not.toBeInTheDocument();
+    expect(screen.queryByText("Litige commande")).not.toBeInTheDocument();
+  });
+
+  it("shows a filter-specific empty state when no conversation matches the active status", async () => {
+    mockFetch((url) =>
+      url.startsWith("/api/sessions?user_id=") ? jsonResponse(sessions) : jsonResponse({}, 404)
+    );
+
+    render(<UserDashboard userId={42} />);
+    await screen.findByText("Problème de connexion");
+
+    fireEvent.click(screen.getByText("Transférées (0)"));
+
+    expect(await screen.findByText("Aucune conversation ne correspond à ce filtre.")).toBeInTheDocument();
   });
 });
