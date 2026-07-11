@@ -3,7 +3,8 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import {
     MessageSquare, Zap, BookOpen, BarChart2, ArrowRight,
-    ShieldCheck, Users, Activity, CheckCircle2,
+    ShieldCheck, Users, Activity, CheckCircle2, Building2,
+    Lock, TrendingUp, Headset,
 } from "lucide-react"
 
 export default function LandingPage() {
@@ -20,7 +21,7 @@ export default function LandingPage() {
                     <nav className="hidden md:flex items-center gap-8 text-sm text-slate-600">
                         <a href="#features" className="hover:text-indigo-600 transition-colors">Fonctionnalités</a>
                         <a href="#how" className="hover:text-indigo-600 transition-colors">Comment ça marche</a>
-                        <a href="#tech" className="hover:text-indigo-600 transition-colors">Technologie</a>
+                        <a href="#entreprises" className="hover:text-indigo-600 transition-colors">Entreprises</a>
                     </nav>
                     <div className="flex items-center gap-3">
                         <Button variant="ghost" size="sm" asChild>
@@ -226,16 +227,56 @@ export default function LandingPage() {
                 </div>
             </section>
 
-            {/* ── Tech stack ── */}
-            <section id="tech" className="py-24 px-6">
-                <div className="max-w-4xl mx-auto text-center">
-                    <h2 className="text-3xl font-bold text-slate-900 mb-4">Construit sur des technologies modernes</h2>
-                    <p className="text-slate-500 mb-12">Stack open-source, déployé sur Render, modèle Mistral AI.</p>
-                    <div className="flex flex-wrap justify-center gap-3">
-                        {["Next.js 16", "FastAPI", "PostgreSQL", "pgvector", "Mistral AI", "Docker", "GitHub Actions"].map((tech) => (
-                            <span key={tech} className="px-4 py-2 rounded-full border border-slate-200 bg-white text-sm font-medium text-slate-600 hover:border-indigo-300 hover:text-indigo-600 transition-colors">
-                                {tech}
-                            </span>
+            {/* ── Entreprises ── */}
+            <section id="entreprises" className="py-24 px-6 bg-slate-50/50 border-y border-slate-100">
+                <div className="max-w-6xl mx-auto">
+                    <div className="text-center mb-16">
+                        <span className="inline-flex items-center gap-2 text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-full mb-6">
+                            <Building2 className="h-3 w-3" />
+                            Pour les entreprises
+                        </span>
+                        <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
+                            Une solution pensée pour vos équipes support
+                        </h2>
+                        <p className="text-slate-500 text-lg max-w-2xl mx-auto">
+                            Sécurité, scalabilité et accompagnement : tout ce qu&apos;il faut pour déployer
+                            SmartTicket à l&apos;échelle de votre organisation.
+                        </p>
+                    </div>
+                    <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {[
+                            {
+                                icon: <Lock className="h-5 w-5 text-indigo-600" />,
+                                title: "Sécurité de niveau entreprise",
+                                desc: "Authentification chiffrée, gestion fine des rôles et isolation des données par organisation.",
+                                bg: "bg-indigo-50",
+                            },
+                            {
+                                icon: <TrendingUp className="h-5 w-5 text-violet-600" />,
+                                title: "Évolutif avec votre croissance",
+                                desc: "Des dizaines aux milliers de tickets par jour, l'infrastructure suit votre volume sans effort.",
+                                bg: "bg-violet-50",
+                            },
+                            {
+                                icon: <Users className="h-5 w-5 text-emerald-600" />,
+                                title: "Multi-équipes & multi-rôles",
+                                desc: "Organisez vos agents SAV par équipe, suivez la charge et la performance de chacun.",
+                                bg: "bg-emerald-50",
+                            },
+                            {
+                                icon: <Headset className="h-5 w-5 text-amber-600" />,
+                                title: "Accompagnement dédié",
+                                desc: "Aide à l'intégration de votre base de connaissances et support prioritaire pour vos équipes.",
+                                bg: "bg-amber-50",
+                            },
+                        ].map((f) => (
+                            <div key={f.title} className="rounded-2xl border border-slate-100 bg-white p-6 hover:shadow-md hover:border-slate-200 transition-all">
+                                <div className={`w-10 h-10 rounded-xl ${f.bg} flex items-center justify-center mb-4`}>
+                                    {f.icon}
+                                </div>
+                                <h3 className="font-semibold text-slate-900 mb-2">{f.title}</h3>
+                                <p className="text-sm text-slate-500 leading-relaxed">{f.desc}</p>
+                            </div>
                         ))}
                     </div>
                 </div>
