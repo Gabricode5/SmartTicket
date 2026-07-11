@@ -93,6 +93,7 @@ Suivi des évolutions techniques et fonctionnelles du projet. Statuts : **Fait**
 
 ### Fonctionnel / produit (2026-07-11)
 - [x] Landing page repositionnée pour les entreprises — section "Construit sur des technologies modernes" (stack technique exposée publiquement, sans valeur pour un acheteur B2B) retirée de `frontend/app/page.tsx` et remplacée par une section "Entreprises" (sécurité de niveau entreprise, scalabilité, gestion multi-équipes/multi-rôles, accompagnement dédié), avec son lien de nav mis à jour (`#tech` → `#entreprises`). Vérifié réellement : `tsc --noEmit`, `eslint` et un lancement local du serveur de dev (`200 OK` sur `/`) passent tous. Pas de bump de version (page statique, aucun contrat d'API changé)
+- [x] Bouton "Se connecter" de la section CTA finale de la landing page (`frontend/app/page.tsx`) entièrement blanc et illisible — le variant `outline` du composant `Button` applique par défaut `bg-background` (blanc), jamais surchargé par les classes custom (`border-white/40 text-white hover:bg-white/10`), qui n'ajustaient que la bordure/le texte/le survol. Résultat : un bouton blanc sur fond blanc avec un texte blanc invisible dessus. Corrigé en ajoutant `bg-transparent` à la className. Vérifié réellement : `tsc --noEmit`, `eslint` propres. Pas de bump de version (correctif CSS, aucun contrat d'API changé)
 
 ## En cours
 
@@ -101,7 +102,11 @@ _Rien en cours actuellement._
 ## À faire
 - [ ] Ajouter un dark thème
 - [ ] Ajouter d'autre langues(anglais).
-- [ ] Corriger le bouton en bas de page full blanc
+- [ ] Gérer la gestion descalade entre l'ia et l'utilisateur, que l'ia reprenne la main une fois que le sav à répondu (géré par el client ou sav ?)
+- [ ] Améliorer l'export des données utilisateur avec un sommaire.
+- [ ] Améliorer le tableau de bord et la gestion des conversations.
+- [ ] Rajouter une hierarchi par date des tickets pour les utilisateurs ?
+- [ ] 
 _Rien en attente actuellement._
 
 ## Stratégie de commercialisation (2026-07-08)
