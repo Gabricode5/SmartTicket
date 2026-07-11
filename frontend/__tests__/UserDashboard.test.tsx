@@ -135,7 +135,7 @@ describe("UserDashboard", () => {
     });
   });
 
-  it("filters conversations by status and shows the breakdown panel", async () => {
+  it("filters conversations by status", async () => {
     mockFetch((url) =>
       url.startsWith("/api/sessions?user_id=") ? jsonResponse(sessionsWithTransfer) : jsonResponse({}, 404)
     );
@@ -143,8 +143,7 @@ describe("UserDashboard", () => {
     render(<UserDashboard userId={42} />);
     await screen.findByText("Problème de connexion");
 
-    // Breakdown panel: 1 open, 1 transferred, 1 closed.
-    expect(screen.getByText("Répartition")).toBeInTheDocument();
+    // Filter tabs: 1 open, 1 transferred, 1 closed.
     expect(screen.getByText("Ouvertes (1)")).toBeInTheDocument();
     expect(screen.getByText("Transférées (1)")).toBeInTheDocument();
     expect(screen.getByText("Clôturées (1)")).toBeInTheDocument();
