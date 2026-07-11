@@ -106,6 +106,12 @@ _Rien en cours actuellement._
 - [ ] Améliorer l'export des données utilisateur avec un sommaire.
 - [ ] Améliorer le tableau de bord et la gestion des conversations.
 - [ ] Rajouter une hiérarchie par date des tickets pour les utilisateurs ?
+- [ ] Gérer la gestion descalade entre l'ia et l'utilisateur, que l'ia reprenne la main une fois que le sav à répondu (géré par el client ou sav ?)
+- [ ] Améliorer l'export des données utilisateur avec un sommaire.
+- [ ] Améliorer le tableau de bord et la gestion des conversations.
+- [ ] Rajouter une hierarchi par date des tickets pour les utilisateurs ?
+- [ ] 
+_Rien en attente actuellement._
 
 ## Stratégie de commercialisation (2026-07-08)
 
