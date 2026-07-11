@@ -38,6 +38,24 @@ describe("SavDashboard", () => {
     expect(screen.getByText("Technique")).toBeInTheDocument();
   });
 
+  it("groups the queue by date period", async () => {
+    const today = new Date().toISOString();
+    const sessionsAcrossPeriods = [
+      { ...transferredSessions[0], id: 6, username: "alice", date_creation: today },
+      { ...transferredSessions[0], id: 7, username: "bob", date_creation: "2026-01-01T10:00:00Z" },
+    ];
+    mockFetch((url) =>
+      url === "/api/sessions/transferred" ? jsonResponse(sessionsAcrossPeriods) : jsonResponse({}, 404)
+    );
+
+    render(<SavDashboard />);
+
+    expect(await screen.findByText("Aujourd'hui")).toBeInTheDocument();
+    expect(screen.getByText("Janvier 2026")).toBeInTheDocument();
+    expect(screen.getByText("alice")).toBeInTheDocument();
+    expect(screen.getByText("bob")).toBeInTheDocument();
+  });
+
   it("loads the conversation when a queued session is selected", async () => {
     mockFetch((url) => {
       if (url === "/api/sessions/transferred") return jsonResponse(transferredSessions);
