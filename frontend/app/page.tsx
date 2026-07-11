@@ -298,7 +298,7 @@ export default function LandingPage() {
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Link>
                         </Button>
-                        <Button size="lg" variant="outline" className="border-white/40 text-white hover:bg-white/10 h-12 px-8 text-base" asChild>
+                        <Button size="lg" variant="outline" className="bg-transparent border-white/40 text-white hover:bg-white/10 h-12 px-8 text-base" asChild>
                             <Link href="/login">Se connecter</Link>
                         </Button>
                     </div>
