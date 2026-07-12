@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Bot, Headphones, MessageSquare, Send } from "lucide-react"
 import { REASON_LABELS, REASON_STYLES, type MessageItem, type TransferredSession } from "./types"
+import { groupByDate } from "./dateGrouping"
 
 export default function SavDashboard() {
     const [transferredSessions, setTransferredSessions] = useState<TransferredSession[]>([])
@@ -101,7 +102,7 @@ export default function SavDashboard() {
                         {transferredSessions.length}
                     </Badge>
                 </div>
-                <div className="flex-1 overflow-y-auto divide-y divide-slate-50">
+                <div className="flex-1 overflow-y-auto">
                     {isLoading ? (
                         <div className="px-5 py-12 text-center text-sm text-slate-400">Chargement...</div>
                     ) : transferredSessions.length === 0 ? (
@@ -110,30 +111,37 @@ export default function SavDashboard() {
                             <p className="text-sm text-slate-400">Aucun transfert</p>
                         </div>
                     ) : (
-                        transferredSessions.map((s) => (
-                            <button
-                                key={s.id}
-                                onClick={() => handleSelectSession(s)}
-                                className={`w-full text-left px-4 py-3 transition-colors ${selectedSession?.id === s.id ? "bg-emerald-50/70 border-l-2 border-l-emerald-500" : "hover:bg-slate-50 border-l-2 border-l-transparent"}`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className="w-9 h-9 rounded-full bg-indigo-50 flex items-center justify-center flex-shrink-0 text-xs font-bold text-indigo-600 border-2 border-indigo-100">
-                                        {s.username.charAt(0).toUpperCase()}
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                        <div className="text-sm font-medium text-slate-800 truncate">{s.username}</div>
-                                        <div className="text-xs text-slate-400 truncate">{s.title || "Sans titre"}</div>
-                                        <div className="flex items-center gap-1.5 mt-1">
-                                            {s.transfer_reason && (
-                                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${REASON_STYLES[s.transfer_reason] ?? "bg-slate-100 text-slate-600 border-slate-200"}`}>
-                                                    {REASON_LABELS[s.transfer_reason] ?? s.transfer_reason}
-                                                </span>
-                                            )}
-                                            <span className="text-[10px] text-slate-400">#{s.id}</span>
+                        groupByDate(transferredSessions).map((group) => (
+                            <div key={group.label}>
+                                <p className="px-4 pt-3 pb-1 text-[10px] font-semibold text-slate-400 uppercase tracking-wide">
+                                    {group.label}
+                                </p>
+                                {group.items.map((s) => (
+                                    <button
+                                        key={s.id}
+                                        onClick={() => handleSelectSession(s)}
+                                        className={`w-full text-left px-4 py-3 transition-colors border-b border-slate-50 ${selectedSession?.id === s.id ? "bg-emerald-50/70 border-l-2 border-l-emerald-500" : "hover:bg-slate-50 border-l-2 border-l-transparent"}`}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-9 h-9 rounded-full bg-indigo-50 flex items-center justify-center flex-shrink-0 text-xs font-bold text-indigo-600 border-2 border-indigo-100">
+                                                {s.username.charAt(0).toUpperCase()}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className="text-sm font-medium text-slate-800 truncate">{s.username}</div>
+                                                <div className="text-xs text-slate-400 truncate">{s.title || "Sans titre"}</div>
+                                                <div className="flex items-center gap-1.5 mt-1">
+                                                    {s.transfer_reason && (
+                                                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${REASON_STYLES[s.transfer_reason] ?? "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                                                            {REASON_LABELS[s.transfer_reason] ?? s.transfer_reason}
+                                                        </span>
+                                                    )}
+                                                    <span className="text-[10px] text-slate-400">#{s.id}</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                </div>
-                            </button>
+                                    </button>
+                                ))}
+                            </div>
                         ))
                     )}
                 </div>

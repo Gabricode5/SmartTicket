@@ -191,8 +191,8 @@ export default function UserDashboard({ userId }: { userId: number }) {
                     </Card>
                 </div>
 
-                <div className="grid gap-6 lg:grid-cols-7">
-                    <Card className="col-span-4 lg:col-span-5">
+                <div className="grid gap-6">
+                    <Card>
                         <CardHeader>
                             <CardTitle>Vos conversations</CardTitle>
                             <CardDescription>Vos discussions personnelles uniquement.</CardDescription>
@@ -369,33 +369,6 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                     </div>
                                 )}
                             </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="col-span-4 lg:col-span-2">
-                        <CardHeader>
-                            <CardTitle>Répartition</CardTitle>
-                            <CardDescription>Par statut</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            {[
-                                { label: "Ouvertes", count: openSessions, color: "bg-emerald-500" },
-                                { label: "Transférées", count: transferredSessions, color: "bg-amber-500" },
-                                { label: "Clôturées", count: closedSessions, color: "bg-slate-400" },
-                            ].map((s) => (
-                                <div key={s.label}>
-                                    <div className="flex items-center justify-between text-sm mb-1">
-                                        <span className="text-muted-foreground">{s.label}</span>
-                                        <span className="font-medium">{s.count}</span>
-                                    </div>
-                                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                                        <div
-                                            className={`h-full ${s.color}`}
-                                            style={{ width: totalSessions > 0 ? `${(s.count / totalSessions) * 100}%` : "0%" }}
-                                        />
-                                    </div>
-                                </div>
-                            ))}
                         </CardContent>
                     </Card>
                 </div>
