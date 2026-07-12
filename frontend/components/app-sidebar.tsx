@@ -8,6 +8,7 @@ import { NotificationBell } from "@/components/NotificationBell"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
+import { groupByDate } from "@/components/dashboard/dateGrouping"
 import {
     LayoutDashboard,
     BookOpen,
@@ -20,6 +21,7 @@ import {
     Trash2,
     ChevronLeft,
     ChevronRight,
+    ChevronDown,
     Headphones,
 } from "lucide-react"
 
@@ -28,6 +30,7 @@ interface Conversation {
     title: string
     status?: string
     has_sav_reply?: boolean
+    date_creation?: string | null
 }
 
 type UserRole = "user" | "sav" | "superviseur" | "admin"
@@ -60,6 +63,16 @@ export function AppSidebar() {
     const [conversations, setConversations] = useState<Conversation[]>([])
     const [isLoadingConversations, setIsLoadingConversations] = useState(false)
     const [convoPage, setConvoPage] = useState(1)
+    const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+
+    const toggleGroup = (label: string) => {
+        setCollapsedGroups((prev) => {
+            const next = new Set(prev)
+            if (next.has(label)) next.delete(label)
+            else next.add(label)
+            return next
+        })
+    }
 
     const CONVO_PAGE_SIZE = 15
 
@@ -86,11 +99,12 @@ export function AppSidebar() {
             }
             if (!response.ok) return
             const data = await response.json()
-            const normalized: Conversation[] = data.map((item: { id: number | string; title?: string | null; status?: string; has_sav_reply?: boolean }) => ({
+            const normalized: Conversation[] = data.map((item: { id: number | string; title?: string | null; status?: string; has_sav_reply?: boolean; date_creation?: string | null }) => ({
                 id: String(item.id),
                 title: item.title || "Nouvelle conversation",
                 status: item.status,
                 has_sav_reply: item.has_sav_reply,
+                date_creation: item.date_creation,
             }))
             setConversations(normalized)
             setConvoPage(1)
@@ -258,41 +272,56 @@ export function AppSidebar() {
                                     Aucune conversation pour le moment.
                                 </div>
                             ) : (
-                                conversations.slice((convoPage - 1) * CONVO_PAGE_SIZE, convoPage * CONVO_PAGE_SIZE).map((chat) => (
-                                    <div
-                                        key={chat.id}
-                                        className={cn(
-                                            "group flex items-center w-full rounded-md px-3 h-9 text-sm",
-                                            pathname === `/ai-assistant/${chat.id}`
-                                                ? "bg-primary/10 text-primary font-medium"
-                                                : "hover:bg-sidebar-accent/60"
-                                        )}
-                                    >
-                                        <Link
-                                            href={`/ai-assistant/${chat.id}`}
-                                            className="flex items-center gap-3 flex-1 min-w-0"
-                                        >
-                                            <MessageSquare className="h-3.5 w-3.5 flex-shrink-0" />
-                                            <span className="truncate flex-1">{chat.title}</span>
-                                            {chat.status === "transferred" && chat.has_sav_reply && (
-                                                <span title="Agent SAV a répondu" className="flex-shrink-0">
-                                                    <Headphones className="h-3 w-3 text-emerald-500" />
-                                                </span>
-                                            )}
-                                            {chat.status === "transferred" && !chat.has_sav_reply && (
-                                                <span className="h-2 w-2 rounded-full bg-amber-400 flex-shrink-0" title="En attente SAV" />
-                                            )}
-                                        </Link>
-                                        <button
-                                            type="button"
-                                            onClick={() => handleDeleteConversation(chat.id)}
-                                            className="ml-2 rounded-md p-1 text-sidebar-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition"
-                                            title="Supprimer"
-                                        >
-                                            <Trash2 className="h-3.5 w-3.5" />
-                                        </button>
-                                    </div>
-                                ))
+                                groupByDate(conversations.slice((convoPage - 1) * CONVO_PAGE_SIZE, convoPage * CONVO_PAGE_SIZE)).map((group) => {
+                                    const isCollapsed = collapsedGroups.has(group.label)
+                                    return (
+                                        <div key={group.label}>
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleGroup(group.label)}
+                                                className="flex items-center gap-1 w-full px-3 py-1 text-[11px] font-semibold text-sidebar-foreground/50 uppercase tracking-wide hover:text-sidebar-foreground/80"
+                                            >
+                                                <ChevronDown className={cn("h-3 w-3 transition-transform", isCollapsed && "-rotate-90")} />
+                                                {group.label}
+                                            </button>
+                                            {!isCollapsed && group.items.map((chat) => (
+                                                <div
+                                                    key={chat.id}
+                                                    className={cn(
+                                                        "group flex items-center w-full rounded-md px-3 h-9 text-sm",
+                                                        pathname === `/ai-assistant/${chat.id}`
+                                                            ? "bg-primary/10 text-primary font-medium"
+                                                            : "hover:bg-sidebar-accent/60"
+                                                    )}
+                                                >
+                                                    <Link
+                                                        href={`/ai-assistant/${chat.id}`}
+                                                        className="flex items-center gap-3 flex-1 min-w-0"
+                                                    >
+                                                        <MessageSquare className="h-3.5 w-3.5 flex-shrink-0" />
+                                                        <span className="truncate flex-1">{chat.title}</span>
+                                                        {chat.status === "transferred" && chat.has_sav_reply && (
+                                                            <span title="Agent SAV a répondu" className="flex-shrink-0">
+                                                                <Headphones className="h-3 w-3 text-emerald-500" />
+                                                            </span>
+                                                        )}
+                                                        {chat.status === "transferred" && !chat.has_sav_reply && (
+                                                            <span className="h-2 w-2 rounded-full bg-amber-400 flex-shrink-0" title="En attente SAV" />
+                                                        )}
+                                                    </Link>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleDeleteConversation(chat.id)}
+                                                        className="ml-2 rounded-md p-1 text-sidebar-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition"
+                                                        title="Supprimer"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )
+                                })
                             )}
                         </div>
                         {Math.ceil(conversations.length / CONVO_PAGE_SIZE) > 1 && (
