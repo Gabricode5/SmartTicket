@@ -291,16 +291,25 @@ def resolve_session(session_id: int, current_user: str = Depends(get_current_use
     user = get_user_by_email(db, current_user)
     if not user:
         raise HTTPException(status_code=404, detail="Utilisateur introuvable")
-    if not is_admin_or_sav(user):
-        raise HTTPException(status_code=403, detail="Accès refusé")
     session = db.query(models.ChatSession).filter(models.ChatSession.id == session_id, models.ChatSession.deleted_at.is_(None)).first()
     if not session:
         raise HTTPException(status_code=404, detail="Session introuvable")
+    is_owner = session.id_utilisateur == user.id
+    if not is_owner and not is_admin_or_sav(user):
+        raise HTTPException(status_code=403, detail="Accès refusé")
     if session.status != "transferred":
         raise HTTPException(status_code=400, detail="Cette session n'est pas en transfert.")
+    # Le client ne peut reprendre la main que si un agent SAV a déjà répondu — avant ça, il doit
+    # attendre en file d'attente (sinon il pourrait court-circuiter le transfert qu'il vient de demander).
+    has_sav_reply = db.query(models.ChatMessage).filter(
+        models.ChatMessage.id_session == session_id, models.ChatMessage.type_envoyeur == "sav"
+    ).first() is not None
+    if is_owner and not is_admin_or_sav(user) and not has_sav_reply:
+        raise HTTPException(status_code=400, detail="En attente de la réponse d'un agent SAV.")
     session.status = "open"
     session.transfer_reason = None
-    db.add(models.ChatMessage(id_session=session_id, type_envoyeur="ai", contenu="L'agent SAV a rétabli la conversation avec l'assistant IA."))
+    resolved_by = "l'agent SAV" if not is_owner else "le client"
+    db.add(models.ChatMessage(id_session=session_id, type_envoyeur="ai", contenu=f"La conversation a été rétablie avec l'assistant IA (par {resolved_by})."))
     db.commit()
     db.refresh(session)
     return {"id": session.id, "id_utilisateur": session.id_utilisateur, "title": session.title, "status": session.status, "transfer_reason": session.transfer_reason, "date_creation": session.date_creation}
