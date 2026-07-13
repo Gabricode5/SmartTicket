@@ -1,6 +1,11 @@
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import UserDashboard from "@/components/dashboard/UserDashboard";
+import { LocaleProvider } from "@/lib/i18n/LocaleContext";
 import { mockFetch, jsonResponse } from "../test-utils/fetchMock";
+
+function renderDashboard(userId = 42) {
+  return render(<UserDashboard userId={userId} />, { wrapper: LocaleProvider });
+}
 
 const push = jest.fn();
 jest.mock("next/navigation", () => ({
@@ -31,7 +36,7 @@ describe("UserDashboard", () => {
       url.startsWith("/api/sessions?user_id=") ? jsonResponse(sessions) : jsonResponse({}, 404)
     );
 
-    render(<UserDashboard userId={42} />);
+    renderDashboard();
 
     expect(await screen.findByText("Problème de connexion")).toBeInTheDocument();
     expect(screen.getByText("Facture erronée")).toBeInTheDocument();
@@ -44,7 +49,7 @@ describe("UserDashboard", () => {
   it("shows an empty state when the user has no sessions", async () => {
     mockFetch(() => jsonResponse([]));
 
-    render(<UserDashboard userId={42} />);
+    renderDashboard();
 
     expect(await screen.findByText("Aucune conversation.")).toBeInTheDocument();
   });
@@ -52,7 +57,7 @@ describe("UserDashboard", () => {
   it("shows a session-expired error on 401", async () => {
     mockFetch(() => jsonResponse({}, 401));
 
-    render(<UserDashboard userId={42} />);
+    renderDashboard();
 
     expect(await screen.findByText(/session expirée/i)).toBeInTheDocument();
   });
@@ -73,7 +78,7 @@ describe("UserDashboard", () => {
       return jsonResponse({}, 404);
     });
 
-    render(<UserDashboard userId={42} />);
+    renderDashboard();
     await screen.findByText("Problème de connexion");
 
     fireEvent.change(screen.getByPlaceholderText("Rechercher des conversations..."), {
@@ -100,7 +105,7 @@ describe("UserDashboard", () => {
       return jsonResponse({}, 404);
     });
 
-    render(<UserDashboard userId={42} />);
+    renderDashboard();
     await screen.findByText("Problème de connexion");
 
     fireEvent.change(screen.getByPlaceholderText("Rechercher des conversations..."), {
@@ -120,7 +125,7 @@ describe("UserDashboard", () => {
       return jsonResponse({}, 404);
     });
 
-    render(<UserDashboard userId={42} />);
+    renderDashboard();
     await screen.findByText("Problème de connexion");
 
     const closeButtons = screen.getAllByRole("button", { name: "Clôturer" });
@@ -140,7 +145,7 @@ describe("UserDashboard", () => {
       url.startsWith("/api/sessions?user_id=") ? jsonResponse(sessionsWithTransfer) : jsonResponse({}, 404)
     );
 
-    render(<UserDashboard userId={42} />);
+    renderDashboard();
     await screen.findByText("Problème de connexion");
 
     // Filter tabs: 1 open, 1 transferred, 1 closed.
@@ -160,7 +165,7 @@ describe("UserDashboard", () => {
       url.startsWith("/api/sessions?user_id=") ? jsonResponse(sessions) : jsonResponse({}, 404)
     );
 
-    render(<UserDashboard userId={42} />);
+    renderDashboard();
     await screen.findByText("Problème de connexion");
 
     fireEvent.click(screen.getByText("Transférées (0)"));

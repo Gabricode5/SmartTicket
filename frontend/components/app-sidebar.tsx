@@ -6,9 +6,11 @@ import { usePathname } from "next/navigation"
 import { useTheme } from "next-themes"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { NotificationBell } from "@/components/NotificationBell"
+import { LanguageToggle } from "@/components/LanguageToggle"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
+import { useLocale } from "@/lib/i18n/LocaleContext"
 import { groupByDate } from "@/components/dashboard/dateGrouping"
 import {
     LayoutDashboard,
@@ -63,6 +65,8 @@ export function AppSidebar() {
     const pathname = usePathname()
 
     const { user: apiUser } = useCurrentUser()
+    const { messages: t, locale } = useLocale()
+    const dateLocale = locale === "en" ? "en-US" : "fr-FR"
     const { resolvedTheme, setTheme } = useTheme()
     const [mountedTheme, setMountedTheme] = useState(false)
     useEffect(() => setMountedTheme(true), [])
@@ -107,7 +111,7 @@ export function AppSidebar() {
             const data = await response.json()
             const normalized: Conversation[] = data.map((item: { id: number | string; title?: string | null; status?: string; has_sav_reply?: boolean; date_creation?: string | null }) => ({
                 id: String(item.id),
-                title: item.title || "Nouvelle conversation",
+                title: item.title || t.dashboard.newConversation,
                 status: item.status,
                 has_sav_reply: item.has_sav_reply,
                 date_creation: item.date_creation,
@@ -155,7 +159,7 @@ export function AppSidebar() {
     }
 
     const handleDeleteConversation = async (conversationId: string) => {
-        const confirmed = window.confirm("Supprimer cette conversation ?")
+        const confirmed = window.confirm(t.sidebar.confirmDeleteConversation)
         if (!confirmed) return
         try {
             const response = await fetch(`/api/sessions/${conversationId}`, {
@@ -210,7 +214,7 @@ export function AppSidebar() {
                 {/* 1. Menu Principal */}
                 <div>
                     <h3 className="px-4 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-2">
-                        Menu Principal
+                        {t.sidebar.mainMenu}
                     </h3>
                     <div className="space-y-1">
                         <Button
@@ -220,7 +224,7 @@ export function AppSidebar() {
                         >
                             <Link href="/dashboard">
                                 <LayoutDashboard className="mr-3 h-4 w-4" />
-                                Tableau de bord
+                                {t.sidebar.dashboard}
                             </Link>
                         </Button>
 
@@ -232,7 +236,7 @@ export function AppSidebar() {
                             >
                                 <Link href="/knowledge-base">
                                     <BookOpen className="mr-3 h-4 w-4" />
-                                    Base de connaissances
+                                    {t.sidebar.knowledgeBase}
                                 </Link>
                             </Button>
                         )}
@@ -244,18 +248,18 @@ export function AppSidebar() {
                 <div>
                     <div className="flex items-center justify-between px-4 mb-2">
                         <h3 className="text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
-                            Discussions
+                            {t.sidebar.discussions}
                         </h3>
                         <button
                             type="button"
                             onClick={handleCreateConversation}
                             className="hover:text-primary transition-colors"
-                            title="Nouvelle discussion"
+                            title={t.sidebar.newDiscussion}
                         >
                             <Plus className="h-4 w-4 cursor-pointer" />
                         </button>
                     </div>
-                    
+
                     <div className="space-y-1">
                         {/* Bouton pour créer une nouvelle discussion */}
                         <Button
@@ -264,21 +268,21 @@ export function AppSidebar() {
                             onClick={handleCreateConversation}
                         >
                             <Plus className="mr-2 h-4 w-4" />
-                            Nouveau chat
+                            {t.sidebar.newChat}
                         </Button>
 
                         {/* Liste des conversations récentes */}
                         <div className="space-y-1">
                             {isLoadingConversations ? (
                                 <div className="px-3 text-xs text-sidebar-foreground/60">
-                                    Chargement des conversations...
+                                    {t.sidebar.loadingConversations}
                                 </div>
                             ) : conversations.length === 0 ? (
                                 <div className="px-3 text-xs text-sidebar-foreground/60">
-                                    Aucune conversation pour le moment.
+                                    {t.sidebar.noConversations}
                                 </div>
                             ) : (
-                                groupByDate(conversations.slice((convoPage - 1) * CONVO_PAGE_SIZE, convoPage * CONVO_PAGE_SIZE)).map((group) => {
+                                groupByDate(conversations.slice((convoPage - 1) * CONVO_PAGE_SIZE, convoPage * CONVO_PAGE_SIZE), new Date(), t.common.dateGroups, dateLocale).map((group) => {
                                     const isCollapsed = collapsedGroups.has(group.label)
                                     return (
                                         <div key={group.label}>
@@ -307,19 +311,19 @@ export function AppSidebar() {
                                                         <MessageSquare className="h-3.5 w-3.5 flex-shrink-0" />
                                                         <span className="truncate flex-1">{chat.title}</span>
                                                         {chat.status === "transferred" && chat.has_sav_reply && (
-                                                            <span title="Agent SAV a répondu" className="flex-shrink-0">
+                                                            <span title={t.sidebar.agentReplied} className="flex-shrink-0">
                                                                 <Headphones className="h-3 w-3 text-emerald-500" />
                                                             </span>
                                                         )}
                                                         {chat.status === "transferred" && !chat.has_sav_reply && (
-                                                            <span className="h-2 w-2 rounded-full bg-amber-400 flex-shrink-0" title="En attente SAV" />
+                                                            <span className="h-2 w-2 rounded-full bg-amber-400 flex-shrink-0" title={t.sidebar.waitingAgent} />
                                                         )}
                                                     </Link>
                                                     <button
                                                         type="button"
                                                         onClick={() => handleDeleteConversation(chat.id)}
                                                         className="ml-2 rounded-md p-1 text-sidebar-foreground/40 hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition"
-                                                        title="Supprimer"
+                                                        title={t.sidebar.deleteConversation}
                                                     >
                                                         <Trash2 className="h-3.5 w-3.5" />
                                                     </button>
@@ -358,7 +362,7 @@ export function AppSidebar() {
                 {(user.role === "admin" || user.role === "sav" || user.role === "superviseur") && (
                     <div>
                         <h3 className="px-4 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider mb-2">
-                            Analyses
+                            {t.sidebar.analyses}
                         </h3>
                         <div className="space-y-1">
                             <Button
@@ -368,7 +372,7 @@ export function AppSidebar() {
                             >
                                 <Link href="/analytics">
                                     <BarChart2 className="mr-3 h-4 w-4" />
-                                    Analytique
+                                    {t.sidebar.analytics}
                                 </Link>
                             </Button>
                             <Button
@@ -378,7 +382,7 @@ export function AppSidebar() {
                             >
                                 <Link href="/monitoring">
                                     <Activity className="mr-3 h-4 w-4" />
-                                    Monitoring IA
+                                    {t.sidebar.monitoring}
                                 </Link>
                             </Button>
                         </div>
@@ -387,7 +391,8 @@ export function AppSidebar() {
             </div>
 
             {/* User Footer */}
-            <div className="p-4 border-t border-sidebar-border">
+            <div className="p-4 border-t border-sidebar-border space-y-3">
+                <LanguageToggle className="w-full justify-center" />
                 <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-sidebar-accent cursor-default group transition-all">
                     <Avatar className="h-9 w-9 border border-sidebar-border">
                         <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">
@@ -409,7 +414,7 @@ export function AppSidebar() {
                             type="button"
                             onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
                             className="p-1.5 rounded-md text-sidebar-foreground/40 hover:text-primary hover:bg-primary/10 transition-all"
-                            title={mountedTheme && resolvedTheme === "dark" ? "Passer en thème clair" : "Passer en thème sombre"}
+                            title={mountedTheme && resolvedTheme === "dark" ? t.sidebar.lightTheme : t.sidebar.darkTheme}
                         >
                             {mountedTheme && resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                         </button>
@@ -419,14 +424,14 @@ export function AppSidebar() {
                                 "p-1.5 rounded-md text-sidebar-foreground/40 hover:text-primary hover:bg-primary/10 transition-all",
                                 isActive("/settings") && "text-primary bg-primary/10"
                             )}
-                            title="Modifier mon compte"
+                            title={t.sidebar.editAccount}
                         >
                             <Settings className="h-4 w-4" />
                         </Link>
                         <button
                             onClick={handleLogout}
                             className="p-1.5 rounded-md text-sidebar-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-all"
-                            title="Se déconnecter"
+                            title={t.sidebar.logout}
                         >
                             <LogOut className="h-4 w-4" />
                         </button>
