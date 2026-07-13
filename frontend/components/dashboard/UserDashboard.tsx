@@ -11,21 +11,23 @@ import { Search, MessageSquare, Zap, Clock, Star, TrendingUp, Bot, Headphones, C
 import type { SessionItem, SessionSearchResult } from "./types"
 import { renderSnippet } from "./searchSnippet"
 import { groupByDate } from "./dateGrouping"
+import { useLocale } from "@/lib/i18n/LocaleContext"
 
 type StatusFilter = "all" | "open" | "transferred" | "closed"
 
 const sessionStatusKey = (session: SessionItem): "open" | "transferred" | "closed" =>
     session.status === "closed" ? "closed" : session.status === "transferred" ? "transferred" : "open"
 
-const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
-    { key: "all", label: "Toutes" },
-    { key: "open", label: "Ouvertes" },
-    { key: "transferred", label: "Transférées" },
-    { key: "closed", label: "Clôturées" },
-]
-
 export default function UserDashboard({ userId }: { userId: number }) {
     const router = useRouter()
+    const { messages: t, locale } = useLocale()
+    const dateLocale = locale === "en" ? "en-US" : "fr-FR"
+    const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
+        { key: "all", label: t.dashboard.filters.all },
+        { key: "open", label: t.dashboard.filters.open },
+        { key: "transferred", label: t.dashboard.filters.transferred },
+        { key: "closed", label: t.dashboard.filters.closed },
+    ]
     const [userSessions, setUserSessions] = useState<SessionItem[]>([])
     const [userQuery, setUserQuery] = useState("")
     const [isLoading, setIsLoading] = useState(false)
@@ -44,16 +46,19 @@ export default function UserDashboard({ userId }: { userId: number }) {
             setError(null)
             try {
                 const res = await fetch(`/api/sessions?user_id=${userId}`)
-                if (res.status === 401) { setError("Session expirée. Veuillez vous reconnecter."); return }
-                if (!res.ok) { setError("Impossible de charger vos conversations."); return }
+                if (res.status === 401) { setError(t.dashboard.sessionExpired); return }
+                if (!res.ok) { setError(t.dashboard.loadError); return }
                 setUserSessions(await res.json())
             } catch {
-                setError("Erreur réseau.")
+                setError(t.dashboard.networkError)
             } finally {
                 setIsLoading(false)
             }
         }
         loadSessions()
+        // t is intentionally excluded — a language switch shouldn't re-fetch sessions,
+        // it only needs to affect strings shown on the *next* fetch/error.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [userId])
 
     // Full-text search (débounced) sur le contenu des messages + titres, côté serveur.
@@ -79,20 +84,20 @@ export default function UserDashboard({ userId }: { userId: number }) {
     }, [userQuery, userId])
 
     const handleCloseSession = async (session: SessionItem) => {
-        const confirmed = window.confirm(`Clôturer la session #${session.id} ?`)
+        const confirmed = window.confirm(t.dashboard.confirmClose(session.id))
         if (!confirmed) return
         setClosingSessionId(session.id)
         try {
             const res = await fetch(`/api/sessions/${session.id}/close`, { method: "POST" })
             if (!res.ok) {
                 const data = await res.json()
-                setError(data?.detail || "Impossible de clôturer la session.")
+                setError(data?.detail || t.dashboard.closeError)
                 return
             }
             const refresh = await fetch(`/api/sessions?user_id=${userId}`)
             if (refresh.ok) setUserSessions(await refresh.json())
         } catch {
-            setError("Erreur réseau.")
+            setError(t.dashboard.networkError)
         } finally {
             setClosingSessionId(null)
         }
@@ -119,18 +124,18 @@ export default function UserDashboard({ userId }: { userId: number }) {
         .filter((d): d is string => Boolean(d))
         .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0]
     const lastActivityLabel = lastSessionDate
-        ? new Date(lastSessionDate).toLocaleDateString("fr-FR", { day: "2-digit", month: "short" })
-        : "Aucune"
+        ? new Date(lastSessionDate).toLocaleDateString(dateLocale, { day: "2-digit", month: "short" })
+        : t.dashboard.never
 
     return (
         <div className="flex flex-col min-h-full">
             <header className="flex items-center justify-between px-8 py-5 bg-background border-b sticky top-0 z-10">
-                <h1 className="text-2xl font-bold tracking-tight">Tableau de bord</h1>
+                <h1 className="text-2xl font-bold tracking-tight">{t.dashboard.title}</h1>
                 <div className="relative w-96 hidden md:block">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
                         type="search"
-                        placeholder="Rechercher des conversations..."
+                        placeholder={t.dashboard.searchPlaceholder}
                         value={userQuery}
                         onChange={(e) => { setUserQuery(e.target.value); setSessionsPage(1) }}
                         className="pl-9 bg-muted/20 border-muted-foreground/20 focus-visible:ring-offset-0 focus-visible:bg-background transition-colors"
@@ -146,47 +151,47 @@ export default function UserDashboard({ userId }: { userId: number }) {
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Total Conversations</CardTitle>
+                            <CardTitle className="text-sm font-medium text-muted-foreground">{t.dashboard.totalConversations}</CardTitle>
                             <MessageSquare className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">{totalSessions}</div>
                             <p className="text-xs text-muted-foreground flex items-center mt-1">
                                 <TrendingUp className="h-3 w-3 text-green-500 mr-1" />
-                                <span className="text-green-500 font-medium">Activité personnelle</span>
+                                <span className="text-green-500 font-medium">{t.dashboard.personalActivity}</span>
                             </p>
                         </CardContent>
                     </Card>
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Sessions clôturées</CardTitle>
+                            <CardTitle className="text-sm font-medium text-muted-foreground">{t.dashboard.closedSessions}</CardTitle>
                             <Zap className="h-4 w-4 text-yellow-500" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">{closureRate}</div>
                             <p className="text-xs text-muted-foreground mt-1">
-                                {closedSessions} conversation{closedSessions > 1 ? "s" : ""} terminée{closedSessions > 1 ? "s" : ""}
+                                {t.dashboard.closedSummary(closedSessions)}
                             </p>
                         </CardContent>
                     </Card>
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Conversations ouvertes</CardTitle>
+                            <CardTitle className="text-sm font-medium text-muted-foreground">{t.dashboard.openConversations}</CardTitle>
                             <Clock className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">{openSessions}</div>
-                            <p className="text-xs text-muted-foreground mt-1">Encore en attente de clôture</p>
+                            <p className="text-xs text-muted-foreground mt-1">{t.dashboard.waitingClosure}</p>
                         </CardContent>
                     </Card>
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium text-muted-foreground">Dernière activité</CardTitle>
+                            <CardTitle className="text-sm font-medium text-muted-foreground">{t.dashboard.lastActivity}</CardTitle>
                             <Star className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold">{lastActivityLabel}</div>
-                            <p className="text-xs text-muted-foreground mt-1">Basé sur la date de vos sessions</p>
+                            <p className="text-xs text-muted-foreground mt-1">{t.dashboard.basedOnSessionDate}</p>
                         </CardContent>
                     </Card>
                 </div>
@@ -194,8 +199,8 @@ export default function UserDashboard({ userId }: { userId: number }) {
                 <div className="grid gap-6">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Vos conversations</CardTitle>
-                            <CardDescription>Vos discussions personnelles uniquement.</CardDescription>
+                            <CardTitle>{t.dashboard.yourConversations}</CardTitle>
+                            <CardDescription>{t.dashboard.personalDiscussionsOnly}</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-6">
@@ -218,9 +223,9 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                 )}
                                 {isSearchMode ? (
                                     isSearching ? (
-                                        <div className="text-sm text-muted-foreground">Recherche...</div>
+                                        <div className="text-sm text-muted-foreground">{t.dashboard.searching}</div>
                                     ) : !searchResults || searchResults.length === 0 ? (
-                                        <div className="text-sm text-muted-foreground">Aucun résultat pour « {userQuery.trim()} ».</div>
+                                        <div className="text-sm text-muted-foreground">{t.dashboard.noResultsFor(userQuery.trim())}</div>
                                     ) : (
                                         searchResults.map((session) => (
                                             <div
@@ -238,7 +243,7 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                             >
                                                 <div className="min-w-0">
                                                     <p className="text-sm font-medium leading-none">
-                                                        {session.title || "Nouvelle conversation"}
+                                                        {session.title || t.dashboard.newConversation}
                                                     </p>
                                                     {session.snippet && (
                                                         <p className="text-sm text-muted-foreground mt-1.5">
@@ -249,7 +254,7 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                                 <div className="flex flex-col items-end gap-1 flex-shrink-0 ml-4">
                                                     <span className="text-xs text-muted-foreground whitespace-nowrap">
                                                         {session.date_creation
-                                                            ? new Date(session.date_creation).toLocaleDateString("fr-FR")
+                                                            ? new Date(session.date_creation).toLocaleDateString(dateLocale)
                                                             : "—"}
                                                     </span>
                                                     <Badge variant="secondary" className={`${
@@ -257,20 +262,20 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                                         : session.status === "transferred" ? "bg-amber-100 text-amber-700"
                                                         : "bg-emerald-100 text-emerald-700"
                                                     } border-0`}>
-                                                        {session.status === "closed" ? "Clôturée" : session.status === "transferred" ? "Transférée" : "Ouverte"}
+                                                        {session.status === "closed" ? t.dashboard.statusClosed : session.status === "transferred" ? t.dashboard.statusTransferred : t.dashboard.statusOpen}
                                                     </Badge>
                                                 </div>
                                             </div>
                                         ))
                                     )
                                 ) : isLoading ? (
-                                    <div className="text-sm text-muted-foreground">Chargement...</div>
+                                    <div className="text-sm text-muted-foreground">{t.dashboard.loading}</div>
                                 ) : filteredSessions.length === 0 ? (
                                     <div className="text-sm text-muted-foreground">
-                                        {statusFilter === "all" ? "Aucune conversation." : "Aucune conversation ne correspond à ce filtre."}
+                                        {statusFilter === "all" ? t.dashboard.noConversationsAtAll : t.dashboard.noConversationsMatchFilter}
                                     </div>
                                 ) : (
-                                    groupByDate(filteredSessions.slice((sessionsPage - 1) * PAGE_SIZE, sessionsPage * PAGE_SIZE)).map((group) => (
+                                    groupByDate(filteredSessions.slice((sessionsPage - 1) * PAGE_SIZE, sessionsPage * PAGE_SIZE), new Date(), t.common.dateGroups, dateLocale).map((group) => (
                                         <div key={group.label} className="space-y-1">
                                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide px-3 pb-1">
                                                 {group.label}
@@ -297,17 +302,17 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                                         </Avatar>
                                                         <div className="text-left">
                                                             <p className="text-sm font-medium leading-none">
-                                                                {session.title || "Nouvelle conversation"}
+                                                                {session.title || t.dashboard.newConversation}
                                                             </p>
                                                             <p className="text-sm text-muted-foreground line-clamp-1 mt-1">
-                                                                Session #{session.id}
+                                                                {t.dashboard.sessionHash(session.id)}
                                                             </p>
                                                         </div>
                                                     </div>
                                                     <div className="flex flex-col items-end gap-1">
                                                         <span className="text-xs text-muted-foreground whitespace-nowrap">
                                                             {session.date_creation
-                                                                ? new Date(session.date_creation).toLocaleDateString("fr-FR")
+                                                                ? new Date(session.date_creation).toLocaleDateString(dateLocale)
                                                                 : "—"}
                                                         </span>
                                                         <Badge variant="secondary" className={`${
@@ -315,7 +320,7 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                                             : session.status === "transferred" ? "bg-amber-100 text-amber-700"
                                                             : "bg-emerald-100 text-emerald-700"
                                                         } border-0`}>
-                                                            {session.status === "closed" ? "Clôturée" : session.status === "transferred" ? "Transférée" : "Ouverte"}
+                                                            {session.status === "closed" ? t.dashboard.statusClosed : session.status === "transferred" ? t.dashboard.statusTransferred : t.dashboard.statusOpen}
                                                         </Badge>
                                                         <Button
                                                             size="sm"
@@ -323,22 +328,22 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                                             onClick={(e) => { e.stopPropagation(); handleCloseSession(session) }}
                                                             disabled={closingSessionId === session.id || session.status === "closed"}
                                                         >
-                                                            {closingSessionId === session.id ? "..." : "Clôturer"}
+                                                            {closingSessionId === session.id ? t.dashboard.closing : t.dashboard.closeButton}
                                                         </Button>
                                                         {session.status === "transferred" && session.has_sav_reply ? (
                                                             <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 border-0">
                                                                 <Headphones className="h-3 w-3 mr-1" />
-                                                                Agent SAV a répondu
+                                                                {t.dashboard.savReplied}
                                                             </Badge>
                                                         ) : session.status === "transferred" ? (
                                                             <Badge variant="secondary" className="bg-amber-100 text-amber-700 border-0">
                                                                 <Headphones className="h-3 w-3 mr-1" />
-                                                                En attente SAV
+                                                                {t.dashboard.waitingSav}
                                                             </Badge>
                                                         ) : (
                                                             <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/15 border-0">
                                                                 <Bot className="h-3 w-3 mr-1" />
-                                                                IA Autonome
+                                                                {t.dashboard.aiAutonomous}
                                                             </Badge>
                                                         )}
                                                     </div>
@@ -354,7 +359,7 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                             disabled={sessionsPage <= 1}
                                             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                                         >
-                                            <ChevronLeft className="h-4 w-4" /> Précédent
+                                            <ChevronLeft className="h-4 w-4" /> {t.dashboard.previous}
                                         </button>
                                         <span className="text-sm text-muted-foreground">
                                             {sessionsPage} / {Math.ceil(filteredSessions.length / PAGE_SIZE)}
@@ -364,7 +369,7 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                             disabled={sessionsPage >= Math.ceil(filteredSessions.length / PAGE_SIZE)}
                                             className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed"
                                         >
-                                            Suivant <ChevronRight className="h-4 w-4" />
+                                            {t.dashboard.next} <ChevronRight className="h-4 w-4" />
                                         </button>
                                     </div>
                                 )}

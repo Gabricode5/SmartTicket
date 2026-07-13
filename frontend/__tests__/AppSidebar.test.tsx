@@ -1,6 +1,11 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import { AppSidebar } from "@/components/app-sidebar";
+import { LocaleProvider } from "@/lib/i18n/LocaleContext";
 import { mockFetch, jsonResponse } from "../test-utils/fetchMock";
+
+function renderSidebar() {
+  return render(<AppSidebar />, { wrapper: LocaleProvider });
+}
 
 jest.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
@@ -26,7 +31,7 @@ describe("AppSidebar", () => {
   it("groups the conversation history by date period", async () => {
     setupFetch();
 
-    render(<AppSidebar />);
+    renderSidebar();
 
     expect(await screen.findByText("Question du jour")).toBeInTheDocument();
     expect(screen.getByText("Aujourd'hui")).toBeInTheDocument();
@@ -37,7 +42,7 @@ describe("AppSidebar", () => {
   it("collapses and expands a group when its header is clicked", async () => {
     setupFetch();
 
-    render(<AppSidebar />);
+    renderSidebar();
     await screen.findByText("Vieille question");
 
     fireEvent.click(screen.getByText("Janvier 2026"));
