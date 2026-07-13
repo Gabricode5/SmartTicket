@@ -1,9 +1,11 @@
+from collections import Counter
 from datetime import datetime
 
 from fpdf import FPDF
 
 AUTHOR_LABELS = {"user": "Vous", "ai": "Assistant IA", "sav": "Agent SAV"}
 ALERT_LEVEL_LABELS = {"critical": "CRITIQUE", "warning": "ATTENTION"}
+STATUS_LABELS = {"open": "Ouvertes", "transferred": "Transférées", "closed": "Clôturées"}
 
 
 def _safe(value) -> str:
@@ -90,6 +92,22 @@ def build_user_data_export_pdf(user, sessions_with_messages: list[dict]) -> byte
         f"Date de création du compte : {user.date_creation.strftime('%d/%m/%Y') if user.date_creation else '-'}",
     ]:
         line(text)
+    pdf.ln(4)
+
+    line("Résumé", size=12, style="B")
+    total_messages = sum(len(s["messages"]) for s in sessions_with_messages)
+    status_counts = Counter(s["status"] for s in sessions_with_messages)
+    line(f"Conversations : {len(sessions_with_messages)}")
+    line(f"Messages échangés : {total_messages}")
+    line(", ".join(
+        f"{STATUS_LABELS.get(status, status)} : {count}"
+        for status, count in sorted(status_counts.items())
+    ) or "Aucune conversation.")
+    # sessions_with_messages est trié par date_creation croissante (cf. requête dans routers/auth.py),
+    # donc le premier et le dernier élément donnent directement la période sans re-trier.
+    dated_sessions = [s for s in sessions_with_messages if s.get("date_creation")]
+    if dated_sessions:
+        line(f"Période : du {dated_sessions[0]['date_creation']} au {dated_sessions[-1]['date_creation']}")
     pdf.ln(4)
 
     line(f"Conversations ({len(sessions_with_messages)})", size=12, style="B")
