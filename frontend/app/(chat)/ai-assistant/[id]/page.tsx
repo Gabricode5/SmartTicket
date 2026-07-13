@@ -95,8 +95,10 @@ export default function AiAssistantPage() {
     const [aiEnabled, setAiEnabled] = useState(true)
     const [isClosed, setIsClosed] = useState(false)
     const [isTransferred, setIsTransferred] = useState(false)
+    const [hasSavReply, setHasSavReply] = useState(false)
     const [showTransferPanel, setShowTransferPanel] = useState(false)
     const [isTransferring, setIsTransferring] = useState(false)
+    const [isResolving, setIsResolving] = useState(false)
     const bottomRef = useRef<HTMLDivElement | null>(null)
 
     const username = currentUser?.username ?? "Utilisateur"
@@ -149,9 +151,10 @@ export default function AiAssistantPage() {
                 if (!response.ok) return
                 const data = await response.json()
                 if (!Array.isArray(data)) return
-                const currentSession = data.find((item: { id?: number; status?: string | null }) => item.id === sessionIdNumber)
+                const currentSession = data.find((item: { id?: number; status?: string | null; has_sav_reply?: boolean }) => item.id === sessionIdNumber)
                 if (currentSession?.status === "closed") setIsClosed(true)
                 if (currentSession?.status === "transferred") setIsTransferred(true)
+                setHasSavReply(Boolean(currentSession?.has_sav_reply))
             } catch (err) {
                 console.error("Erreur chargement session :", err)
             }
@@ -191,6 +194,39 @@ export default function AiAssistantPage() {
             setError("Impossible de contacter le serveur.")
         } finally {
             setIsTransferring(false)
+        }
+    }
+
+    const handleResolve = async () => {
+        setIsResolving(true)
+        try {
+            const res = await fetch(`/api/sessions/${sessionIdNumber}/resolve`, { method: "POST" })
+            if (res.ok) {
+                setIsTransferred(false)
+                setHasSavReply(false)
+                const msgsRes = await fetch(`/api/messages?session_id=${sessionIdNumber}`)
+                if (msgsRes.ok) {
+                    const data = await msgsRes.json()
+                    if (Array.isArray(data)) {
+                        setMessages((data as BackendChatMessage[]).map((item) => ({
+                            id: String(item.id ?? makeId()),
+                            role: item.type_envoyeur === "ai" ? "ai" : item.type_envoyeur === "sav" ? "sav" : "user",
+                            content: item.contenu ?? "",
+                            createdAt: item.date_creation
+                                ? new Date(item.date_creation).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+                                : new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+                            feedback: null,
+                        })))
+                    }
+                }
+            } else {
+                const data = await res.json().catch(() => null)
+                setError(data?.detail || "Impossible de reprendre la conversation avec l'IA.")
+            }
+        } catch {
+            setError("Impossible de contacter le serveur.")
+        } finally {
+            setIsResolving(false)
         }
     }
 
@@ -401,9 +437,26 @@ export default function AiAssistantPage() {
             <div className="bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
                 {/* Transferred banner */}
                 {isTransferred && (
-                    <div className="flex items-center gap-2 px-6 py-2.5 bg-amber-50 border-b border-amber-100 text-amber-700 text-sm">
-                        <Headphones className="h-4 w-4 flex-shrink-0" />
-                        <span>En attente d&apos;un agent SAV — un agent humain va vous répondre prochainement.</span>
+                    <div className="flex items-center justify-between gap-2 px-6 py-2.5 bg-amber-50 border-b border-amber-100 text-amber-700 text-sm">
+                        <div className="flex items-center gap-2">
+                            <Headphones className="h-4 w-4 flex-shrink-0" />
+                            <span>
+                                {hasSavReply
+                                    ? "Un agent SAV a répondu à votre demande."
+                                    : "En attente d'un agent SAV — un agent humain va vous répondre prochainement."}
+                            </span>
+                        </div>
+                        {hasSavReply && (
+                            <button
+                                type="button"
+                                onClick={() => void handleResolve()}
+                                disabled={isResolving}
+                                className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full border border-amber-200 bg-white text-amber-700 hover:bg-amber-100 transition-colors text-xs font-bold uppercase disabled:opacity-50"
+                            >
+                                <Bot className="h-3.5 w-3.5" />
+                                {isResolving ? "…" : "Reprendre avec l'IA"}
+                            </button>
+                        )}
                     </div>
                 )}
 
