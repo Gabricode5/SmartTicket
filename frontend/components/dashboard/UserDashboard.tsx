@@ -140,7 +140,7 @@ export default function UserDashboard({ userId }: { userId: number }) {
 
             <div className="p-8 space-y-8 max-w-7xl mx-auto w-full">
                 {error && (
-                    <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>
+                    <div className="rounded-md border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</div>
                 )}
 
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
@@ -253,7 +253,7 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                                             : "—"}
                                                     </span>
                                                     <Badge variant="secondary" className={`${
-                                                        session.status === "closed" ? "bg-slate-200 text-slate-700"
+                                                        session.status === "closed" ? "bg-muted text-muted-foreground"
                                                         : session.status === "transferred" ? "bg-amber-100 text-amber-700"
                                                         : "bg-emerald-100 text-emerald-700"
                                                     } border-0`}>
@@ -311,7 +311,7 @@ export default function UserDashboard({ userId }: { userId: number }) {
                                                                 : "—"}
                                                         </span>
                                                         <Badge variant="secondary" className={`${
-                                                            session.status === "closed" ? "bg-slate-200 text-slate-700"
+                                                            session.status === "closed" ? "bg-muted text-muted-foreground"
                                                             : session.status === "transferred" ? "bg-amber-100 text-amber-700"
                                                             : "bg-emerald-100 text-emerald-700"
                                                         } border-0`}>

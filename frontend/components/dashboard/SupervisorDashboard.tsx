@@ -69,22 +69,22 @@ export default function SupervisorDashboard() {
     }
 
     return (
-        <div className="flex flex-col min-h-full bg-slate-50/50">
-            <header className="flex items-center justify-between px-8 py-5 bg-white border-b shadow-sm">
+        <div className="flex flex-col min-h-full bg-muted/50">
+            <header className="flex items-center justify-between px-8 py-5 bg-card border-b shadow-sm">
                 <div className="flex items-center gap-3">
                     <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-600 shadow-sm">
                         <ShieldCheck className="h-5 w-5 text-white" />
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold tracking-tight text-slate-900">Espace Superviseur SAV</h1>
-                        <p className="text-xs text-slate-500">Gestion de l&apos;équipe SAV &amp; support client</p>
+                        <h1 className="text-xl font-bold tracking-tight text-foreground">Espace Superviseur SAV</h1>
+                        <p className="text-xs text-muted-foreground">Gestion de l&apos;équipe SAV &amp; support client</p>
                     </div>
                 </div>
             </header>
 
             <div className="p-8 space-y-6 max-w-7xl mx-auto w-full">
                 {error && (
-                    <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    <div className="flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm text-red-700 dark:text-red-400">
                         <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
                         {error}
                     </div>
@@ -92,33 +92,33 @@ export default function SupervisorDashboard() {
 
                 <div className="grid gap-5 lg:grid-cols-2">
                     {/* Utilisateurs */}
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                    <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                             <div className="flex items-center gap-2.5">
                                 <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
                                     <Users className="h-4 w-4 text-blue-600" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-semibold text-slate-800">Utilisateurs</p>
-                                    <p className="text-xs text-slate-400">Promouvoir en agent SAV</p>
+                                    <p className="text-sm font-semibold text-foreground">Utilisateurs</p>
+                                    <p className="text-xs text-muted-foreground">Promouvoir en agent SAV</p>
                                 </div>
                             </div>
                             <Badge className="bg-blue-50 text-blue-600 border-blue-100 text-xs font-semibold">{users.length}</Badge>
                         </div>
                         <div className="divide-y divide-slate-50">
                             {isLoading ? (
-                                <div className="px-5 py-8 text-center text-sm text-slate-400">Chargement...</div>
+                                <div className="px-5 py-8 text-center text-sm text-muted-foreground">Chargement...</div>
                             ) : users.length === 0 ? (
-                                <div className="px-5 py-8 text-center text-sm text-slate-400">Aucun utilisateur</div>
+                                <div className="px-5 py-8 text-center text-sm text-muted-foreground">Aucun utilisateur</div>
                             ) : users.slice((usersPage - 1) * PAGE_SIZE, usersPage * PAGE_SIZE).map((u) => (
-                                <div key={u.id} className="px-4 py-3 flex items-center justify-between hover:bg-slate-50/80">
+                                <div key={u.id} className="px-4 py-3 flex items-center justify-between hover:bg-muted/80">
                                     <div className="flex items-center gap-3 min-w-0">
                                         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
                                             <span className="text-xs font-bold text-blue-600">{u.username.charAt(0).toUpperCase()}</span>
                                         </div>
                                         <div className="min-w-0">
-                                            <div className="text-sm font-medium text-slate-800 truncate">{u.username}</div>
-                                            <div className="text-xs text-slate-400 truncate">{u.email}</div>
+                                            <div className="text-sm font-medium text-foreground truncate">{u.username}</div>
+                                            <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                                         </div>
                                     </div>
                                     <button
@@ -133,12 +133,12 @@ export default function SupervisorDashboard() {
                             ))}
                         </div>
                         {Math.ceil(users.length / PAGE_SIZE) > 1 && (
-                            <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
-                                <button onClick={() => setUsersPage(p => p - 1)} disabled={usersPage <= 1} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                            <div className="flex items-center justify-between px-3 py-2 border-t border-border">
+                                <button onClick={() => setUsersPage(p => p - 1)} disabled={usersPage <= 1} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                     <ChevronLeft className="h-3.5 w-3.5" />
                                 </button>
-                                <span className="text-xs text-slate-400">{usersPage} / {Math.ceil(users.length / PAGE_SIZE)}</span>
-                                <button onClick={() => setUsersPage(p => p + 1)} disabled={usersPage >= Math.ceil(users.length / PAGE_SIZE)} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                <span className="text-xs text-muted-foreground">{usersPage} / {Math.ceil(users.length / PAGE_SIZE)}</span>
+                                <button onClick={() => setUsersPage(p => p + 1)} disabled={usersPage >= Math.ceil(users.length / PAGE_SIZE)} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                     <ChevronRight className="h-3.5 w-3.5" />
                                 </button>
                             </div>
@@ -146,33 +146,33 @@ export default function SupervisorDashboard() {
                     </div>
 
                     {/* Agents SAV */}
-                    <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                    <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                        <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                             <div className="flex items-center gap-2.5">
                                 <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
                                     <Headphones className="h-4 w-4 text-emerald-600" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-semibold text-slate-800">Agents SAV</p>
-                                    <p className="text-xs text-slate-400">Rétrograder en utilisateur</p>
+                                    <p className="text-sm font-semibold text-foreground">Agents SAV</p>
+                                    <p className="text-xs text-muted-foreground">Rétrograder en utilisateur</p>
                                 </div>
                             </div>
                             <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 text-xs font-semibold">{savUsers.length}</Badge>
                         </div>
                         <div className="divide-y divide-slate-50">
                             {isLoading ? (
-                                <div className="px-5 py-8 text-center text-sm text-slate-400">Chargement...</div>
+                                <div className="px-5 py-8 text-center text-sm text-muted-foreground">Chargement...</div>
                             ) : savUsers.length === 0 ? (
-                                <div className="px-5 py-8 text-center text-sm text-slate-400">Aucun agent SAV</div>
+                                <div className="px-5 py-8 text-center text-sm text-muted-foreground">Aucun agent SAV</div>
                             ) : savUsers.slice((savPage - 1) * PAGE_SIZE, savPage * PAGE_SIZE).map((u) => (
-                                <div key={u.id} className="px-4 py-3 flex items-center justify-between hover:bg-slate-50/80">
+                                <div key={u.id} className="px-4 py-3 flex items-center justify-between hover:bg-muted/80">
                                     <div className="flex items-center gap-3 min-w-0">
                                         <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
                                             <span className="text-xs font-bold text-emerald-600">{u.username.charAt(0).toUpperCase()}</span>
                                         </div>
                                         <div className="min-w-0">
-                                            <div className="text-sm font-medium text-slate-800 truncate">{u.username}</div>
-                                            <div className="text-xs text-slate-400 truncate">{u.email}</div>
+                                            <div className="text-sm font-medium text-foreground truncate">{u.username}</div>
+                                            <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                                         </div>
                                     </div>
                                     <button
@@ -187,12 +187,12 @@ export default function SupervisorDashboard() {
                             ))}
                         </div>
                         {Math.ceil(savUsers.length / PAGE_SIZE) > 1 && (
-                            <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
-                                <button onClick={() => setSavPage(p => p - 1)} disabled={savPage <= 1} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                            <div className="flex items-center justify-between px-3 py-2 border-t border-border">
+                                <button onClick={() => setSavPage(p => p - 1)} disabled={savPage <= 1} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                     <ChevronLeft className="h-3.5 w-3.5" />
                                 </button>
-                                <span className="text-xs text-slate-400">{savPage} / {Math.ceil(savUsers.length / PAGE_SIZE)}</span>
-                                <button onClick={() => setSavPage(p => p + 1)} disabled={savPage >= Math.ceil(savUsers.length / PAGE_SIZE)} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                <span className="text-xs text-muted-foreground">{savPage} / {Math.ceil(savUsers.length / PAGE_SIZE)}</span>
+                                <button onClick={() => setSavPage(p => p + 1)} disabled={savPage >= Math.ceil(savUsers.length / PAGE_SIZE)} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                     <ChevronRight className="h-3.5 w-3.5" />
                                 </button>
                             </div>
@@ -202,7 +202,7 @@ export default function SupervisorDashboard() {
             </div>
 
             {/* File d'attente SAV — un superviseur reste aussi un agent, il traite les tickets transférés */}
-            <div className="flex-1 min-h-[600px] border-t border-slate-200">
+            <div className="flex-1 min-h-[600px] border-t border-border">
                 <SavDashboard />
             </div>
         </div>

@@ -268,7 +268,7 @@ export default function MonitoringPage() {
                         <CardContent>
                             {!metrics?.latency_trend?.length ? (
                                 <div className="flex flex-col items-center justify-center h-[260px] text-muted-foreground text-sm gap-2">
-                                    <Activity className="h-8 w-8 text-slate-200" />
+                                    <Activity className="h-8 w-8 text-muted-foreground/40" />
                                     <span>Aucune donnée — les métriques s&apos;accumulent au fil des échanges.</span>
                                 </div>
                             ) : (
@@ -353,7 +353,7 @@ function KbScoreInfo({ open, onToggle }: { open: boolean; onToggle: () => void }
         <button
             type="button"
             onClick={onToggle}
-            className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold cursor-pointer select-none transition-colors ${open ? "bg-slate-700 text-white" : "bg-slate-200 text-slate-500 hover:bg-slate-300"}`}
+            className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold cursor-pointer select-none transition-colors ${open ? "bg-slate-700 text-white" : "bg-muted text-muted-foreground hover:bg-muted-foreground/20"}`}
         >i</button>
     )
 }
@@ -363,7 +363,7 @@ function KbScoreCard({ score, totalCalls, negativeRate }: { score: number | null
 
     if (totalCalls < 5) {
         return (
-            <Card className="border-slate-200">
+            <Card className="border-border">
                 <CardContent className="py-4 flex items-center gap-3 text-sm text-muted-foreground">
                     <Database className="h-4 w-4 flex-shrink-0" />
                     <span>Score de santé KB indisponible — au moins 5 appels IA nécessaires pour calculer le score (<strong>{totalCalls}</strong> enregistrés).</span>
@@ -495,7 +495,7 @@ function MistralStatusCard({ status, loading, onRefresh }: { status: MistralStat
                         {status.components.map((c) => {
                             const s = STATUS_CONFIG[c.status]
                             return (
-                                <div key={c.name} className="flex items-center gap-2 rounded-lg border px-3 py-2 bg-slate-50/50">
+                                <div key={c.name} className="flex items-center gap-2 rounded-lg border px-3 py-2 bg-muted/50">
                                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
                                     <div className="min-w-0">
                                         <p className="text-xs font-medium truncate">{c.name}</p>
@@ -550,7 +550,7 @@ function buildRecommendations(m: AiMetrics): Reco[] {
 
     if (m.avg_rag_chunks < 1 && m.total_calls > 0) {
         recos.push({
-            icon: <Database className="h-4 w-4 text-slate-500" />,
+            icon: <Database className="h-4 w-4 text-muted-foreground" />,
             title: "Aucun chunk RAG récupéré en moyenne",
             detail: "Le modèle répond sans contexte issu de la base de connaissances. Vérifier que les embeddings ont bien été générés lors de l'ingestion des documents.",
             action: { label: "Gérer la base de connaissances →", href: "/knowledge-base" },
@@ -582,7 +582,7 @@ function RecommendationsCard({ metrics }: { metrics: AiMetrics }) {
             <CardContent>
                 <div className="space-y-3">
                     {recos.map((r, i) => (
-                        <div key={i} className="flex items-start gap-3 rounded-lg border px-4 py-3 bg-slate-50/50">
+                        <div key={i} className="flex items-start gap-3 rounded-lg border px-4 py-3 bg-muted/50">
                             <div className="mt-0.5 flex-shrink-0">{r.icon}</div>
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-medium">{r.title}</p>

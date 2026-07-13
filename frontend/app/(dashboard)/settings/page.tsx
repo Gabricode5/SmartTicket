@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Download, Compass } from "lucide-react"
 import { onboardingStorageKey } from "@/components/onboarding/OnboardingModal"
+import { ThemeToggle } from "@/components/ThemeToggle"
 
 type Me = {
     id: number
@@ -224,8 +225,8 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted-foreground mt-1">Modifiez vos informations personnelles et votre mot de passe.</p>
             </div>
 
-            {error && <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
-            {success && <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{success}</div>}
+            {error && <div className="rounded-md border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</div>}
+            {success && <div className="rounded-md border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/30 px-3 py-2 text-sm text-green-700 dark:text-green-400">{success}</div>}
             {!loading && !emailVerified && (
                 <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 flex flex-wrap items-center justify-between gap-2">
                     <span>Confirmez votre nouvelle adresse email — un lien de confirmation vous a été envoyé.</span>
@@ -331,6 +332,15 @@ export default function SettingsPage() {
                     <Button onClick={handleSavePassword} disabled={savingPassword}>
                         {savingPassword ? "Mise à jour..." : "Mettre à jour le mot de passe"}
                     </Button>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>Apparence</CardTitle>
+                    <CardDescription>Choisissez le thème de l&apos;interface.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ThemeToggle />
                 </CardContent>
             </Card>
             <Card>

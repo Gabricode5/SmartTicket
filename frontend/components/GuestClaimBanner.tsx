@@ -67,7 +67,7 @@ export function GuestClaimBanner() {
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="h-9 px-3 rounded-lg border border-indigo-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                            className="h-9 px-3 rounded-lg border border-indigo-200 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                         />
                     </div>
                     <div className="flex flex-col gap-1">
@@ -78,7 +78,7 @@ export function GuestClaimBanner() {
                             required
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="h-9 px-3 rounded-lg border border-indigo-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                            className="h-9 px-3 rounded-lg border border-indigo-200 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
                         />
                     </div>
                     <button

@@ -37,7 +37,7 @@ export default function StartChatPage() {
     }, [router])
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-white flex flex-col items-center justify-center px-4">
+        <div className="force-light bg-background min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-white flex flex-col items-center justify-center px-4">
             {error ? (
                 <div className="text-center space-y-4">
                     <p className="text-sm text-red-600">{error}</p>
