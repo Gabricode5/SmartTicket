@@ -3,7 +3,7 @@ import Link from "next/link"
 
 export default function LegalLayout({ children }: { children: React.ReactNode }) {
     return (
-        <div className="min-h-screen bg-white flex flex-col">
+        <div className="force-light min-h-screen bg-white flex flex-col">
             <header className="border-b border-slate-100 px-6 py-4">
                 <div className="max-w-3xl mx-auto flex items-center justify-between">
                     <Link href="/" className="flex items-center gap-2 text-slate-700">

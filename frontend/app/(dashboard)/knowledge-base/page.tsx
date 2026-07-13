@@ -470,8 +470,8 @@ export default function KnowledgeBasePage() {
                     {robotsInfo && (
                         <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
                             <div className="flex flex-wrap items-center gap-4 text-sm">
-                                <span className="flex items-center gap-1.5 font-medium text-slate-700">
-                                    <LinkIcon className="h-4 w-4 text-slate-400" />
+                                <span className="flex items-center gap-1.5 font-medium text-foreground">
+                                    <LinkIcon className="h-4 w-4 text-muted-foreground" />
                                     {robotsInfo.sitemap_found ? "Sitemap détecté" : "Pas de sitemap (URL unique)"}
                                     {!robotsInfo.robots_found && <span className="text-xs text-muted-foreground ml-1">(robots.txt absent)</span>}
                                 </span>
@@ -574,12 +574,12 @@ export default function KnowledgeBasePage() {
                                     <CardContent className="p-4 flex items-start gap-3">
                                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isFile ? "bg-indigo-50" : "bg-blue-50"}`}>
                                             {isFile
-                                                ? <FileText className={`h-5 w-5 ${ext === "pdf" ? "text-red-500" : ext === "docx" ? "text-blue-600" : "text-slate-500"}`} />
+                                                ? <FileText className={`h-5 w-5 ${ext === "pdf" ? "text-red-500" : ext === "docx" ? "text-blue-600" : "text-muted-foreground"}`} />
                                                 : <Globe className="h-5 w-5 text-blue-500" />
                                             }
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-semibold text-slate-800 truncate" title={s.source}>{s.source}</p>
+                                            <p className="text-sm font-semibold text-foreground truncate" title={s.source}>{s.source}</p>
                                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                                                 {s.category && <Badge variant="secondary" className="text-xs">{s.category}</Badge>}
                                                 <span className="text-xs text-muted-foreground">{s.chunks} chunks</span>

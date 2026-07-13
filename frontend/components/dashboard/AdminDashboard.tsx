@@ -229,19 +229,19 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
     }
 
     const userColumnClass = (selected: boolean, color: string) =>
-        `px-4 py-3 transition-colors ${selected ? `bg-${color}-50/60` : "hover:bg-slate-50/80"}`
+        `px-4 py-3 transition-colors ${selected ? `bg-${color}-50/60` : "hover:bg-muted/80"}`
 
     return (
         <>
-            <div className="flex flex-col min-h-full bg-slate-50/50">
-                <header className="flex items-center justify-between px-8 py-5 bg-white border-b sticky top-0 z-10 shadow-sm">
+            <div className="flex flex-col min-h-full bg-muted/50">
+                <header className="flex items-center justify-between px-8 py-5 bg-card border-b sticky top-0 z-10 shadow-sm">
                     <div className="flex items-center gap-3">
                         <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-600 shadow-sm">
                             <UserCog className="h-5 w-5 text-white" />
                         </div>
                         <div>
-                            <h1 className="text-xl font-bold tracking-tight text-slate-900">Espace Admin</h1>
-                            <p className="text-xs text-slate-500">Gestion des utilisateurs &amp; conversations</p>
+                            <h1 className="text-xl font-bold tracking-tight text-foreground">Espace Admin</h1>
+                            <p className="text-xs text-muted-foreground">Gestion des utilisateurs &amp; conversations</p>
                         </div>
                         <Badge className="bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border border-indigo-200 gap-1 ml-2">
                             <Shield className="h-3 w-3" /> Administrateur
@@ -249,17 +249,17 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                     </div>
                     <div className="flex items-center gap-3">
                         <CsvImportDialog onImported={loadAll} />
-                        <div className="flex items-center gap-1.5 bg-white border rounded-lg px-3 py-1.5 shadow-sm text-sm">
+                        <div className="flex items-center gap-1.5 bg-card border rounded-lg px-3 py-1.5 shadow-sm text-sm">
                             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                            <span className="font-medium text-slate-700">{users.length + savUsers.length + superviseurUsers.length + adminUsers.length}</span>
-                            <span className="text-slate-500">utilisateurs</span>
+                            <span className="font-medium text-foreground">{users.length + savUsers.length + superviseurUsers.length + adminUsers.length}</span>
+                            <span className="text-muted-foreground">utilisateurs</span>
                         </div>
                     </div>
                 </header>
 
                 <div className="p-8 space-y-6 max-w-7xl mx-auto w-full">
                     {error && (
-                        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                        <div className="flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm text-red-700 dark:text-red-400">
                             <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
                             {error}
                         </div>
@@ -267,24 +267,24 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
 
                     <div className="grid gap-5 lg:grid-cols-5">
                         {/* Utilisateurs */}
-                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
                                     <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
                                         <Users className="h-4 w-4 text-blue-600" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-semibold text-slate-800">Utilisateurs</p>
-                                        <p className="text-xs text-slate-400">Comptes clients</p>
+                                        <p className="text-sm font-semibold text-foreground">Utilisateurs</p>
+                                        <p className="text-xs text-muted-foreground">Comptes clients</p>
                                     </div>
                                 </div>
                                 <Badge className="bg-blue-50 text-blue-600 border-blue-100 text-xs font-semibold">{users.length}</Badge>
                             </div>
                             <div className="divide-y divide-slate-50">
                                 {isLoading ? (
-                                    <div className="px-5 py-8 text-center text-sm text-slate-400">Chargement...</div>
+                                    <div className="px-5 py-8 text-center text-sm text-muted-foreground">Chargement...</div>
                                 ) : users.length === 0 ? (
-                                    <div className="px-5 py-8 text-center text-sm text-slate-400">Aucun utilisateur</div>
+                                    <div className="px-5 py-8 text-center text-sm text-muted-foreground">Aucun utilisateur</div>
                                 ) : users.slice((usersPage - 1) * PAGE_SIZE, usersPage * PAGE_SIZE).map((u) => (
                                     <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "blue")}>
                                         <button onClick={() => handleSelectUser(u)} className="w-full text-left flex items-center gap-3 mb-2.5">
@@ -292,8 +292,8 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                                 <span className="text-xs font-bold text-blue-600">{u.username.charAt(0).toUpperCase()}</span>
                                             </div>
                                             <div className="min-w-0">
-                                                <div className="text-sm font-medium text-slate-800 truncate">{u.username}</div>
-                                                <div className="text-xs text-slate-400 truncate">{u.email}</div>
+                                                <div className="text-sm font-medium text-foreground truncate">{u.username}</div>
+                                                <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                                             </div>
                                             {selectedUser?.id === u.id && <ChevronRight className="h-4 w-4 text-blue-400 ml-auto flex-shrink-0" />}
                                         </button>
@@ -302,7 +302,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                                 <UserCheck className="h-3 w-3" />
                                                 {updatingRoleUserId === u.id ? "..." : "SAV"}
                                             </button>
-                                            <button onClick={() => handleEditUser(u)} disabled={updatingUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors disabled:opacity-50">
+                                            <button onClick={() => handleEditUser(u)} disabled={updatingUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-muted text-muted-foreground hover:bg-muted border border-border transition-colors disabled:opacity-50">
                                                 <Pencil className="h-3 w-3" />
                                             </button>
                                             <button onClick={() => handleDeleteUser(u)} disabled={updatingUserId === u.id || currentUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-red-50 text-red-500 hover:bg-red-100 border border-red-200 transition-colors disabled:opacity-50">
@@ -313,12 +313,12 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 ))}
                             </div>
                             {Math.ceil(users.length / PAGE_SIZE) > 1 && (
-                                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
-                                    <button onClick={() => setUsersPage(p => p - 1)} disabled={usersPage <= 1} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                <div className="flex items-center justify-between px-3 py-2 border-t border-border">
+                                    <button onClick={() => setUsersPage(p => p - 1)} disabled={usersPage <= 1} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                         <ChevronLeft className="h-3.5 w-3.5" />
                                     </button>
-                                    <span className="text-xs text-slate-400">{usersPage} / {Math.ceil(users.length / PAGE_SIZE)}</span>
-                                    <button onClick={() => setUsersPage(p => p + 1)} disabled={usersPage >= Math.ceil(users.length / PAGE_SIZE)} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                    <span className="text-xs text-muted-foreground">{usersPage} / {Math.ceil(users.length / PAGE_SIZE)}</span>
+                                    <button onClick={() => setUsersPage(p => p + 1)} disabled={usersPage >= Math.ceil(users.length / PAGE_SIZE)} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                         <ChevronRight className="h-3.5 w-3.5" />
                                     </button>
                                 </div>
@@ -326,24 +326,24 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                         </div>
 
                         {/* Agents SAV */}
-                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
                                     <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center">
                                         <Headphones className="h-4 w-4 text-emerald-600" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-semibold text-slate-800">Agents SAV</p>
-                                        <p className="text-xs text-slate-400">Support client</p>
+                                        <p className="text-sm font-semibold text-foreground">Agents SAV</p>
+                                        <p className="text-xs text-muted-foreground">Support client</p>
                                     </div>
                                 </div>
                                 <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 text-xs font-semibold">{savUsers.length}</Badge>
                             </div>
                             <div className="divide-y divide-slate-50">
                                 {isLoading ? (
-                                    <div className="px-5 py-8 text-center text-sm text-slate-400">Chargement...</div>
+                                    <div className="px-5 py-8 text-center text-sm text-muted-foreground">Chargement...</div>
                                 ) : savUsers.length === 0 ? (
-                                    <div className="px-5 py-8 text-center text-sm text-slate-400">Aucun agent SAV</div>
+                                    <div className="px-5 py-8 text-center text-sm text-muted-foreground">Aucun agent SAV</div>
                                 ) : savUsers.slice((savPage - 1) * PAGE_SIZE, savPage * PAGE_SIZE).map((u) => (
                                     <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "emerald")}>
                                         <button onClick={() => handleSelectUser(u)} className="w-full text-left flex items-center gap-3 mb-2.5">
@@ -351,8 +351,8 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                                 <span className="text-xs font-bold text-emerald-600">{u.username.charAt(0).toUpperCase()}</span>
                                             </div>
                                             <div className="min-w-0">
-                                                <div className="text-sm font-medium text-slate-800 truncate">{u.username}</div>
-                                                <div className="text-xs text-slate-400 truncate">{u.email}</div>
+                                                <div className="text-sm font-medium text-foreground truncate">{u.username}</div>
+                                                <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                                             </div>
                                             {selectedUser?.id === u.id && <ChevronRight className="h-4 w-4 text-emerald-400 ml-auto flex-shrink-0" />}
                                         </button>
@@ -361,7 +361,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                                 <UserX className="h-3 w-3" />
                                                 {updatingRoleUserId === u.id ? "..." : "Retirer"}
                                             </button>
-                                            <button onClick={() => handleEditUser(u)} disabled={updatingUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors disabled:opacity-50">
+                                            <button onClick={() => handleEditUser(u)} disabled={updatingUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-muted text-muted-foreground hover:bg-muted border border-border transition-colors disabled:opacity-50">
                                                 <Pencil className="h-3 w-3" />
                                             </button>
                                             <button onClick={() => handleDeleteUser(u)} disabled={updatingUserId === u.id || currentUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-red-50 text-red-500 hover:bg-red-100 border border-red-200 transition-colors disabled:opacity-50">
@@ -372,12 +372,12 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 ))}
                             </div>
                             {Math.ceil(savUsers.length / PAGE_SIZE) > 1 && (
-                                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
-                                    <button onClick={() => setSavPage(p => p - 1)} disabled={savPage <= 1} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                <div className="flex items-center justify-between px-3 py-2 border-t border-border">
+                                    <button onClick={() => setSavPage(p => p - 1)} disabled={savPage <= 1} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                         <ChevronLeft className="h-3.5 w-3.5" />
                                     </button>
-                                    <span className="text-xs text-slate-400">{savPage} / {Math.ceil(savUsers.length / PAGE_SIZE)}</span>
-                                    <button onClick={() => setSavPage(p => p + 1)} disabled={savPage >= Math.ceil(savUsers.length / PAGE_SIZE)} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                    <span className="text-xs text-muted-foreground">{savPage} / {Math.ceil(savUsers.length / PAGE_SIZE)}</span>
+                                    <button onClick={() => setSavPage(p => p + 1)} disabled={savPage >= Math.ceil(savUsers.length / PAGE_SIZE)} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                         <ChevronRight className="h-3.5 w-3.5" />
                                     </button>
                                 </div>
@@ -385,24 +385,24 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                         </div>
 
                         {/* Superviseurs */}
-                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
                                     <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
                                         <Shield className="h-4 w-4 text-violet-600" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-semibold text-slate-800">Superviseurs</p>
-                                        <p className="text-xs text-slate-400">Encadrement SAV</p>
+                                        <p className="text-sm font-semibold text-foreground">Superviseurs</p>
+                                        <p className="text-xs text-muted-foreground">Encadrement SAV</p>
                                     </div>
                                 </div>
                                 <Badge className="bg-violet-50 text-violet-600 border-violet-100 text-xs font-semibold">{superviseurUsers.length}</Badge>
                             </div>
                             <div className="divide-y divide-slate-50">
                                 {isLoading ? (
-                                    <div className="px-5 py-8 text-center text-sm text-slate-400">Chargement...</div>
+                                    <div className="px-5 py-8 text-center text-sm text-muted-foreground">Chargement...</div>
                                 ) : superviseurUsers.length === 0 ? (
-                                    <div className="px-5 py-8 text-center text-sm text-slate-400">Aucun superviseur</div>
+                                    <div className="px-5 py-8 text-center text-sm text-muted-foreground">Aucun superviseur</div>
                                 ) : superviseurUsers.slice((superviseurPage - 1) * PAGE_SIZE, superviseurPage * PAGE_SIZE).map((u) => (
                                     <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "violet")}>
                                         <button onClick={() => handleSelectUser(u)} className="w-full text-left flex items-center gap-3 mb-2.5">
@@ -410,8 +410,8 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                                 <span className="text-xs font-bold text-violet-600">{u.username.charAt(0).toUpperCase()}</span>
                                             </div>
                                             <div className="min-w-0">
-                                                <div className="text-sm font-medium text-slate-800 truncate">{u.username}</div>
-                                                <div className="text-xs text-slate-400 truncate">{u.email}</div>
+                                                <div className="text-sm font-medium text-foreground truncate">{u.username}</div>
+                                                <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                                             </div>
                                             {selectedUser?.id === u.id && <ChevronRight className="h-4 w-4 text-violet-400 ml-auto flex-shrink-0" />}
                                         </button>
@@ -420,7 +420,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                                 <UserX className="h-3 w-3" />
                                                 {updatingRoleUserId === u.id ? "..." : "Retirer"}
                                             </button>
-                                            <button onClick={() => handleEditUser(u)} disabled={updatingUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors disabled:opacity-50">
+                                            <button onClick={() => handleEditUser(u)} disabled={updatingUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-muted text-muted-foreground hover:bg-muted border border-border transition-colors disabled:opacity-50">
                                                 <Pencil className="h-3 w-3" />
                                             </button>
                                             <button onClick={() => handleDeleteUser(u)} disabled={updatingUserId === u.id || currentUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-red-50 text-red-500 hover:bg-red-100 border border-red-200 transition-colors disabled:opacity-50">
@@ -431,12 +431,12 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 ))}
                             </div>
                             {Math.ceil(superviseurUsers.length / PAGE_SIZE) > 1 && (
-                                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
-                                    <button onClick={() => setSuperviseurPage(p => p - 1)} disabled={superviseurPage <= 1} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                <div className="flex items-center justify-between px-3 py-2 border-t border-border">
+                                    <button onClick={() => setSuperviseurPage(p => p - 1)} disabled={superviseurPage <= 1} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                         <ChevronLeft className="h-3.5 w-3.5" />
                                     </button>
-                                    <span className="text-xs text-slate-400">{superviseurPage} / {Math.ceil(superviseurUsers.length / PAGE_SIZE)}</span>
-                                    <button onClick={() => setSuperviseurPage(p => p + 1)} disabled={superviseurPage >= Math.ceil(superviseurUsers.length / PAGE_SIZE)} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                    <span className="text-xs text-muted-foreground">{superviseurPage} / {Math.ceil(superviseurUsers.length / PAGE_SIZE)}</span>
+                                    <button onClick={() => setSuperviseurPage(p => p + 1)} disabled={superviseurPage >= Math.ceil(superviseurUsers.length / PAGE_SIZE)} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                         <ChevronRight className="h-3.5 w-3.5" />
                                     </button>
                                 </div>
@@ -444,24 +444,24 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                         </div>
 
                         {/* Admins */}
-                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
                                     <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
                                         <Crown className="h-4 w-4 text-indigo-600" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-semibold text-slate-800">Admins</p>
-                                        <p className="text-xs text-slate-400">Administrateurs</p>
+                                        <p className="text-sm font-semibold text-foreground">Admins</p>
+                                        <p className="text-xs text-muted-foreground">Administrateurs</p>
                                     </div>
                                 </div>
                                 <Badge className="bg-indigo-50 text-indigo-600 border-indigo-100 text-xs font-semibold">{adminUsers.length}</Badge>
                             </div>
                             <div className="divide-y divide-slate-50">
                                 {isLoading ? (
-                                    <div className="px-5 py-8 text-center text-sm text-slate-400">Chargement...</div>
+                                    <div className="px-5 py-8 text-center text-sm text-muted-foreground">Chargement...</div>
                                 ) : adminUsers.length === 0 ? (
-                                    <div className="px-5 py-8 text-center text-sm text-slate-400">Aucun admin</div>
+                                    <div className="px-5 py-8 text-center text-sm text-muted-foreground">Aucun admin</div>
                                 ) : adminUsers.slice((adminPage - 1) * PAGE_SIZE, adminPage * PAGE_SIZE).map((u) => (
                                     <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "indigo")}>
                                         <button onClick={() => handleSelectUser(u)} className="w-full text-left flex items-center gap-3 mb-2.5">
@@ -469,13 +469,13 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                                 <span className="text-xs font-bold text-indigo-600">{u.username.charAt(0).toUpperCase()}</span>
                                             </div>
                                             <div className="min-w-0">
-                                                <div className="text-sm font-medium text-slate-800 truncate">{u.username}</div>
-                                                <div className="text-xs text-slate-400 truncate">{u.email}</div>
+                                                <div className="text-sm font-medium text-foreground truncate">{u.username}</div>
+                                                <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                                             </div>
                                             {selectedUser?.id === u.id && <ChevronRight className="h-4 w-4 text-indigo-400 ml-auto flex-shrink-0" />}
                                         </button>
                                         <div className="flex items-center gap-1.5 pl-11">
-                                            <button onClick={() => handleEditUser(u)} disabled={updatingUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-slate-50 text-slate-600 hover:bg-slate-100 border border-slate-200 transition-colors disabled:opacity-50">
+                                            <button onClick={() => handleEditUser(u)} disabled={updatingUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-muted text-muted-foreground hover:bg-muted border border-border transition-colors disabled:opacity-50">
                                                 <Pencil className="h-3 w-3" /> Modifier
                                             </button>
                                             <button onClick={() => handleDeleteUser(u)} disabled={updatingUserId === u.id || currentUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-red-50 text-red-500 hover:bg-red-100 border border-red-200 transition-colors disabled:opacity-50">
@@ -486,12 +486,12 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 ))}
                             </div>
                             {Math.ceil(adminUsers.length / PAGE_SIZE) > 1 && (
-                                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
-                                    <button onClick={() => setAdminPage(p => p - 1)} disabled={adminPage <= 1} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                <div className="flex items-center justify-between px-3 py-2 border-t border-border">
+                                    <button onClick={() => setAdminPage(p => p - 1)} disabled={adminPage <= 1} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                         <ChevronLeft className="h-3.5 w-3.5" />
                                     </button>
-                                    <span className="text-xs text-slate-400">{adminPage} / {Math.ceil(adminUsers.length / PAGE_SIZE)}</span>
-                                    <button onClick={() => setAdminPage(p => p + 1)} disabled={adminPage >= Math.ceil(adminUsers.length / PAGE_SIZE)} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                    <span className="text-xs text-muted-foreground">{adminPage} / {Math.ceil(adminUsers.length / PAGE_SIZE)}</span>
+                                    <button onClick={() => setAdminPage(p => p + 1)} disabled={adminPage >= Math.ceil(adminUsers.length / PAGE_SIZE)} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                         <ChevronRight className="h-3.5 w-3.5" />
                                     </button>
                                 </div>
@@ -499,15 +499,15 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                         </div>
 
                         {/* Conversations */}
-                        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                            <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
                                     <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
                                         <MessageCircle className="h-4 w-4 text-violet-600" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-semibold text-slate-800">Conversations</p>
-                                        <p className="text-xs text-slate-400">{selectedUser ? selectedUser.username : "Sélectionner"}</p>
+                                        <p className="text-sm font-semibold text-foreground">Conversations</p>
+                                        <p className="text-xs text-muted-foreground">{selectedUser ? selectedUser.username : "Sélectionner"}</p>
                                     </div>
                                 </div>
                                 {sessions.length > 0 && (
@@ -515,7 +515,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 )}
                             </div>
                             {selectedUser && (
-                                <div className="px-4 py-2.5 border-b border-slate-100">
+                                <div className="px-4 py-2.5 border-b border-border">
                                     <Input
                                         value={sessionQuery}
                                         onChange={(e) => setSessionQuery(e.target.value)}
@@ -527,14 +527,14 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                             <div className="divide-y divide-slate-50">
                                 {!selectedUser ? (
                                     <div className="px-5 py-10 text-center">
-                                        <MessageCircle className="h-8 w-8 text-slate-200 mx-auto mb-2" />
-                                        <p className="text-sm text-slate-400">Sélectionne un utilisateur</p>
+                                        <MessageCircle className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+                                        <p className="text-sm text-muted-foreground">Sélectionne un utilisateur</p>
                                     </div>
                                 ) : sessionQuery.trim() ? (
                                     isSearchingSessions ? (
-                                        <div className="px-5 py-8 text-center text-sm text-slate-400">Recherche...</div>
+                                        <div className="px-5 py-8 text-center text-sm text-muted-foreground">Recherche...</div>
                                     ) : !sessionSearchResults || sessionSearchResults.length === 0 ? (
-                                        <div className="px-5 py-8 text-center text-sm text-slate-400">Aucun résultat pour « {sessionQuery.trim()} »</div>
+                                        <div className="px-5 py-8 text-center text-sm text-muted-foreground">Aucun résultat pour « {sessionQuery.trim()} »</div>
                                     ) : (
                                         sessionSearchResults.map((s) => (
                                             <div
@@ -548,18 +548,18 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                                         setSelectedSession(s)
                                                     }
                                                 }}
-                                                className={`w-full text-left px-4 py-3 transition-colors cursor-pointer ${selectedSession?.id === s.id ? "bg-violet-50/70" : "hover:bg-slate-50/80"}`}
+                                                className={`w-full text-left px-4 py-3 transition-colors cursor-pointer ${selectedSession?.id === s.id ? "bg-violet-50/70" : "hover:bg-muted/80"}`}
                                             >
                                                 <div className="flex items-start justify-between gap-2">
                                                     <div className="min-w-0">
-                                                        <div className="text-sm font-medium text-slate-800 truncate">{s.title || "Sans titre"}</div>
+                                                        <div className="text-sm font-medium text-foreground truncate">{s.title || "Sans titre"}</div>
                                                         {s.snippet ? (
-                                                            <div className="text-xs text-slate-400 mt-0.5 line-clamp-2">{renderSnippet(s.snippet)}</div>
+                                                            <div className="text-xs text-muted-foreground mt-0.5 line-clamp-2">{renderSnippet(s.snippet)}</div>
                                                         ) : (
-                                                            <div className="text-xs text-slate-400 mt-0.5">#{s.id}</div>
+                                                            <div className="text-xs text-muted-foreground mt-0.5">#{s.id}</div>
                                                         )}
                                                     </div>
-                                                    <div className={`flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${s.status === "closed" ? "bg-slate-100 text-slate-500" : s.status === "transferred" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                                    <div className={`flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ${s.status === "closed" ? "bg-muted text-muted-foreground" : s.status === "transferred" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
                                                         {s.status === "closed" ? <><CheckCircle2 className="h-2.5 w-2.5" /> Clôturée</>
                                                             : s.status === "transferred" ? <><AlertCircle className="h-2.5 w-2.5" /> Transférée</>
                                                             : <><CircleDot className="h-2.5 w-2.5" /> Ouverte</>}
@@ -569,7 +569,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                         ))
                                     )
                                 ) : sessions.length === 0 ? (
-                                    <div className="px-5 py-8 text-center text-sm text-slate-400">Aucune session</div>
+                                    <div className="px-5 py-8 text-center text-sm text-muted-foreground">Aucune session</div>
                                 ) : sessions.slice((sessionsPage - 1) * PAGE_SIZE, sessionsPage * PAGE_SIZE).map((s) => (
                                     <div
                                         key={s.id}
@@ -582,15 +582,15 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                                 setSelectedSession(s)
                                             }
                                         }}
-                                        className={`w-full text-left px-4 py-3 transition-colors cursor-pointer ${selectedSession?.id === s.id ? "bg-violet-50/70" : "hover:bg-slate-50/80"}`}
+                                        className={`w-full text-left px-4 py-3 transition-colors cursor-pointer ${selectedSession?.id === s.id ? "bg-violet-50/70" : "hover:bg-muted/80"}`}
                                     >
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0">
-                                                <div className="text-sm font-medium text-slate-800 truncate">{s.title || "Sans titre"}</div>
-                                                <div className="text-xs text-slate-400 mt-0.5">#{s.id}</div>
+                                                <div className="text-sm font-medium text-foreground truncate">{s.title || "Sans titre"}</div>
+                                                <div className="text-xs text-muted-foreground mt-0.5">#{s.id}</div>
                                             </div>
                                             <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
-                                                <div className={`flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full ${s.status === "closed" ? "bg-slate-100 text-slate-500" : s.status === "transferred" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
+                                                <div className={`flex items-center gap-1 text-[11px] font-medium px-1.5 py-0.5 rounded-full ${s.status === "closed" ? "bg-muted text-muted-foreground" : s.status === "transferred" ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>
                                                     {s.status === "closed" ? <><CheckCircle2 className="h-2.5 w-2.5" /> Clôturée</>
                                                         : s.status === "transferred" ? <><AlertCircle className="h-2.5 w-2.5" /> Transférée</>
                                                         : <><CircleDot className="h-2.5 w-2.5" /> Ouverte</>}
@@ -599,7 +599,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); handleCloseSession(s) }}
                                                         disabled={closingSessionId === s.id}
-                                                        className="text-[11px] px-2 py-0.5 rounded-md bg-slate-50 text-slate-500 hover:bg-slate-100 border border-slate-200 transition-colors disabled:opacity-50"
+                                                        className="text-[11px] px-2 py-0.5 rounded-md bg-muted text-muted-foreground hover:bg-muted border border-border transition-colors disabled:opacity-50"
                                                     >
                                                         {closingSessionId === s.id ? "..." : "Clôturer"}
                                                     </button>
@@ -610,12 +610,12 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 ))}
                             </div>
                             {!sessionQuery.trim() && Math.ceil(sessions.length / PAGE_SIZE) > 1 && (
-                                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
-                                    <button onClick={() => setSessionsPage(p => p - 1)} disabled={sessionsPage <= 1} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                <div className="flex items-center justify-between px-3 py-2 border-t border-border">
+                                    <button onClick={() => setSessionsPage(p => p - 1)} disabled={sessionsPage <= 1} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                         <ChevronLeft className="h-3.5 w-3.5" />
                                     </button>
-                                    <span className="text-xs text-slate-400">{sessionsPage} / {Math.ceil(sessions.length / PAGE_SIZE)}</span>
-                                    <button onClick={() => setSessionsPage(p => p + 1)} disabled={sessionsPage >= Math.ceil(sessions.length / PAGE_SIZE)} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                    <span className="text-xs text-muted-foreground">{sessionsPage} / {Math.ceil(sessions.length / PAGE_SIZE)}</span>
+                                    <button onClick={() => setSessionsPage(p => p + 1)} disabled={sessionsPage >= Math.ceil(sessions.length / PAGE_SIZE)} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                         <ChevronRight className="h-3.5 w-3.5" />
                                     </button>
                                 </div>
@@ -625,15 +625,15 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
 
                     {/* Platform Overview */}
                     <div className="grid gap-5 lg:grid-cols-3">
-                        <div className="lg:col-span-2 bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                        <div className="lg:col-span-2 bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                            <div className="px-6 py-4 border-b border-border flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
                                     <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">
                                         <Headphones className="h-4 w-4 text-amber-600" />
                                     </div>
                                     <div>
-                                        <p className="text-sm font-semibold text-slate-800">Transferts en cours</p>
-                                        <p className="text-xs text-slate-400">Sessions en attente d&apos;un agent SAV</p>
+                                        <p className="text-sm font-semibold text-foreground">Transferts en cours</p>
+                                        <p className="text-xs text-muted-foreground">Sessions en attente d&apos;un agent SAV</p>
                                     </div>
                                 </div>
                                 <Badge className="bg-amber-50 text-amber-600 border-amber-100 text-xs font-semibold">{transferredSessions.length}</Badge>
@@ -642,8 +642,8 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 {transferredSessions.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-12 gap-2">
                                         <CheckCircle2 className="h-8 w-8 text-emerald-200" />
-                                        <p className="text-sm text-slate-400">Aucun transfert en attente</p>
-                                        <p className="text-xs text-slate-300">Tout est sous contrôle</p>
+                                        <p className="text-sm text-muted-foreground">Aucun transfert en attente</p>
+                                        <p className="text-xs text-muted-foreground">Tout est sous contrôle</p>
                                     </div>
                                 ) : transferredSessions.slice((transfersPage - 1) * PAGE_SIZE, transfersPage * PAGE_SIZE).map((s) => (
                                     <div key={s.id} className="px-5 py-3 flex items-center gap-3">
@@ -651,25 +651,25 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                             {s.username.charAt(0).toUpperCase()}
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <div className="text-sm font-medium text-slate-800">{s.username}</div>
-                                            <div className="text-xs text-slate-400 truncate">{s.title || "Sans titre"}</div>
+                                            <div className="text-sm font-medium text-foreground">{s.username}</div>
+                                            <div className="text-xs text-muted-foreground truncate">{s.title || "Sans titre"}</div>
                                         </div>
                                         {s.transfer_reason && (
-                                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${REASON_STYLES[s.transfer_reason] ?? "bg-slate-100 text-slate-600 border-slate-200"}`}>
+                                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${REASON_STYLES[s.transfer_reason] ?? "bg-muted text-muted-foreground border-border"}`}>
                                                 {REASON_LABELS[s.transfer_reason] ?? s.transfer_reason}
                                             </span>
                                         )}
-                                        <span className="text-xs text-slate-400 flex-shrink-0">#{s.id}</span>
+                                        <span className="text-xs text-muted-foreground flex-shrink-0">#{s.id}</span>
                                     </div>
                                 ))}
                             </div>
                             {Math.ceil(transferredSessions.length / PAGE_SIZE) > 1 && (
-                                <div className="flex items-center justify-between px-3 py-2 border-t border-slate-100">
-                                    <button onClick={() => setTransfersPage(p => p - 1)} disabled={transfersPage <= 1} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                <div className="flex items-center justify-between px-3 py-2 border-t border-border">
+                                    <button onClick={() => setTransfersPage(p => p - 1)} disabled={transfersPage <= 1} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                         <ChevronLeft className="h-3.5 w-3.5" />
                                     </button>
-                                    <span className="text-xs text-slate-400">{transfersPage} / {Math.ceil(transferredSessions.length / PAGE_SIZE)}</span>
-                                    <button onClick={() => setTransfersPage(p => p + 1)} disabled={transfersPage >= Math.ceil(transferredSessions.length / PAGE_SIZE)} className="p-1 rounded text-slate-400 hover:text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed">
+                                    <span className="text-xs text-muted-foreground">{transfersPage} / {Math.ceil(transferredSessions.length / PAGE_SIZE)}</span>
+                                    <button onClick={() => setTransfersPage(p => p + 1)} disabled={transfersPage >= Math.ceil(transferredSessions.length / PAGE_SIZE)} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
                                         <ChevronRight className="h-3.5 w-3.5" />
                                     </button>
                                 </div>
@@ -678,51 +678,51 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
 
                         <div className="space-y-5">
                             <Link href="/analytics" className="block group">
-                                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:border-indigo-200 hover:shadow-md transition-all">
+                                <div className="bg-card rounded-xl border border-border shadow-sm p-5 hover:border-indigo-200 hover:shadow-md transition-all">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center group-hover:bg-indigo-100 transition-colors">
                                             <BarChart2 className="h-5 w-5 text-indigo-600" />
                                         </div>
                                         <div className="flex-1">
-                                            <p className="text-sm font-semibold text-slate-800">Analytique</p>
-                                            <p className="text-xs text-slate-400">Performance IA &amp; métriques</p>
+                                            <p className="text-sm font-semibold text-foreground">Analytique</p>
+                                            <p className="text-xs text-muted-foreground">Performance IA &amp; métriques</p>
                                         </div>
-                                        <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-indigo-500 transition-colors" />
+                                        <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-indigo-500 transition-colors" />
                                     </div>
                                 </div>
                             </Link>
                             <Link href="/knowledge-base" className="block group">
-                                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 hover:border-emerald-200 hover:shadow-md transition-all">
+                                <div className="bg-card rounded-xl border border-border shadow-sm p-5 hover:border-emerald-200 hover:shadow-md transition-all">
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center group-hover:bg-emerald-100 transition-colors">
                                             <BookOpen className="h-5 w-5 text-emerald-600" />
                                         </div>
                                         <div className="flex-1">
-                                            <p className="text-sm font-semibold text-slate-800">Base de connaissances</p>
-                                            <p className="text-xs text-slate-400">Gérer les sources IA</p>
+                                            <p className="text-sm font-semibold text-foreground">Base de connaissances</p>
+                                            <p className="text-xs text-muted-foreground">Gérer les sources IA</p>
                                         </div>
-                                        <ArrowRight className="h-4 w-4 text-slate-300 group-hover:text-emerald-500 transition-colors" />
+                                        <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-emerald-500 transition-colors" />
                                     </div>
                                 </div>
                             </Link>
-                            <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+                            <div className="bg-card rounded-xl border border-border shadow-sm p-5">
                                 <div className="flex items-center gap-3 mb-4">
                                     <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center">
                                         <TrendingUp className="h-5 w-5 text-violet-600" />
                                     </div>
-                                    <p className="text-sm font-semibold text-slate-800">Résumé</p>
+                                    <p className="text-sm font-semibold text-foreground">Résumé</p>
                                 </div>
                                 <div className="space-y-2.5">
                                     <div className="flex items-center justify-between text-sm">
-                                        <span className="text-slate-500">Clients</span>
-                                        <span className="font-semibold text-slate-700">{users.length}</span>
+                                        <span className="text-muted-foreground">Clients</span>
+                                        <span className="font-semibold text-foreground">{users.length}</span>
                                     </div>
                                     <div className="flex items-center justify-between text-sm">
-                                        <span className="text-slate-500">Agents SAV</span>
-                                        <span className="font-semibold text-slate-700">{savUsers.length}</span>
+                                        <span className="text-muted-foreground">Agents SAV</span>
+                                        <span className="font-semibold text-foreground">{savUsers.length}</span>
                                     </div>
                                     <div className="flex items-center justify-between text-sm">
-                                        <span className="text-slate-500">Transferts en attente</span>
+                                        <span className="text-muted-foreground">Transferts en attente</span>
                                         <span className="font-semibold text-amber-600">{transferredSessions.length}</span>
                                     </div>
                                 </div>
@@ -786,7 +786,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                         <AlertDialogTitle>Supprimer le compte ?</AlertDialogTitle>
                         <AlertDialogDescription>
                             Vous êtes sur le point de supprimer le compte de{" "}
-                            <span className="font-semibold text-slate-800">{deletingUser?.username}</span>{" "}
+                            <span className="font-semibold text-foreground">{deletingUser?.username}</span>{" "}
                             ({deletingUser?.email}). Cette action est irréversible.
                         </AlertDialogDescription>
                     </AlertDialogHeader>

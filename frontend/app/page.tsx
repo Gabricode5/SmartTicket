@@ -9,7 +9,7 @@ import {
 
 export default function LandingPage() {
     return (
-        <div className="min-h-screen bg-white flex flex-col">
+        <div className="force-light min-h-screen bg-white flex flex-col">
 
             {/* ── Navbar ── */}
             <header className="sticky top-0 z-50 border-b border-slate-100 bg-white/80 backdrop-blur-sm">

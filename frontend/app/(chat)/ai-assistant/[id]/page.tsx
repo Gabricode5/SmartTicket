@@ -335,23 +335,23 @@ export default function AiAssistantPage() {
     const isLastMessage = (id: string) => messages[messages.length - 1]?.id === id
 
     return (
-        <div className="flex flex-col h-full bg-slate-50/30">
-            <header className="h-16 border-b bg-white flex items-center justify-between px-6 shrink-0 shadow-sm">
+        <div className="flex flex-col h-full bg-muted/30">
+            <header className="h-16 border-b bg-card flex items-center justify-between px-6 shrink-0 shadow-sm">
                 <div className="flex items-center gap-3">
                     <Avatar className="h-10 w-10 border-2 border-primary/10">
                         <AvatarFallback className="bg-primary/5 text-primary text-xs font-bold">{username.slice(0, 2).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div>
-                        <h2 className="font-bold text-sm text-slate-800">{username} <span className="text-slate-400 font-normal ml-1">#S{sessionId}</span></h2>
-                        <p className={`text-[11px] font-medium flex items-center gap-1 ${isClosed ? "text-slate-400" : isTransferred ? "text-amber-600" : "text-green-600"}`}>
-                            <span className={`h-1.5 w-1.5 rounded-full ${isClosed ? "bg-slate-400" : isTransferred ? "bg-amber-500 animate-pulse" : "bg-green-500 animate-pulse"}`}></span>
+                        <h2 className="font-bold text-sm text-foreground">{username} <span className="text-muted-foreground font-normal ml-1">#S{sessionId}</span></h2>
+                        <p className={`text-[11px] font-medium flex items-center gap-1 ${isClosed ? "text-muted-foreground" : isTransferred ? "text-amber-600" : "text-green-600"}`}>
+                            <span className={`h-1.5 w-1.5 rounded-full ${isClosed ? "bg-muted-foreground" : isTransferred ? "bg-amber-500 animate-pulse" : "bg-green-500 animate-pulse"}`}></span>
                             {isClosed ? "Conversation clôturée" : isTransferred ? "En attente d'un agent SAV" : "Assistant IA Actif"}
                         </p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" className="text-slate-400" aria-label="Rechercher dans la conversation"><Search className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" className="text-slate-400" aria-label="Plus d'options"><MoreVertical className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label="Rechercher dans la conversation"><Search className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label="Plus d'options"><MoreVertical className="h-4 w-4" /></Button>
                 </div>
             </header>
 
@@ -364,21 +364,21 @@ export default function AiAssistantPage() {
                             <div className="bg-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-xl shadow-indigo-100 mb-6">
                                 <Bot className="h-9 w-9 text-white" />
                             </div>
-                            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Prêt à booster votre SAV ?</h1>
-                            <p className="text-slate-500 text-sm max-w-sm mx-auto">Choisissez une action rapide ou posez votre question ci-dessous.</p>
+                            <h1 className="text-3xl font-black text-foreground tracking-tight">Prêt à booster votre SAV ?</h1>
+                            <p className="text-muted-foreground text-sm max-w-sm mx-auto">Choisissez une action rapide ou posez votre question ci-dessous.</p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full px-4">
                             {SUGGESTIONS.map((s, i) => (
                                 <Card
                                     key={i}
                                     onClick={() => { if (!isClosed) void handleSend(undefined, s.prompt) }}
-                                    className={`p-4 border-2 transition-all group bg-white ${isClosed ? "border-slate-100 opacity-50 cursor-not-allowed" : "border-slate-100 hover:border-indigo-500 hover:shadow-lg cursor-pointer"}`}
+                                    className={`p-4 border-2 transition-all group bg-card ${isClosed ? "border-border opacity-50 cursor-not-allowed" : "border-border hover:border-indigo-500 hover:shadow-lg cursor-pointer"}`}
                                 >
                                     <div className="flex items-start gap-4">
-                                        <div className="p-3 rounded-xl bg-slate-50 group-hover:bg-indigo-50 transition-colors">{s.icon}</div>
+                                        <div className="p-3 rounded-xl bg-muted group-hover:bg-indigo-50 transition-colors">{s.icon}</div>
                                         <div>
-                                            <div className="font-bold text-sm text-slate-800 group-hover:text-indigo-600 transition-colors">{s.title}</div>
-                                            <div className="text-[11px] text-slate-400">{s.desc}</div>
+                                            <div className="font-bold text-sm text-foreground group-hover:text-indigo-600 transition-colors">{s.title}</div>
+                                            <div className="text-[11px] text-muted-foreground">{s.desc}</div>
                                         </div>
                                     </div>
                                 </Card>
@@ -394,7 +394,7 @@ export default function AiAssistantPage() {
                                             ? "bg-indigo-600 text-white"
                                             : m.role === "sav"
                                                 ? "bg-emerald-600 text-white"
-                                                : "bg-white border-2 border-slate-100 text-slate-700"
+                                                : "bg-card border-2 border-border text-foreground"
                                         }`}>
                                         {m.role === "user" ? (
                                             m.content
@@ -405,15 +405,15 @@ export default function AiAssistantPage() {
                                                 {m.content}
                                             </Streamdown>
                                         ) : (
-                                            <span className="inline-flex gap-1 items-center text-slate-400">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-slate-300 animate-bounce [animation-delay:0ms]" />
-                                                <span className="h-1.5 w-1.5 rounded-full bg-slate-300 animate-bounce [animation-delay:150ms]" />
-                                                <span className="h-1.5 w-1.5 rounded-full bg-slate-300 animate-bounce [animation-delay:300ms]" />
+                                            <span className="inline-flex gap-1 items-center text-muted-foreground">
+                                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:0ms]" />
+                                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:150ms]" />
+                                                <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:300ms]" />
                                             </span>
                                         )}
                                     </div>
                                     <div className="flex items-center gap-2 px-2 mt-1">
-                                        <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">
+                                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">
                                             {m.role === "user" ? username : m.role === "sav" ? "Agent SAV" : "Assistant IA"} • {m.createdAt}
                                         </span>
                                         {m.role === "ai" && m.content && !(isSending && isLastMessage(m.id)) && (
@@ -423,7 +423,7 @@ export default function AiAssistantPage() {
                                                     disabled={m.feedback !== null && m.feedback !== undefined}
                                                     onClick={() => handleFeedback(m.id, -1)}
                                                     aria-label="Marquer comme mauvaise réponse"
-                                                    className={`p-0.5 rounded transition-colors disabled:cursor-default ${m.feedback === -1 ? "text-red-500" : "text-slate-300 hover:text-slate-500"}`}
+                                                    className={`p-0.5 rounded transition-colors disabled:cursor-default ${m.feedback === -1 ? "text-red-500" : "text-muted-foreground hover:text-foreground"}`}
                                                 >
                                                     <ThumbsDown className={`h-3.5 w-3.5 ${m.feedback === -1 ? "fill-red-500" : ""}`} />
                                                 </button>
@@ -438,7 +438,7 @@ export default function AiAssistantPage() {
                 <div ref={bottomRef} />
             </div>
 
-            <div className="bg-white border-t border-slate-100 shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
+            <div className="bg-card border-t border-border shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
                 {/* Transferred banner */}
                 {isTransferred && (
                     <div className="flex items-center justify-between gap-2 px-6 py-2.5 bg-amber-50 border-b border-amber-100 text-amber-700 text-sm">
@@ -455,7 +455,7 @@ export default function AiAssistantPage() {
                                 type="button"
                                 onClick={() => void handleResolve()}
                                 disabled={isResolving}
-                                className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full border border-amber-200 bg-white text-amber-700 hover:bg-amber-100 transition-colors text-xs font-bold uppercase disabled:opacity-50"
+                                className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full border border-amber-200 bg-card text-amber-700 hover:bg-amber-100 transition-colors text-xs font-bold uppercase disabled:opacity-50"
                             >
                                 <Bot className="h-3.5 w-3.5" />
                                 {isResolving ? "…" : "Reprendre avec l'IA"}
@@ -466,11 +466,11 @@ export default function AiAssistantPage() {
 
                 {/* Transfer reason panel */}
                 {showTransferPanel && (
-                    <div className="px-6 py-3 border-b border-slate-100 bg-slate-50/60">
+                    <div className="px-6 py-3 border-b border-border bg-muted/60">
                         <div className="max-w-4xl mx-auto">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">Pourquoi souhaitez-vous parler à un agent ?</span>
-                                <button onClick={() => setShowTransferPanel(false)} aria-label="Fermer le panneau de transfert" className="text-slate-400 hover:text-slate-600">
+                                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pourquoi souhaitez-vous parler à un agent ?</span>
+                                <button onClick={() => setShowTransferPanel(false)} aria-label="Fermer le panneau de transfert" className="text-muted-foreground hover:text-foreground">
                                     <X className="h-4 w-4" />
                                 </button>
                             </div>
@@ -494,14 +494,14 @@ export default function AiAssistantPage() {
                     <div className="max-w-4xl mx-auto space-y-4">
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
-                                <div className="flex items-center gap-3 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-100">
+                                <div className="flex items-center gap-3 bg-muted px-3 py-1.5 rounded-full border border-border">
                                     <Switch checked={aiEnabled} onCheckedChange={setAiEnabled} disabled={isClosed || isTransferred} className="data-[state=checked]:bg-indigo-600" />
-                                    <span className="text-[11px] font-bold text-slate-500 uppercase">IA Active</span>
+                                    <span className="text-[11px] font-bold text-muted-foreground uppercase">IA Active</span>
                                 </div>
                                 {!isClosed && !isTransferred && (
                                     <button
                                         onClick={() => setShowTransferPanel(v => !v)}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50 text-slate-500 hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition-colors text-[11px] font-bold uppercase"
+                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-muted text-muted-foreground hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition-colors text-[11px] font-bold uppercase"
                                     >
                                         <Headphones className="h-3.5 w-3.5" />
                                         Agent humain
@@ -529,7 +529,7 @@ export default function AiAssistantPage() {
                                             ? "Envoyez un message à l'agent SAV..."
                                             : "Posez votre question à l'assistant..."
                                 }
-                                className="h-14 pl-6 pr-24 rounded-2xl border-2 border-slate-100 focus-visible:ring-indigo-500 bg-slate-50/30 transition-all text-base"
+                                className="h-14 pl-6 pr-24 rounded-2xl border-2 border-border focus-visible:ring-indigo-500 bg-muted/30 transition-all text-base"
                             />
                             <div className="absolute right-2 top-2 flex items-center gap-1">
                                 <Button type="submit" disabled={isClosed || isSending || !input.trim()} size="sm" className="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all">

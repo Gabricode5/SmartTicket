@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useTheme } from "next-themes"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { NotificationBell } from "@/components/NotificationBell"
 import { Button } from "@/components/ui/button"
@@ -23,6 +24,8 @@ import {
     ChevronRight,
     ChevronDown,
     Headphones,
+    Sun,
+    Moon,
 } from "lucide-react"
 
 interface Conversation {
@@ -60,6 +63,9 @@ export function AppSidebar() {
     const pathname = usePathname()
 
     const { user: apiUser } = useCurrentUser()
+    const { resolvedTheme, setTheme } = useTheme()
+    const [mountedTheme, setMountedTheme] = useState(false)
+    useEffect(() => setMountedTheme(true), [])
     const [conversations, setConversations] = useState<Conversation[]>([])
     const [isLoadingConversations, setIsLoadingConversations] = useState(false)
     const [convoPage, setConvoPage] = useState(1)
@@ -399,6 +405,14 @@ export function AppSidebar() {
                         </p>
                     </div>
                     <div className="flex items-center gap-1">
+                        <button
+                            type="button"
+                            onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+                            className="p-1.5 rounded-md text-sidebar-foreground/40 hover:text-primary hover:bg-primary/10 transition-all"
+                            title={mountedTheme && resolvedTheme === "dark" ? "Passer en thème clair" : "Passer en thème sombre"}
+                        >
+                            {mountedTheme && resolvedTheme === "dark" ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                        </button>
                         <Link
                             href="/settings"
                             className={cn(
