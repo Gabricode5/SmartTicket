@@ -46,30 +46,34 @@ function makeId(): string {
     return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+// Suggestions volontairement génériques (suivi de commande, retours, contact, compte) plutôt
+// que spécifiques à un métier (l'ancienne version, centrée Stripe/CVV/litige, supposait à tort
+// que chaque client déployé traite des paiements Stripe — faux pour la plupart des clients de
+// cette plateforme multi-tenant). Alignées sur l'exemple déjà utilisé sur la landing page.
 const SUGGESTIONS = [
     {
-        title: "Remboursement Stripe",
-        desc: "Depuis le Dashboard Stripe",
+        title: "Suivre ma commande",
+        desc: "Statut et livraison",
         icon: <Smile className="h-4 w-4 text-amber-500" />,
-        prompt: "Comment rembourser un client depuis le Dashboard Stripe ?"
+        prompt: "Comment puis-je suivre ma commande ?"
     },
     {
-        title: "Annuler un remboursement",
-        desc: "Remboursement déjà initié",
+        title: "Retour ou remboursement",
+        desc: "Politique de retour",
         icon: <FileText className="h-4 w-4 text-blue-500" />,
-        prompt: "Peut-on annuler un remboursement déjà initié ?"
+        prompt: "Quelle est la politique de retour ou de remboursement ?"
     },
     {
-        title: "Erreur carte ou CVV",
-        desc: "Paiement refusé côté client",
+        title: "Contacter un agent",
+        desc: "Besoin d'une aide humaine",
         icon: <MessageCircle className="h-4 w-4 text-emerald-500" />,
-        prompt: "Que faire si un client entre un mauvais numéro de carte ou un CVV incorrect ?"
+        prompt: "Comment puis-je être mis en relation avec un agent humain ?"
     },
     {
-        title: "Délai de litige",
-        desc: "Réponse à un dispute",
+        title: "Mon compte",
+        desc: "Gérer mes informations",
         icon: <Zap className="h-4 w-4 text-purple-500" />,
-        prompt: "Combien de temps ai-je pour répondre à un litige ?"
+        prompt: "Comment modifier les informations de mon compte ?"
     },
 ]
 

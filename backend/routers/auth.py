@@ -330,6 +330,7 @@ def export_my_data(current_user: str = Depends(get_current_user), db: Session = 
             "id": s.id,
             "title": s.title,
             "status": s.status,
+            "date_creation": s.date_creation.strftime("%d/%m/%Y") if s.date_creation else None,
             "messages": [
                 {
                     "auteur": m.type_envoyeur,
