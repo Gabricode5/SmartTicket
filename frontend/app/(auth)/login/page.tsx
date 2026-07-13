@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { ArrowLeft, Eye, EyeOff } from "lucide-react"
+import { LanguageToggle } from "@/components/LanguageToggle"
+import { useLocale } from "@/lib/i18n/LocaleContext"
 
 export default function LoginPage() {
     return <LoginForm />
@@ -12,6 +14,7 @@ export default function LoginPage() {
 
 function LoginForm() {
     const router = useRouter()
+    const { messages: t } = useLocale()
     const [error, setError] = useState("")
     const [isLoading, setIsLoading] = useState(false)
     const [showPassword, setShowPassword] = useState(false)
@@ -48,16 +51,16 @@ function LoginForm() {
             } else if (typeof data.detail === "object" && data.detail?.code === "email_not_verified") {
                 setNeedsVerification(true)
                 setPendingEmail(email)
-                setError(data.detail.message || "Adresse email non vérifiée.")
+                setError(data.detail.message || t.login.errorEmailNotVerified)
             } else if (typeof data.detail === "string") {
                 setError(data.detail)
             } else if (Array.isArray(data.detail)) {
-                setError(data.detail[0]?.msg || "Données invalides.")
+                setError(data.detail[0]?.msg || t.login.errorInvalidData)
             } else {
-                setError("Échec de la connexion.")
+                setError(t.login.errorLoginFailed)
             }
         } catch {
-            setError("Impossible de contacter le serveur.")
+            setError(t.login.errorNetwork)
         } finally {
             setIsLoading(false)
         }
@@ -87,11 +90,14 @@ function LoginForm() {
                     className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 transition-colors group"
                 >
                     <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
-                    Retour à l&apos;accueil
+                    {t.login.backToHome}
                 </Link>
-                <div className="flex items-center gap-2 font-bold text-slate-800">
-                    <Image src="/logo_smartticket.png" alt="SmartTicket" width={28} height={28} className="h-7 w-7" />
-                    <span>SmartTicket</span>
+                <div className="flex items-center gap-3">
+                    <LanguageToggle />
+                    <div className="flex items-center gap-2 font-bold text-slate-800">
+                        <Image src="/logo_smartticket.png" alt="SmartTicket" width={28} height={28} className="h-7 w-7" />
+                        <span>SmartTicket</span>
+                    </div>
                 </div>
             </header>
 
@@ -107,9 +113,9 @@ function LoginForm() {
                             <div className="inline-flex items-center justify-center w-12 h-12 mb-4">
                                 <Image src="/logo_smartticket.png" alt="SmartTicket" width={48} height={48} className="w-12 h-12" />
                             </div>
-                            <h1 className="text-2xl font-bold text-slate-900">Bon retour !</h1>
+                            <h1 className="text-2xl font-bold text-slate-900">{t.login.title}</h1>
                             <p className="text-slate-500 text-sm mt-1">
-                                Connectez-vous à votre espace SmartTicket
+                                {t.login.subtitle}
                             </p>
                         </div>
 
@@ -123,7 +129,7 @@ function LoginForm() {
                                     </div>
                                     {needsVerification && (
                                         resendSent ? (
-                                            <p className="text-xs text-red-600">Si un compte existe avec cet email, un nouveau lien vient d&apos;être envoyé.</p>
+                                            <p className="text-xs text-red-600">{t.login.verificationResent}</p>
                                         ) : (
                                             <button
                                                 type="button"
@@ -131,7 +137,7 @@ function LoginForm() {
                                                 disabled={isResending}
                                                 className="text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:underline disabled:opacity-60"
                                             >
-                                                {isResending ? "Envoi…" : "Renvoyer l'email de vérification"}
+                                                {isResending ? t.login.resending : t.login.resendVerification}
                                             </button>
                                         )
                                     )}
@@ -141,13 +147,13 @@ function LoginForm() {
                             {/* Email */}
                             <div className="space-y-1.5">
                                 <label htmlFor="email" className="block text-sm font-medium text-slate-700">
-                                    Adresse email
+                                    {t.login.emailLabel}
                                 </label>
                                 <input
                                     id="email"
                                     name="email"
                                     type="email"
-                                    placeholder="vous@exemple.com"
+                                    placeholder={t.login.emailPlaceholder}
                                     required
                                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
                                 />
@@ -157,13 +163,13 @@ function LoginForm() {
                             <div className="space-y-1.5">
                                 <div className="flex items-center justify-between">
                                     <label htmlFor="password" className="block text-sm font-medium text-slate-700">
-                                        Mot de passe
+                                        {t.login.passwordLabel}
                                     </label>
                                     <Link
                                         href="/forgot-password"
                                         className="text-xs text-indigo-600 hover:text-indigo-700 hover:underline"
                                     >
-                                        Mot de passe oublié ?
+                                        {t.login.forgotPassword}
                                     </Link>
                                 </div>
                                 <div className="relative">
@@ -196,24 +202,24 @@ function LoginForm() {
                                 {isLoading ? (
                                     <span className="flex items-center justify-center gap-2">
                                         <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                        Connexion…
+                                        {t.login.submitting}
                                     </span>
-                                ) : "Se connecter"}
+                                ) : t.login.submit}
                             </button>
                         </form>
 
                         {/* Divider */}
                         <div className="flex items-center gap-3 my-6">
                             <div className="flex-1 h-px bg-slate-100" />
-                            <span className="text-xs text-slate-400">ou</span>
+                            <span className="text-xs text-slate-400">{t.login.or}</span>
                             <div className="flex-1 h-px bg-slate-100" />
                         </div>
 
                         {/* Sign up */}
                         <p className="text-center text-sm text-slate-500">
-                            Pas encore de compte ?{" "}
+                            {t.login.noAccount}{" "}
                             <Link href="/sign-up" className="text-indigo-600 font-medium hover:text-indigo-700 hover:underline">
-                                Créer un compte
+                                {t.login.createAccount}
                             </Link>
                         </p>
                     </div>
