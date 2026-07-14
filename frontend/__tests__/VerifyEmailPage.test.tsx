@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import VerifyEmailPage from "@/app/(auth)/verify-email/page";
 import { mockFetch, jsonResponse } from "../test-utils/fetchMock";
+import { LocaleProvider } from "@/lib/i18n/LocaleContext";
 
 let searchParams = new URLSearchParams();
 jest.mock("next/navigation", () => ({
@@ -19,7 +20,7 @@ describe("VerifyEmailPage", () => {
       return jsonResponse({ message: "Adresse email vérifiée avec succès." });
     });
 
-    render(<VerifyEmailPage />);
+    render(<VerifyEmailPage />, { wrapper: LocaleProvider });
 
     expect(await screen.findByText(/email vérifié/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /se connecter/i })).toHaveAttribute("href", "/login");
@@ -32,7 +33,7 @@ describe("VerifyEmailPage", () => {
       return jsonResponse({ message: "ok" });
     });
 
-    render(<VerifyEmailPage />);
+    render(<VerifyEmailPage />, { wrapper: LocaleProvider });
 
     expect(await screen.findByText("Lien de vérification invalide ou expiré")).toBeInTheDocument();
 
@@ -49,7 +50,7 @@ describe("VerifyEmailPage", () => {
   });
 
   it("shows an error immediately when there is no token in the URL", async () => {
-    render(<VerifyEmailPage />);
+    render(<VerifyEmailPage />, { wrapper: LocaleProvider });
     expect(await screen.findByText("Lien de vérification invalide.")).toBeInTheDocument();
   });
 });

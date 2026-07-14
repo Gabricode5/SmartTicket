@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button"
 import { Download, Compass } from "lucide-react"
 import { onboardingStorageKey } from "@/components/onboarding/OnboardingModal"
 import { ThemeToggle } from "@/components/ThemeToggle"
+import { LanguageToggle } from "@/components/LanguageToggle"
+import { useLocale } from "@/lib/i18n/LocaleContext"
 
 type Me = {
     id: number
@@ -23,6 +25,7 @@ type Me = {
 
 export default function SettingsPage() {
     const router = useRouter()
+    const { messages: t } = useLocale()
     const [loading, setLoading] = useState(true)
     const [savingProfile, setSavingProfile] = useState(false)
     const [savingPassword, setSavingPassword] = useState(false)
@@ -56,11 +59,11 @@ export default function SettingsPage() {
                 const response = await fetch("/api/me")
                 if (!response.ok) {
                     if (response.status === 401) {
-                        setError("Session expirée. Veuillez vous reconnecter.")
+                        setError(t.settings.sessionExpired)
                         setLoading(false)
                         return
                     }
-                    setError("Impossible de charger votre profil.")
+                    setError(t.settings.loadProfileError)
                     setLoading(false)
                     return
                 }
@@ -76,13 +79,14 @@ export default function SettingsPage() {
                 setEmailVerified(me.email_verified)
             } catch (e) {
                 console.error("Erreur chargement profil:", e)
-                setError("Erreur réseau.")
+                setError(t.settings.networkError)
             } finally {
                 setLoading(false)
             }
         }
 
         loadMe()
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- chargement initial du profil, ne doit pas se relancer au changement de langue
     }, [])
 
     const handleSaveProfile = async () => {
@@ -107,10 +111,10 @@ export default function SettingsPage() {
             const data = await response.json()
             if (!response.ok) {
                 if (response.status === 401) {
-                    setError("Session expirée. Veuillez vous reconnecter.")
+                    setError(t.settings.sessionExpired)
                     return
                 }
-                setError(data?.detail || "Impossible de sauvegarder le profil.")
+                setError(data?.detail || t.settings.saveProfileError)
                 return
             }
 
@@ -118,10 +122,10 @@ export default function SettingsPage() {
             localStorage.setItem("user_email", data.email)
             setEmailVerified(data.email_verified)
             setVerificationResent(false)
-            setSuccess("Profil mis à jour.")
+            setSuccess(t.settings.profileUpdated)
         } catch (e) {
             console.error("Erreur sauvegarde profil:", e)
-            setError("Erreur réseau.")
+            setError(t.settings.networkError)
         } finally {
             setSavingProfile(false)
         }
@@ -133,7 +137,7 @@ export default function SettingsPage() {
         try {
             const response = await fetch("/api/me/export")
             if (!response.ok) {
-                setError("Impossible d'exporter vos données.")
+                setError(t.settings.exportError)
                 return
             }
             const blob = await response.blob()
@@ -146,7 +150,7 @@ export default function SettingsPage() {
             document.body.removeChild(a)
             URL.revokeObjectURL(url)
         } catch {
-            setError("Erreur réseau.")
+            setError(t.settings.networkError)
         } finally {
             setExporting(false)
         }
@@ -177,11 +181,11 @@ export default function SettingsPage() {
         setSuccess(null)
 
         if (!passwordForm.currentPassword || !passwordForm.newPassword) {
-            setError("Veuillez remplir les champs mot de passe.")
+            setError(t.settings.passwordFieldsRequired)
             return
         }
         if (passwordForm.newPassword !== passwordForm.confirmPassword) {
-            setError("La confirmation du nouveau mot de passe ne correspond pas.")
+            setError(t.settings.passwordMismatch)
             return
         }
 
@@ -201,18 +205,18 @@ export default function SettingsPage() {
             const data = await response.json()
             if (!response.ok) {
                 if (response.status === 401) {
-                    setError("Session expirée. Veuillez vous reconnecter.")
+                    setError(t.settings.sessionExpired)
                     return
                 }
-                setError(data?.detail || "Impossible de modifier le mot de passe.")
+                setError(data?.detail || t.settings.passwordUpdateError)
                 return
             }
 
             setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" })
-            setSuccess("Mot de passe mis à jour.")
+            setSuccess(t.settings.passwordUpdated)
         } catch (e) {
             console.error("Erreur mot de passe:", e)
-            setError("Erreur réseau.")
+            setError(t.settings.networkError)
         } finally {
             setSavingPassword(false)
         }
@@ -221,17 +225,17 @@ export default function SettingsPage() {
     return (
         <div className="flex flex-col min-h-full p-8 space-y-6">
             <div>
-                <h1 className="text-2xl font-bold tracking-tight">Paramètres du compte</h1>
-                <p className="text-sm text-muted-foreground mt-1">Modifiez vos informations personnelles et votre mot de passe.</p>
+                <h1 className="text-2xl font-bold tracking-tight">{t.settings.title}</h1>
+                <p className="text-sm text-muted-foreground mt-1">{t.settings.subtitle}</p>
             </div>
 
             {error && <div className="rounded-md border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-sm text-red-600 dark:text-red-400">{error}</div>}
             {success && <div className="rounded-md border border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/30 px-3 py-2 text-sm text-green-700 dark:text-green-400">{success}</div>}
             {!loading && !emailVerified && (
                 <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 flex flex-wrap items-center justify-between gap-2">
-                    <span>Confirmez votre nouvelle adresse email — un lien de confirmation vous a été envoyé.</span>
+                    <span>{t.settings.verifyEmailBanner}</span>
                     {verificationResent ? (
-                        <span className="text-xs font-medium">Email renvoyé.</span>
+                        <span className="text-xs font-medium">{t.settings.emailResent}</span>
                     ) : (
                         <button
                             type="button"
@@ -239,7 +243,7 @@ export default function SettingsPage() {
                             disabled={resendingVerification}
                             className="text-xs font-semibold underline underline-offset-2 disabled:opacity-60"
                         >
-                            {resendingVerification ? "Envoi…" : "Renvoyer l'email"}
+                            {resendingVerification ? t.settings.resending : t.settings.resendEmail}
                         </button>
                     )}
                 </div>
@@ -247,12 +251,12 @@ export default function SettingsPage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Profil</CardTitle>
-                    <CardDescription>Informations de base du compte.</CardDescription>
+                    <CardTitle>{t.settings.profileTitle}</CardTitle>
+                    <CardDescription>{t.settings.profileDesc}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="username">Nom d&apos;utilisateur</Label>
+                        <Label htmlFor="username">{t.settings.usernameLabel}</Label>
                         <Input
                             id="username"
                             value={profile.username}
@@ -261,7 +265,7 @@ export default function SettingsPage() {
                         />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="email">Email</Label>
+                        <Label htmlFor="email">{t.settings.emailLabel}</Label>
                         <Input
                             id="email"
                             type="email"
@@ -272,7 +276,7 @@ export default function SettingsPage() {
                     </div>
                     <div className="grid gap-2 md:grid-cols-2">
                         <div className="grid gap-2">
-                            <Label htmlFor="prenom">Prénom</Label>
+                            <Label htmlFor="prenom">{t.settings.firstNameLabel}</Label>
                             <Input
                                 id="prenom"
                                 value={profile.prenom}
@@ -281,7 +285,7 @@ export default function SettingsPage() {
                             />
                         </div>
                         <div className="grid gap-2">
-                            <Label htmlFor="nom">Nom</Label>
+                            <Label htmlFor="nom">{t.settings.lastNameLabel}</Label>
                             <Input
                                 id="nom"
                                 value={profile.nom}
@@ -291,19 +295,19 @@ export default function SettingsPage() {
                         </div>
                     </div>
                     <Button onClick={handleSaveProfile} disabled={loading || savingProfile}>
-                        {savingProfile ? "Enregistrement..." : "Enregistrer le profil"}
+                        {savingProfile ? t.settings.savingProfile : t.settings.saveProfile}
                     </Button>
                 </CardContent>
             </Card>
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Mot de passe</CardTitle>
-                    <CardDescription>Changez votre mot de passe.</CardDescription>
+                    <CardTitle>{t.settings.passwordTitle}</CardTitle>
+                    <CardDescription>{t.settings.passwordDesc}</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <div className="grid gap-2">
-                        <Label htmlFor="currentPassword">Mot de passe actuel</Label>
+                        <Label htmlFor="currentPassword">{t.settings.currentPasswordLabel}</Label>
                         <Input
                             id="currentPassword"
                             type="password"
@@ -312,7 +316,7 @@ export default function SettingsPage() {
                         />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="newPassword">Nouveau mot de passe</Label>
+                        <Label htmlFor="newPassword">{t.settings.newPasswordLabel}</Label>
                         <Input
                             id="newPassword"
                             type="password"
@@ -321,7 +325,7 @@ export default function SettingsPage() {
                         />
                     </div>
                     <div className="grid gap-2">
-                        <Label htmlFor="confirmPassword">Confirmer le nouveau mot de passe</Label>
+                        <Label htmlFor="confirmPassword">{t.settings.confirmPasswordLabel}</Label>
                         <Input
                             id="confirmPassword"
                             type="password"
@@ -330,14 +334,14 @@ export default function SettingsPage() {
                         />
                     </div>
                     <Button onClick={handleSavePassword} disabled={savingPassword}>
-                        {savingPassword ? "Mise à jour..." : "Mettre à jour le mot de passe"}
+                        {savingPassword ? t.settings.updatingPassword : t.settings.updatePassword}
                     </Button>
                 </CardContent>
             </Card>
             <Card>
                 <CardHeader>
-                    <CardTitle>Apparence</CardTitle>
-                    <CardDescription>Choisissez le thème de l&apos;interface.</CardDescription>
+                    <CardTitle>{t.settings.appearanceTitle}</CardTitle>
+                    <CardDescription>{t.settings.appearanceDesc}</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <ThemeToggle />
@@ -345,32 +349,41 @@ export default function SettingsPage() {
             </Card>
             <Card>
                 <CardHeader>
-                    <CardTitle>Mes données personnelles</CardTitle>
+                    <CardTitle>{t.settings.languageTitle}</CardTitle>
+                    <CardDescription>{t.settings.languageDesc}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <LanguageToggle />
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader>
+                    <CardTitle>{t.settings.dataTitle}</CardTitle>
                     <CardDescription>
-                        Conformément au RGPD (Art. 15 et 20), vous pouvez télécharger l&apos;intégralité de vos données.
+                        {t.settings.dataDesc}
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                     <p className="text-sm text-muted-foreground">
-                        Le fichier PDF contient votre profil, toutes vos conversations et l&apos;ensemble des messages échangés.
+                        {t.settings.dataBody}
                     </p>
                     <Button variant="outline" onClick={handleExportData} disabled={exporting}>
                         <Download className="mr-2 h-4 w-4" />
-                        {exporting ? "Préparation..." : "Télécharger mes données"}
+                        {exporting ? t.settings.preparingExport : t.settings.downloadData}
                     </Button>
                 </CardContent>
             </Card>
             <Card>
                 <CardHeader>
-                    <CardTitle>Aide</CardTitle>
+                    <CardTitle>{t.settings.helpTitle}</CardTitle>
                     <CardDescription>
-                        Revoir la présentation guidée de l&apos;application pour votre rôle.
+                        {t.settings.helpDesc}
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Button variant="outline" onClick={handleReplayOnboarding} disabled={!account}>
                         <Compass className="mr-2 h-4 w-4" />
-                        Revoir la visite guidée
+                        {t.settings.replayOnboarding}
                     </Button>
                 </CardContent>
             </Card>

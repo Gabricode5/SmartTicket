@@ -1,6 +1,7 @@
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import SavDashboard from "@/components/dashboard/SavDashboard";
 import { mockFetch, jsonResponse } from "../test-utils/fetchMock";
+import { LocaleProvider } from "@/lib/i18n/LocaleContext";
 
 const transferredSessions = [
   {
@@ -21,7 +22,7 @@ describe("SavDashboard", () => {
   it("shows an empty queue when there are no transferred sessions", async () => {
     mockFetch(() => jsonResponse([]));
 
-    render(<SavDashboard />);
+    render(<SavDashboard />, { wrapper: LocaleProvider });
 
     expect(await screen.findByText("Aucun transfert")).toBeInTheDocument();
   });
@@ -31,7 +32,7 @@ describe("SavDashboard", () => {
       url === "/api/sessions/transferred" ? jsonResponse(transferredSessions) : jsonResponse({}, 404)
     );
 
-    render(<SavDashboard />);
+    render(<SavDashboard />, { wrapper: LocaleProvider });
 
     expect(await screen.findByText("dave")).toBeInTheDocument();
     expect(screen.getByText("Bug application")).toBeInTheDocument();
@@ -48,7 +49,7 @@ describe("SavDashboard", () => {
       url === "/api/sessions/transferred" ? jsonResponse(sessionsAcrossPeriods) : jsonResponse({}, 404)
     );
 
-    render(<SavDashboard />);
+    render(<SavDashboard />, { wrapper: LocaleProvider });
 
     expect(await screen.findByText("Aujourd'hui")).toBeInTheDocument();
     expect(screen.getByText("Janvier 2026")).toBeInTheDocument();
@@ -63,7 +64,7 @@ describe("SavDashboard", () => {
       return jsonResponse({}, 404);
     });
 
-    render(<SavDashboard />);
+    render(<SavDashboard />, { wrapper: LocaleProvider });
     fireEvent.click(await screen.findByText("dave"));
 
     expect(await screen.findByText("Bonjour, j'ai un souci.")).toBeInTheDocument();
@@ -79,7 +80,7 @@ describe("SavDashboard", () => {
       return jsonResponse({}, 404);
     });
 
-    render(<SavDashboard />);
+    render(<SavDashboard />, { wrapper: LocaleProvider });
     fireEvent.click(await screen.findByText("dave"));
     await screen.findByText("Bonjour, j'ai un souci.");
 
@@ -106,7 +107,7 @@ describe("SavDashboard", () => {
       return jsonResponse({}, 404);
     });
 
-    render(<SavDashboard />);
+    render(<SavDashboard />, { wrapper: LocaleProvider });
     fireEvent.click(await screen.findByText("dave"));
     await screen.findByText("Bonjour, j'ai un souci.");
 

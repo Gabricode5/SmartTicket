@@ -4,10 +4,12 @@ import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { ArrowLeft, Eye, EyeOff, MailCheck } from "lucide-react"
+import { useLocale } from "@/lib/i18n/LocaleContext"
+import type { Messages } from "@/lib/i18n/translations"
 
 type Strength = { score: number; label: string; color: string; textColor: string }
 
-function getStrength(password: string): Strength {
+function getStrength(password: string, t: Messages): Strength {
     if (!password) return { score: 0, label: "", color: "", textColor: "" }
     let score = 0
     if (password.length >= 6) score++
@@ -16,14 +18,15 @@ function getStrength(password: string): Strength {
     if (/[0-9]/.test(password)) score++
     if (/[^A-Za-z0-9]/.test(password)) score++
 
-    if (score <= 1) return { score: 1, label: "Très faible", color: "bg-red-500", textColor: "text-red-500" }
-    if (score === 2) return { score: 2, label: "Faible", color: "bg-orange-500", textColor: "text-orange-500" }
-    if (score === 3) return { score: 3, label: "Moyen", color: "bg-yellow-500", textColor: "text-yellow-600" }
-    if (score === 4) return { score: 4, label: "Fort", color: "bg-green-500", textColor: "text-green-600" }
-    return { score: 5, label: "Très fort", color: "bg-emerald-600", textColor: "text-emerald-600" }
+    if (score <= 1) return { score: 1, label: t.signUp.strength.veryWeak, color: "bg-red-500", textColor: "text-red-500" }
+    if (score === 2) return { score: 2, label: t.signUp.strength.weak, color: "bg-orange-500", textColor: "text-orange-500" }
+    if (score === 3) return { score: 3, label: t.signUp.strength.medium, color: "bg-yellow-500", textColor: "text-yellow-600" }
+    if (score === 4) return { score: 4, label: t.signUp.strength.strong, color: "bg-green-500", textColor: "text-green-600" }
+    return { score: 5, label: t.signUp.strength.veryStrong, color: "bg-emerald-600", textColor: "text-emerald-600" }
 }
 
 export default function SignUpPage() {
+    const { messages: t } = useLocale()
     const [error, setError] = useState("")
     const [isLoading, setIsLoading] = useState(false)
     const [rgpdAccepted, setRgpdAccepted] = useState(false)
@@ -33,7 +36,7 @@ export default function SignUpPage() {
     const [showConfirm, setShowConfirm] = useState(false)
     const [registeredEmail, setRegisteredEmail] = useState("")
 
-    const strength = getStrength(password)
+    const strength = getStrength(password, t)
     const passwordsMatch = confirmPassword === "" || password === confirmPassword
     const canSubmit = rgpdAccepted && password.length >= 6 && password === confirmPassword
 
@@ -41,9 +44,9 @@ export default function SignUpPage() {
         event.preventDefault()
         setError("")
 
-        if (!rgpdAccepted) { setError("Vous devez accepter la politique de confidentialité."); return }
-        if (password.length < 6) { setError("Le mot de passe doit contenir au moins 6 caractères."); return }
-        if (password !== confirmPassword) { setError("Les mots de passe ne correspondent pas."); return }
+        if (!rgpdAccepted) { setError(t.signUp.mustAcceptPrivacy); return }
+        if (password.length < 6) { setError(t.signUp.passwordTooShort); return }
+        if (password !== confirmPassword) { setError(t.signUp.passwordsDontMatch); return }
 
         setIsLoading(true)
         const formData = new FormData(event.currentTarget)
@@ -61,10 +64,10 @@ export default function SignUpPage() {
                 setRegisteredEmail(created.email ?? String(data.email))
             } else {
                 const errorData = await response.json()
-                setError(errorData.detail || "Une erreur est survenue")
+                setError(errorData.detail || t.signUp.genericError)
             }
         } catch {
-            setError("Impossible de contacter le serveur.")
+            setError(t.signUp.networkError)
         } finally {
             setIsLoading(false)
         }
@@ -80,7 +83,7 @@ export default function SignUpPage() {
                     className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 transition-colors group"
                 >
                     <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
-                    Retour à l&apos;accueil
+                    {t.login.backToHome}
                 </Link>
                 <div className="flex items-center gap-2 font-bold text-slate-800">
                     <Image src="/logo_smartticket.png" alt="SmartTicket" width={28} height={28} className="h-7 w-7" />
@@ -97,15 +100,15 @@ export default function SignUpPage() {
                             <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-100 mb-4">
                                 <MailCheck className="h-6 w-6 text-emerald-600" />
                             </div>
-                            <h1 className="text-2xl font-bold text-slate-900">Vérifiez votre boîte mail</h1>
+                            <h1 className="text-2xl font-bold text-slate-900">{t.signUp.checkEmailTitle}</h1>
                             <p className="text-slate-500 text-sm mt-2">
-                                Un lien de confirmation a été envoyé à <strong>{registeredEmail}</strong>. Cliquez dessus pour activer votre compte avant de vous connecter.
+                                {t.signUp.checkEmailPrefix} <strong>{registeredEmail}</strong>. {t.signUp.checkEmailSuffix}
                             </p>
                             <Link
                                 href="/login"
                                 className="mt-6 inline-block w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-colors"
                             >
-                                Retour à la connexion
+                                {t.signUp.backToLogin}
                             </Link>
                         </div>
                     ) : (
@@ -115,8 +118,8 @@ export default function SignUpPage() {
                             <div className="inline-flex items-center justify-center w-12 h-12 mb-4">
                                 <Image src="/logo_smartticket.png" alt="SmartTicket" width={48} height={48} className="w-12 h-12" />
                             </div>
-                            <h1 className="text-2xl font-bold text-slate-900">Créer un compte</h1>
-                            <p className="text-slate-500 text-sm mt-1">Rejoignez SmartTicket gratuitement</p>
+                            <h1 className="text-2xl font-bold text-slate-900">{t.signUp.title}</h1>
+                            <p className="text-slate-500 text-sm mt-1">{t.signUp.subtitle}</p>
                         </div>
 
                         <form onSubmit={handleSubmit} className="space-y-4">
@@ -131,14 +134,14 @@ export default function SignUpPage() {
                             {/* Prénom + Nom */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
-                                    <label htmlFor="prenom" className="block text-sm font-medium text-slate-700">Prénom</label>
+                                    <label htmlFor="prenom" className="block text-sm font-medium text-slate-700">{t.signUp.firstNameLabel}</label>
                                     <input
                                         id="prenom" name="prenom" placeholder="Jean" required
                                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label htmlFor="nom" className="block text-sm font-medium text-slate-700">Nom</label>
+                                    <label htmlFor="nom" className="block text-sm font-medium text-slate-700">{t.signUp.lastNameLabel}</label>
                                     <input
                                         id="nom" name="nom" placeholder="Dupont" required
                                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
@@ -148,7 +151,7 @@ export default function SignUpPage() {
 
                             {/* Username */}
                             <div className="space-y-1.5">
-                                <label htmlFor="username" className="block text-sm font-medium text-slate-700">Nom d&apos;utilisateur</label>
+                                <label htmlFor="username" className="block text-sm font-medium text-slate-700">{t.signUp.usernameLabel}</label>
                                 <input
                                     id="username" name="username" placeholder="jean_dupont" required
                                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
@@ -157,7 +160,7 @@ export default function SignUpPage() {
 
                             {/* Email */}
                             <div className="space-y-1.5">
-                                <label htmlFor="email" className="block text-sm font-medium text-slate-700">Adresse email</label>
+                                <label htmlFor="email" className="block text-sm font-medium text-slate-700">{t.signUp.emailLabel}</label>
                                 <input
                                     id="email" name="email" type="email" placeholder="vous@exemple.com" required
                                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
@@ -166,7 +169,7 @@ export default function SignUpPage() {
 
                             {/* Mot de passe */}
                             <div className="space-y-1.5">
-                                <label htmlFor="password" className="block text-sm font-medium text-slate-700">Mot de passe</label>
+                                <label htmlFor="password" className="block text-sm font-medium text-slate-700">{t.signUp.passwordLabel}</label>
                                 <div className="relative">
                                     <input
                                         id="password" name="password"
@@ -195,7 +198,7 @@ export default function SignUpPage() {
 
                             {/* Confirmation */}
                             <div className="space-y-1.5">
-                                <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700">Confirmer le mot de passe</label>
+                                <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700">{t.signUp.confirmPasswordLabel}</label>
                                 <div className="relative">
                                     <input
                                         id="confirmPassword"
@@ -215,7 +218,7 @@ export default function SignUpPage() {
                                     </button>
                                 </div>
                                 {!passwordsMatch && (
-                                    <p className="text-xs text-red-500">Les mots de passe ne correspondent pas.</p>
+                                    <p className="text-xs text-red-500">{t.signUp.passwordsDontMatch}</p>
                                 )}
                             </div>
 
@@ -228,10 +231,9 @@ export default function SignUpPage() {
                                     className="mt-0.5 h-4 w-4 cursor-pointer accent-indigo-600 rounded"
                                 />
                                 <label htmlFor="rgpd" className="text-xs text-slate-500 leading-relaxed cursor-pointer">
-                                    J&apos;accepte que mes données personnelles soient traitées pour gérer mon compte,
-                                    conformément à la{" "}
+                                    {t.signUp.rgpdLabelPrefix}{" "}
                                     <a href="/politique-confidentialite" target="_blank" rel="noopener noreferrer"
-                                        className="text-indigo-600 hover:underline">politique de confidentialité</a>.
+                                        className="text-indigo-600 hover:underline">{t.signUp.rgpdLink}</a>.
                                 </label>
                             </div>
 
@@ -244,22 +246,22 @@ export default function SignUpPage() {
                                 {isLoading ? (
                                     <span className="flex items-center justify-center gap-2">
                                         <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                        Création du compte…
+                                        {t.signUp.creatingAccount}
                                     </span>
-                                ) : "Créer mon compte"}
+                                ) : t.signUp.createAccount}
                             </button>
                         </form>
 
                         <div className="flex items-center gap-3 my-5">
                             <div className="flex-1 h-px bg-slate-100" />
-                            <span className="text-xs text-slate-400">ou</span>
+                            <span className="text-xs text-slate-400">{t.signUp.or}</span>
                             <div className="flex-1 h-px bg-slate-100" />
                         </div>
 
                         <p className="text-center text-sm text-slate-500">
-                            Déjà un compte ?{" "}
+                            {t.signUp.alreadyHaveAccount}{" "}
                             <Link href="/login" className="text-indigo-600 font-medium hover:text-indigo-700 hover:underline">
-                                Se connecter
+                                {t.signUp.login}
                             </Link>
                         </p>
                     </>

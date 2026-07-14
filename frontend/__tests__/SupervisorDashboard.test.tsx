@@ -1,6 +1,7 @@
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import SupervisorDashboard from "@/components/dashboard/SupervisorDashboard";
 import { mockFetch, jsonResponse } from "../test-utils/fetchMock";
+import { LocaleProvider } from "@/lib/i18n/LocaleContext";
 
 const usersByRole: Record<string, unknown[]> = {
   user: [{ id: 1, username: "alice", email: "alice@test.com", role: "user" }],
@@ -23,7 +24,7 @@ describe("SupervisorDashboard", () => {
   it("loads and renders users and SAV agents in separate columns", async () => {
     mockFetch(handler);
 
-    render(<SupervisorDashboard />);
+    render(<SupervisorDashboard />, { wrapper: LocaleProvider });
 
     expect(await screen.findByText("alice")).toBeInTheDocument();
     expect(screen.getByText("bob")).toBeInTheDocument();
@@ -32,7 +33,7 @@ describe("SupervisorDashboard", () => {
   it("embeds the SAV ticket queue below the team management panel", async () => {
     mockFetch(handler);
 
-    render(<SupervisorDashboard />);
+    render(<SupervisorDashboard />, { wrapper: LocaleProvider });
 
     expect(await screen.findByText("alice")).toBeInTheDocument();
     expect(await screen.findByText("Aucun transfert")).toBeInTheDocument();
@@ -41,7 +42,7 @@ describe("SupervisorDashboard", () => {
   it("promotes a user to SAV and reloads the team", async () => {
     const fetchMock = mockFetch(handler);
 
-    render(<SupervisorDashboard />);
+    render(<SupervisorDashboard />, { wrapper: LocaleProvider });
     await screen.findByText("alice");
 
     fireEvent.click(screen.getByRole("button", { name: /^sav$/i }));
@@ -65,7 +66,7 @@ describe("SupervisorDashboard", () => {
       return handler(url, init);
     });
 
-    render(<SupervisorDashboard />);
+    render(<SupervisorDashboard />, { wrapper: LocaleProvider });
     await screen.findByText("bob");
 
     fireEvent.click(screen.getByRole("button", { name: /retirer/i }));
@@ -84,7 +85,7 @@ describe("SupervisorDashboard", () => {
   it("shows a session-expired error when the users endpoint returns 401", async () => {
     mockFetch(() => jsonResponse({}, 401));
 
-    render(<SupervisorDashboard />);
+    render(<SupervisorDashboard />, { wrapper: LocaleProvider });
 
     expect(await screen.findByText(/session expirée/i)).toBeInTheDocument();
   });

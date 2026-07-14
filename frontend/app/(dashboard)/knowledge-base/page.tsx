@@ -47,8 +47,11 @@ import {
     Link as LinkIcon,
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
+import { useLocale } from "@/lib/i18n/LocaleContext"
 
 export default function KnowledgeBasePage() {
+    const { messages: t, locale } = useLocale()
+    const dateLocale = locale === "fr" ? "fr-FR" : "en-US"
     const INGEST_POLL_FAST_MS = 5000
     const INGEST_POLL_SLOW_MS = 15000
     const INGEST_POLL_SLOW_AFTER_MS = 60000
@@ -127,7 +130,7 @@ export default function KnowledgeBasePage() {
                     setIsIngesting(false)
                     setIngestJobId(null)
                     ingestStartedAtRef.current = null
-                    setIngestError("Session expirée. Veuillez vous reconnecter.")
+                    setIngestError(t.knowledgeBase.sessionExpired)
                     window.location.href = "/login"
                     return
                 }
@@ -149,11 +152,11 @@ export default function KnowledgeBasePage() {
                     setUrlsTotal(null)
                     setUrlsDone(null)
                     if (data.result?.inserted === 0) {
-                        setIngestError("Aucun contenu récupéré. Le site bloque peut-être le scraping ou utilise du contenu dynamique.")
+                        setIngestError(t.knowledgeBase.noContentRetrieved)
                     } else {
                         const inserted = data.result?.inserted ?? "?"
                         const source = data.result?.filename ?? data.result?.url ?? sourceUrl
-                        setIngestMessage(`Indexation terminée : ${inserted} contenus indexés depuis ${source}`)
+                        setIngestMessage(t.knowledgeBase.indexingComplete(inserted, source))
                         loadSources()
                     }
                     return
@@ -165,7 +168,7 @@ export default function KnowledgeBasePage() {
                     ingestStartedAtRef.current = null
                     setUrlsTotal(null)
                     setUrlsDone(null)
-                    setIngestError(data.error || "Erreur pendant l'indexation.")
+                    setIngestError(data.error || t.knowledgeBase.indexingError)
                     return
                 }
             } catch {
@@ -192,6 +195,7 @@ export default function KnowledgeBasePage() {
                 ingestPollRef.current = null
             }
         }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- le polling ne doit pas redémarrer si la langue change en cours d'indexation
     }, [ingestJobId, sourceUrl])
 
     const handleCheckRobots = async () => {
@@ -205,12 +209,12 @@ export default function KnowledgeBasePage() {
             })
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}))
-                setRobotsError(data?.detail || "Impossible d'analyser le site.")
+                setRobotsError(data?.detail || t.knowledgeBase.cannotAnalyzeSite)
                 return
             }
             setRobotsInfo(await res.json())
         } catch {
-            setRobotsError("Erreur réseau lors de l'analyse.")
+            setRobotsError(t.knowledgeBase.analyzeNetworkError)
         } finally {
             setIsCheckingRobots(false)
         }
@@ -235,29 +239,29 @@ export default function KnowledgeBasePage() {
             const data = await response.json()
             if (!response.ok) {
                 if (response.status === 401) {
-                    setIngestError("Session expirée. Veuillez vous reconnecter.")
+                    setIngestError(t.knowledgeBase.sessionExpired)
                     return
                 }
-                setIngestError(data?.detail || "Impossible de lancer l'ingestion.")
+                setIngestError(data?.detail || t.knowledgeBase.cannotStartIngest)
                 return
             }
 
             if (data.status === "started") {
                 isBackgroundJob = true
-                setIngestMessage(data.message || "Indexation lancée.")
+                setIngestMessage(data.message || t.knowledgeBase.indexingStarted)
                 ingestStartedAtRef.current = Date.now()
                 setIngestJobId(data.job_id || null)
                 return
             }
 
             if (data.inserted === 0) {
-                setIngestError("Aucun contenu récupéré. Le site bloque peut-être le scraping ou utilise du contenu dynamique.")
+                setIngestError(t.knowledgeBase.noContentRetrieved)
                 return
             }
-            setIngestMessage(`${data.inserted} contenus indexés depuis ${data.url}`)
+            setIngestMessage(t.knowledgeBase.contentsIndexed(data.inserted, data.url))
         } catch (error) {
             console.error("Erreur ingestion URL:", error)
-            setIngestError("Erreur réseau pendant l'ingestion.")
+            setIngestError(t.knowledgeBase.ingestNetworkError)
         } finally {
             if (!isBackgroundJob) {
                 setIsIngesting(false)
@@ -270,12 +274,12 @@ export default function KnowledgeBasePage() {
         setUploadError(null)
 
         if (!selectedFile) {
-            setUploadError("Veuillez sélectionner un fichier .pdf, .docx ou .txt.")
+            setUploadError(t.knowledgeBase.selectFileError)
             return
         }
         const ext = selectedFile.name.split(".").pop()?.toLowerCase()
         if (ext !== "docx" && ext !== "txt" && ext !== "pdf") {
-            setUploadError("Seuls les fichiers .pdf, .docx et .txt sont acceptés.")
+            setUploadError(t.knowledgeBase.fileTypeError)
             return
         }
 
@@ -295,12 +299,12 @@ export default function KnowledgeBasePage() {
             })
             const data = await response.json()
             if (!response.ok) {
-                setUploadError(data?.detail || "Erreur lors de l'envoi du fichier.")
+                setUploadError(data?.detail || t.knowledgeBase.uploadError)
                 setIsUploadingFile(false)
                 return
             }
             if (data.status === "started") {
-                setIngestMessage(data.message || "Indexation du fichier lancée.")
+                setIngestMessage(data.message || t.knowledgeBase.fileIndexingStarted)
                 ingestStartedAtRef.current = Date.now()
                 setIngestJobId(data.job_id || null)
                 setIsAddDialogOpen(false)
@@ -308,7 +312,7 @@ export default function KnowledgeBasePage() {
                 setSelectedFile(null)
             }
         } catch {
-            setUploadError("Erreur réseau lors de l'envoi du fichier.")
+            setUploadError(t.knowledgeBase.uploadNetworkError)
             setIsUploadingFile(false)
         }
     }
@@ -337,56 +341,56 @@ export default function KnowledgeBasePage() {
             {/* Header & Search */}
             <div className="p-8 pb-4 space-y-6 bg-background border-b">
                 <div className="flex items-center justify-between">
-                    <h1 className="text-2xl font-bold tracking-tight">Base de connaissances</h1>
+                    <h1 className="text-2xl font-bold tracking-tight">{t.knowledgeBase.title}</h1>
                     <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
                         <DialogTrigger asChild>
                             <Button>
                                 <Plus className="mr-2 h-4 w-4" />
-                                Ajouter un article
+                                {t.knowledgeBase.addArticle}
                             </Button>
                         </DialogTrigger>
                         <DialogContent className="sm:max-w-[500px]">
                             <DialogHeader>
-                                <DialogTitle>Ajouter un nouvel article</DialogTitle>
+                                <DialogTitle>{t.knowledgeBase.addDialogTitle}</DialogTitle>
                                 <DialogDescription>
-                                    Ajoutez du contenu manuellement ou importez un document.
+                                    {t.knowledgeBase.addDialogDesc}
                                 </DialogDescription>
                             </DialogHeader>
 
                             <div className="grid gap-4 py-4">
                                 <div className="grid gap-2">
-                                    <Label htmlFor="title">Titre</Label>
+                                    <Label htmlFor="title">{t.knowledgeBase.titleLabel}</Label>
                                     <Input
                                         id="title"
                                         value={newArticle.title}
                                         onChange={(e) => setNewArticle({ ...newArticle, title: e.target.value })}
-                                        placeholder="Titre de l'article"
+                                        placeholder={t.knowledgeBase.titlePlaceholder}
                                     />
                                 </div>
                                 <div className="grid gap-2">
-                                    <Label htmlFor="category">Catégorie</Label>
+                                    <Label htmlFor="category">{t.knowledgeBase.categoryLabel}</Label>
                                     <Select
                                         value={newArticle.category}
                                         onValueChange={(value) => setNewArticle({ ...newArticle, category: value })}
                                     >
                                         <SelectTrigger>
-                                            <SelectValue placeholder="Sélectionner une catégorie" />
+                                            <SelectValue placeholder={t.knowledgeBase.categoryPlaceholder} />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="FAQ">FAQ</SelectItem>
-                                            <SelectItem value="Guides">Guides</SelectItem>
-                                            <SelectItem value="Documentation">Documentation</SelectItem>
-                                            <SelectItem value="Formés IA">Formés IA</SelectItem>
+                                            <SelectItem value="FAQ">{t.knowledgeBase.categoryFaq}</SelectItem>
+                                            <SelectItem value="Guides">{t.knowledgeBase.categoryGuides}</SelectItem>
+                                            <SelectItem value="Documentation">{t.knowledgeBase.categoryDocumentation}</SelectItem>
+                                            <SelectItem value="Formés IA">{t.knowledgeBase.categoryAiTrained}</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
                                 <div className="grid gap-2">
-                                    <Label htmlFor="tags">Tags</Label>
+                                    <Label htmlFor="tags">{t.knowledgeBase.tagsLabel}</Label>
                                     <Input
                                         id="tags"
                                         value={newArticle.tags}
                                         onChange={(e) => setNewArticle({ ...newArticle, tags: e.target.value })}
-                                        placeholder="Ex: API, Tutoriel"
+                                        placeholder={t.knowledgeBase.tagsPlaceholder}
                                     />
                                 </div>
 
@@ -399,10 +403,10 @@ export default function KnowledgeBasePage() {
                                             <Upload className="h-6 w-6 text-primary" />
                                         </div>
                                         <p className="text-sm font-medium">
-                                            {newArticle.fileName ? newArticle.fileName : "Cliquez pour importer un fichier"}
+                                            {newArticle.fileName ? newArticle.fileName : t.knowledgeBase.clickToImport}
                                         </p>
                                         <p className="text-xs text-muted-foreground mt-1">
-                                            PDF, DOCX ou TXT jusqu&apos;à 10MB
+                                            {t.knowledgeBase.fileHint}
                                         </p>
                                         <input
                                             ref={fileInputRef}
@@ -419,7 +423,7 @@ export default function KnowledgeBasePage() {
                             <DialogFooter>
                                 <Button onClick={handleAddArticle} disabled={isUploadingFile || !selectedFile}>
                                     {isUploadingFile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                                    {isUploadingFile ? "Envoi..." : "Importer et indexer"}
+                                    {isUploadingFile ? t.knowledgeBase.sending : t.knowledgeBase.importAndIndex}
                                 </Button>
                             </DialogFooter>
                         </DialogContent>
@@ -429,7 +433,7 @@ export default function KnowledgeBasePage() {
                 <div className="relative">
                     <Search className="absolute left-3.5 top-3.5 h-5 w-5 text-muted-foreground" />
                     <Input
-                        placeholder="Rechercher dans la base de connaissances..."
+                        placeholder={t.knowledgeBase.searchPlaceholder}
                         className="pl-12 h-12 text-lg rounded-xl bg-muted/30 border-muted-foreground/20 focus-visible:bg-background"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
@@ -437,7 +441,7 @@ export default function KnowledgeBasePage() {
                 </div>
 
                 <div className="rounded-xl border bg-card p-4 space-y-3">
-                    <Label htmlFor="source-url">Indexer une URL dans la base</Label>
+                    <Label htmlFor="source-url">{t.knowledgeBase.indexUrlLabel}</Label>
                     <div className="flex flex-col md:flex-row gap-3">
                         <Input
                             id="source-url"
@@ -453,11 +457,11 @@ export default function KnowledgeBasePage() {
                             {isCheckingRobots
                                 ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                                 : <ShieldCheck className="mr-2 h-4 w-4" />}
-                            {isCheckingRobots ? "Analyse..." : "Vérifier robots.txt"}
+                            {isCheckingRobots ? t.knowledgeBase.checkingRobots : t.knowledgeBase.checkRobots}
                         </Button>
                         <Button onClick={handleIngestUrl} disabled={isIngesting || !sourceUrl.trim()}>
                             {isIngesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                            {isIngesting ? "Indexation..." : "Indexer URL"}
+                            {isIngesting ? t.knowledgeBase.indexing : t.knowledgeBase.indexUrl}
                         </Button>
                     </div>
 
@@ -472,21 +476,21 @@ export default function KnowledgeBasePage() {
                             <div className="flex flex-wrap items-center gap-4 text-sm">
                                 <span className="flex items-center gap-1.5 font-medium text-foreground">
                                     <LinkIcon className="h-4 w-4 text-muted-foreground" />
-                                    {robotsInfo.sitemap_found ? "Sitemap détecté" : "Pas de sitemap (URL unique)"}
-                                    {!robotsInfo.robots_found && <span className="text-xs text-muted-foreground ml-1">(robots.txt absent)</span>}
+                                    {robotsInfo.sitemap_found ? t.knowledgeBase.sitemapFound : t.knowledgeBase.noSitemap}
+                                    {!robotsInfo.robots_found && <span className="text-xs text-muted-foreground ml-1">{t.knowledgeBase.robotsAbsent}</span>}
                                 </span>
                                 <span className="flex items-center gap-1 text-emerald-700 font-semibold">
                                     <ShieldCheck className="h-4 w-4" />
-                                    {robotsInfo.allowed} URL{robotsInfo.allowed > 1 ? "s" : ""} autorisée{robotsInfo.allowed > 1 ? "s" : ""}
+                                    {t.knowledgeBase.urlsAllowed(robotsInfo.allowed)}
                                 </span>
                                 {robotsInfo.blocked > 0 && (
                                     <span className="flex items-center gap-1 text-red-600 font-semibold">
                                         <ShieldAlert className="h-4 w-4" />
-                                        {robotsInfo.blocked} bloquée{robotsInfo.blocked > 1 ? "s" : ""}
+                                        {t.knowledgeBase.urlsBlocked(robotsInfo.blocked)}
                                     </span>
                                 )}
                                 <span className="text-muted-foreground text-xs">
-                                    ({robotsInfo.total} URL{robotsInfo.total > 1 ? "s" : ""} au total)
+                                    {t.knowledgeBase.urlsTotal(robotsInfo.total)}
                                 </span>
                             </div>
                             {/* Barre proportionnelle autorisées / bloquées */}
@@ -497,7 +501,7 @@ export default function KnowledgeBasePage() {
                                         className="h-2"
                                     />
                                     <p className="text-xs text-muted-foreground">
-                                        {Math.round((robotsInfo.allowed / robotsInfo.total) * 100)}% des URLs sont accessibles au scraping
+                                        {t.knowledgeBase.scrapableRate(Math.round((robotsInfo.allowed / robotsInfo.total) * 100))}
                                     </p>
                                 </div>
                             )}
@@ -510,10 +514,10 @@ export default function KnowledgeBasePage() {
                             <div className="flex items-center justify-between text-sm font-medium text-indigo-800">
                                 <span className="flex items-center gap-1.5">
                                     <Loader2 className="h-4 w-4 animate-spin" />
-                                    Scraping en cours
+                                    {t.knowledgeBase.scrapingInProgress}
                                 </span>
                                 <span>
-                                    {urlsDone ?? 0} / {urlsTotal} URL{urlsTotal > 1 ? "s" : ""} scrapée{urlsTotal > 1 ? "s" : ""}
+                                    {t.knowledgeBase.scrapedProgress(urlsDone ?? 0, urlsTotal)}
                                 </span>
                             </div>
                             <Progress
@@ -529,7 +533,7 @@ export default function KnowledgeBasePage() {
 
                 {/* Filter Bar */}
                 <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
-                    <FilterChip label="Tout" active={activeFilter === "Tout"} onClick={() => setActiveFilter("Tout")} />
+                    <FilterChip label={t.knowledgeBase.filterAll} active={activeFilter === "Tout"} onClick={() => setActiveFilter("Tout")} />
                     {uniqueCategories.map(cat => (
                         <FilterChip key={cat} label={cat} active={activeFilter === cat} onClick={() => setActiveFilter(cat)} />
                     ))}
@@ -543,17 +547,17 @@ export default function KnowledgeBasePage() {
                     <MetricCard
                         icon={<DatabaseZap className="h-6 w-6 text-purple-500" />}
                         value={`${kbSources.length}`}
-                        label="Sources indexées"
+                        label={t.knowledgeBase.sourcesIndexed}
                     />
                     <MetricCard
                         icon={<Cpu className="h-6 w-6 text-indigo-500" />}
                         value={`${kbSources.reduce((s, r) => s + r.chunks, 0)}`}
-                        label="Chunks IA"
+                        label={t.knowledgeBase.aiChunks}
                     />
                     <MetricCard
                         icon={<FileText className="h-6 w-6 text-blue-500" />}
                         value={`${uniqueCategories.length}`}
-                        label="Catégories"
+                        label={t.knowledgeBase.categories}
                     />
                 </div>
 
@@ -561,8 +565,8 @@ export default function KnowledgeBasePage() {
                 {filteredSources.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-center text-muted-foreground">
                         <DatabaseZap className="h-12 w-12 mb-4 opacity-30" />
-                        <p className="text-base font-medium">Aucune source indexée</p>
-                        <p className="text-sm mt-1">Utilisez le bouton &quot;Ajouter une source&quot; pour indexer une URL ou un fichier.</p>
+                        <p className="text-base font-medium">{t.knowledgeBase.noSourceIndexed}</p>
+                        <p className="text-sm mt-1">{t.knowledgeBase.noSourceHint}</p>
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -582,10 +586,10 @@ export default function KnowledgeBasePage() {
                                             <p className="text-sm font-semibold text-foreground truncate" title={s.source}>{s.source}</p>
                                             <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                                                 {s.category && <Badge variant="secondary" className="text-xs">{s.category}</Badge>}
-                                                <span className="text-xs text-muted-foreground">{s.chunks} chunks</span>
+                                                <span className="text-xs text-muted-foreground">{t.knowledgeBase.chunksLabel(s.chunks)}</span>
                                                 {s.date_creation && (
                                                     <span className="text-xs text-muted-foreground">
-                                                        {new Date(s.date_creation).toLocaleDateString("fr-FR")}
+                                                        {new Date(s.date_creation).toLocaleDateString(dateLocale)}
                                                     </span>
                                                 )}
                                             </div>
@@ -609,20 +613,20 @@ export default function KnowledgeBasePage() {
         <AlertDialog open={!!deleteSource} onOpenChange={(open) => { if (!open) setDeleteSource(null) }}>
             <AlertDialogContent>
                 <AlertDialogHeader>
-                    <AlertDialogTitle>Supprimer cette source ?</AlertDialogTitle>
+                    <AlertDialogTitle>{t.knowledgeBase.deleteSourceTitle}</AlertDialogTitle>
                     <AlertDialogDescription>
-                        Tous les chunks indexés depuis <span className="font-medium text-foreground">{deleteSource?.source}</span> seront supprimés définitivement de la base de connaissances IA. Cette action est irréversible.
+                        {t.knowledgeBase.deleteSourceIntro} <span className="font-medium text-foreground">{deleteSource?.source}</span> {t.knowledgeBase.deleteSourceOutro}
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                    <AlertDialogCancel disabled={isDeleting}>Annuler</AlertDialogCancel>
+                    <AlertDialogCancel disabled={isDeleting}>{t.knowledgeBase.cancel}</AlertDialogCancel>
                     <AlertDialogAction
                         onClick={handleDeleteConfirm}
                         disabled={isDeleting}
                         className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     >
                         {isDeleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                        Supprimer
+                        {t.knowledgeBase.delete}
                     </AlertDialogAction>
                 </AlertDialogFooter>
             </AlertDialogContent>

@@ -2,6 +2,7 @@ import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import type { ReactNode } from "react";
 import AdminDashboard from "@/components/dashboard/AdminDashboard";
 import { mockFetch, jsonResponse } from "../test-utils/fetchMock";
+import { LocaleProvider } from "@/lib/i18n/LocaleContext";
 
 // AdminDashboard renders next/link, which expects an app-router context that
 // isn't mounted under jsdom in these tests — swap it for a plain anchor.
@@ -35,7 +36,7 @@ describe("AdminDashboard", () => {
   it("loads and renders users grouped by role", async () => {
     mockFetch(handler);
 
-    render(<AdminDashboard currentUserId={3} />);
+    render(<AdminDashboard currentUserId={3} />, { wrapper: LocaleProvider });
 
     expect(await screen.findByText("alice")).toBeInTheDocument();
     expect(screen.getByText("bob")).toBeInTheDocument();
@@ -49,7 +50,7 @@ describe("AdminDashboard", () => {
   it("shows a session-expired error when the users endpoint returns 401", async () => {
     mockFetch(() => jsonResponse({}, 401));
 
-    render(<AdminDashboard currentUserId={3} />);
+    render(<AdminDashboard currentUserId={3} />, { wrapper: LocaleProvider });
 
     expect(await screen.findByText(/session expirée/i)).toBeInTheDocument();
   });
@@ -62,7 +63,7 @@ describe("AdminDashboard", () => {
       return handler(url, init);
     });
 
-    render(<AdminDashboard currentUserId={3} />);
+    render(<AdminDashboard currentUserId={3} />, { wrapper: LocaleProvider });
     fireEvent.click(await screen.findByText("alice"));
 
     expect(await screen.findByText("Souci de paiement")).toBeInTheDocument();
@@ -79,7 +80,7 @@ describe("AdminDashboard", () => {
       return handler(url, init);
     });
 
-    render(<AdminDashboard currentUserId={3} />);
+    render(<AdminDashboard currentUserId={3} />, { wrapper: LocaleProvider });
     fireEvent.click(await screen.findByText("alice"));
     await screen.findByText("Souci de paiement");
 
@@ -101,7 +102,7 @@ describe("AdminDashboard", () => {
       return handler(url, init);
     });
 
-    render(<AdminDashboard currentUserId={3} />);
+    render(<AdminDashboard currentUserId={3} />, { wrapper: LocaleProvider });
     fireEvent.click(await screen.findByText("alice"));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/sessions?user_id=1"));
 
@@ -121,7 +122,7 @@ describe("AdminDashboard", () => {
   it("promotes a user to SAV and reloads the lists", async () => {
     const fetchMock = mockFetch(handler);
 
-    render(<AdminDashboard currentUserId={3} />);
+    render(<AdminDashboard currentUserId={3} />, { wrapper: LocaleProvider });
     await screen.findByText("alice");
 
     // "SAV" (promote-to-SAV) is only rendered for rows in the "Utilisateurs"

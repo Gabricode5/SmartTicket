@@ -4,8 +4,10 @@ import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { ArrowLeft, MailCheck } from "lucide-react"
+import { useLocale } from "@/lib/i18n/LocaleContext"
 
 export default function ForgotPasswordPage() {
+    const { messages: t } = useLocale()
     const [error, setError] = useState("")
     const [isLoading, setIsLoading] = useState(false)
     const [sent, setSent] = useState(false)
@@ -27,10 +29,10 @@ export default function ForgotPasswordPage() {
             if (response.ok) {
                 setSent(true)
             } else {
-                setError("Impossible d'envoyer le lien pour le moment. Réessayez plus tard.")
+                setError(t.forgotPassword.sendError)
             }
         } catch {
-            setError("Impossible de contacter le serveur.")
+            setError(t.forgotPassword.networkError)
         } finally {
             setIsLoading(false)
         }
@@ -44,7 +46,7 @@ export default function ForgotPasswordPage() {
                     className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 transition-colors group"
                 >
                     <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
-                    Retour à l&apos;accueil
+                    {t.login.backToHome}
                 </Link>
                 <div className="flex items-center gap-2 font-bold text-slate-800">
                     <Image src="/logo_smartticket.png" alt="SmartTicket" width={28} height={28} className="h-7 w-7" />
@@ -60,15 +62,15 @@ export default function ForgotPasswordPage() {
                                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-100 mb-4">
                                     <MailCheck className="h-6 w-6 text-emerald-600" />
                                 </div>
-                                <h1 className="text-2xl font-bold text-slate-900">Vérifiez votre boîte mail</h1>
+                                <h1 className="text-2xl font-bold text-slate-900">{t.forgotPassword.checkEmailTitle}</h1>
                                 <p className="text-slate-500 text-sm mt-2">
-                                    Si un compte existe avec cette adresse, un lien de réinitialisation vient d&apos;être envoyé. Le lien expire dans 1 heure.
+                                    {t.forgotPassword.checkEmailBody}
                                 </p>
                                 <Link
                                     href="/login"
                                     className="mt-6 inline-block w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-colors"
                                 >
-                                    Retour à la connexion
+                                    {t.forgotPassword.backToLogin}
                                 </Link>
                             </div>
                         ) : (
@@ -77,8 +79,8 @@ export default function ForgotPasswordPage() {
                                     <div className="inline-flex items-center justify-center w-12 h-12 mb-4">
                                         <Image src="/logo_smartticket.png" alt="SmartTicket" width={48} height={48} className="w-12 h-12" />
                                     </div>
-                                    <h1 className="text-2xl font-bold text-slate-900">Mot de passe oublié ?</h1>
-                                    <p className="text-slate-500 text-sm mt-1">Entrez votre email pour recevoir un lien de réinitialisation</p>
+                                    <h1 className="text-2xl font-bold text-slate-900">{t.forgotPassword.title}</h1>
+                                    <p className="text-slate-500 text-sm mt-1">{t.forgotPassword.subtitle}</p>
                                 </div>
 
                                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -90,7 +92,7 @@ export default function ForgotPasswordPage() {
                                     )}
 
                                     <div className="space-y-1.5">
-                                        <label htmlFor="email" className="block text-sm font-medium text-slate-700">Adresse email</label>
+                                        <label htmlFor="email" className="block text-sm font-medium text-slate-700">{t.forgotPassword.emailLabel}</label>
                                         <input
                                             id="email" name="email" type="email" placeholder="vous@exemple.com" required
                                             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
@@ -102,14 +104,14 @@ export default function ForgotPasswordPage() {
                                         disabled={isLoading}
                                         className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors"
                                     >
-                                        {isLoading ? "Envoi…" : "Envoyer le lien"}
+                                        {isLoading ? t.forgotPassword.sending : t.forgotPassword.sendLink}
                                     </button>
                                 </form>
 
                                 <p className="text-center text-sm text-slate-500 mt-6">
                                     <Link href="/login" className="text-indigo-600 font-medium hover:text-indigo-700 hover:underline inline-flex items-center gap-1">
                                         <ArrowLeft className="h-3.5 w-3.5" />
-                                        Retour à la connexion
+                                        {t.forgotPassword.backToLogin}
                                     </Link>
                                 </p>
                             </>
