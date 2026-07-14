@@ -137,3 +137,88 @@ def test_burned_slug_blocks_retry_without_touching_render_again(render_mock, not
     assert "existe déjà" in retry.error
     # Un seul appel Render au total (celui du premier essai) : le retry n'a rien recréé.
     render_mock.create_postgres.assert_called_once()
+
+
+class TestFrontendReceivesTheRealBackendUrl:
+    """Bug trouvé le 2026-07-14 lors d'un provisioning réel (sans --domain) : le frontend
+    recevait NEXT_PUBLIC_API_URL vide à son PREMIER build (build_urls() renvoyait ("", "")
+    sans domaine, sur l'hypothèse fausse que l'URL *.onrender.com n'était connue qu'après
+    coup). Comme Next.js bake les rewrites de next.config.ts au build et jamais au runtime,
+    ça figeait le fallback "http://localhost:8000" dans l'image déployée — tous les appels
+    /api/* du frontend renvoyaient 404. Corrigé en prédisant l'URL *.onrender.com par
+    avance (déterministe : https://{nom-du-service}.onrender.com, confirmé par la doc
+    Render) plutôt qu'en la découvrant après coup depuis la réponse de l'API."""
+
+    def test_provision_passes_non_empty_backend_url_to_frontend_without_domain(self, render_mock, notify_mock):
+        _mock_common_steps(render_mock, postgres_id="pg-5")
+        render_mock.create_web_service.side_effect = [
+            {"id": "backend-5", "serviceDetails": {"url": "https://smartticket-acme5-backend.onrender.com"}},
+            {"id": "frontend-5", "serviceDetails": {"url": "https://smartticket-acme5-frontend.onrender.com"}},
+        ]
+        notify_mock.send_welcome_email.return_value = True
+
+        result = provision_client.provision(
+            client_name="Acme5", slug="acme5", postgres_plan="starter", admin_email="a@acme5.com",
+        )
+
+        assert result.status == "active"
+        backend_call_kwargs = render_mock.create_web_service.call_args_list[0].kwargs
+        frontend_call_kwargs = render_mock.create_web_service.call_args_list[1].kwargs
+
+        # C'est LE champ qui était vide avant le correctif — jamais vide, et jamais un
+        # fallback localhost/placeholder.
+        api_url = frontend_call_kwargs["env_vars"]["NEXT_PUBLIC_API_URL"]
+        assert api_url, "NEXT_PUBLIC_API_URL ne doit jamais être vide au moment du build frontend"
+        assert "localhost" not in api_url
+        assert "placeholder" not in api_url
+        assert api_url == "https://smartticket-acme5-backend.onrender.com"
+
+        # CORS_ORIGINS côté backend doit, symétriquement, pointer vers le frontend dès le
+        # premier déploiement (même bug potentiel, sens inverse).
+        cors_origins = backend_call_kwargs["env_vars"]["CORS_ORIGINS"]
+        assert cors_origins == "https://smartticket-acme5-frontend.onrender.com"
+
+        # provision() ne doit plus jamais avoir besoin de republier les env vars du backend
+        # après coup (l'ancien mécanisme de correction post-hoc a été retiré : l'URL est
+        # correcte dès la création, plus besoin de la deviner puis la corriger).
+        render_mock.set_env_vars.assert_not_called()
+
+    def test_provision_passes_custom_domain_url_to_frontend_when_domain_given(self, render_mock, notify_mock):
+        _mock_common_steps(render_mock, postgres_id="pg-6")
+        render_mock.create_web_service.side_effect = [
+            {"id": "backend-6", "serviceDetails": {"url": "https://acme6-api.smartticket.fr"}},
+            {"id": "frontend-6", "serviceDetails": {"url": "https://acme6.smartticket.fr"}},
+        ]
+        notify_mock.send_welcome_email.return_value = True
+
+        result = provision_client.provision(
+            client_name="Acme6", slug="acme6", postgres_plan="starter", admin_email="a@acme6.com",
+            domain="smartticket.fr",
+        )
+
+        assert result.status == "active"
+        frontend_call_kwargs = render_mock.create_web_service.call_args_list[1].kwargs
+        assert frontend_call_kwargs["env_vars"]["NEXT_PUBLIC_API_URL"] == "https://acme6-api.smartticket.fr"
+        render_mock.add_custom_domain.assert_called_once_with("frontend-6", "acme6.smartticket.fr")
+
+    def test_mismatch_between_predicted_and_reported_url_is_logged_but_does_not_fail(self, render_mock, notify_mock, caplog):
+        """Filet de sécurité pour une collision de nom *.onrender.com (rare : le nom n'est
+        garanti unique que dans notre workspace, pas globalement sur Render) : si l'API
+        Render renvoie une URL différente de celle prédite, provision() continue quand même
+        avec la valeur prédite (celle qu'on a demandée) et logue un avertissement explicite
+        plutôt que d'échouer silencieusement ou de planter."""
+        _mock_common_steps(render_mock, postgres_id="pg-7")
+        render_mock.create_web_service.side_effect = [
+            {"id": "backend-7", "serviceDetails": {"url": "https://smartticket-acme7-backend-2.onrender.com"}},
+            {"id": "frontend-7", "serviceDetails": {"url": "https://smartticket-acme7-frontend.onrender.com"}},
+        ]
+        notify_mock.send_welcome_email.return_value = True
+
+        import logging
+        with caplog.at_level(logging.WARNING, logger="provision_client"):
+            result = provision_client.provision(
+                client_name="Acme7", slug="acme7", postgres_plan="starter", admin_email="a@acme7.com",
+            )
+
+        assert result.status == "active"
+        assert any("collision de nom" in record.message for record in caplog.records)
