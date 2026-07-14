@@ -179,3 +179,43 @@ class TestRunMigrationsAdminBootstrapIdempotence:
         assert admin is not None
         assert admin.admin_setup_token is None
         assert admin.admin_setup_token_expires_at is None
+
+
+class TestRealisticProvisioningTokenChain:
+    """Reproduit la CHAÎNE RÉELLE d'un provisioning via ops/provision_client.py — pas juste
+    la pose directe d'un token en base comme le fait _give_admin_a_setup_token() plus haut
+    dans ce fichier. Bug trouvé le 2026-07-14 lors du premier provisioning réel contre
+    l'API Render : POST /v1/setup renvoyait 400 malgré un token en apparence correct dans
+    l'env var du backend. Aucun test existant ne couvrait ce chemin bout-en-bout (token
+    généré par secrets.token_urlsafe(32) -> posé en env var ADMIN_SETUP_TOKEN -> lu par
+    run_migrations() au démarrage -> renvoyé au client via /v1/setup?token=... -> POST
+    /v1/setup avec ce même token), ce qui explique pourquoi ce bug n'a été détecté qu'en
+    conditions réelles plutôt qu'en CI."""
+
+    def test_token_generated_like_provisioning_and_read_from_env_survives_the_full_chain(self, client, db_session, monkeypatch):
+        db_session.query(models.Utilisateur).filter_by(email=_ADMIN_EMAIL).delete()
+        db_session.commit()
+
+        # Même génération EXACTE que ops/provision_client.py::generate_secret() — pas un
+        # token de test simplifié comme "fresh-instance-token" ci-dessus. secrets.token_urlsafe
+        # produit un alphabet base64 URL-safe (A-Za-z0-9-_), susceptible de contenir les
+        # caractères '-'/'_' qu'un token de test à la main ne contient pas forcément.
+        real_token = secrets.token_urlsafe(32)
+        monkeypatch.setenv("ADMIN_SETUP_TOKEN", real_token)
+        try:
+            run_migrations()
+        finally:
+            monkeypatch.delenv("ADMIN_SETUP_TOKEN", raising=False)
+
+        # Le client construit ce POST à partir du query param ?token=... de /setup (cf.
+        # frontend/app/(auth)/setup/page.tsx) — ici on saute directement au body réellement
+        # envoyé, le round-trip URL -> useSearchParams() étant strictement côté navigateur,
+        # non testable depuis la suite pytest backend.
+        resp = client.post("/v1/setup", json={
+            "token": real_token, "username": "acme_admin", "email": "acme-admin@example.com",
+            "password": _TEST_PASSWORD,
+        })
+        assert resp.status_code == 200, resp.json()
+
+        login = client.post("/v1/login", json={"email": "acme-admin@example.com", "password": _TEST_PASSWORD})
+        assert login.status_code == 200, login.json()

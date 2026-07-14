@@ -1,3 +1,4 @@
+import logging
 import os
 from datetime import datetime
 
@@ -30,6 +31,7 @@ from email_utils import send_password_reset_email, send_verification_email
 from pdf_export import build_user_data_export_pdf
 
 router = APIRouter(tags=["Authentification"])
+logger = logging.getLogger(__name__)
 
 ADMIN_SETUP_KEY = os.getenv("ADMIN_SETUP_KEY")
 
@@ -205,25 +207,46 @@ def setup_account(request: Request, payload: schemas.AdminSetupRequest, db: Sess
     JWT applicatif — un secret stocké en base, à usage unique (admin_setup_token_used_at)
     et expirant (admin_setup_token_expires_at), jamais renvoyé par aucune route de l'API."""
     if len(payload.password) < ADMIN_SETUP_MIN_PASSWORD_LENGTH:
+        logger.warning("POST /v1/setup rejeté : mot de passe trop court (%d caractères, %d requis)", len(payload.password), ADMIN_SETUP_MIN_PASSWORD_LENGTH)
         raise HTTPException(status_code=400, detail=f"Le mot de passe doit contenir au moins {ADMIN_SETUP_MIN_PASSWORD_LENGTH} caractères")
     if payload.password.lower() in _COMMON_PASSWORDS:
+        logger.warning("POST /v1/setup rejeté : mot de passe trop commun")
         raise HTTPException(status_code=400, detail="Ce mot de passe est trop commun, choisis-en un autre.")
 
     user = db.query(models.Utilisateur).filter(models.Utilisateur.admin_setup_token == payload.token).first()
     if not user:
+        # Jamais le token lui-même dans les logs — uniquement sa longueur et le nombre de
+        # comptes qui ont un token d'amorçage en attente sur CETTE base, pour distinguer
+        # "aucun admin en attente de setup ici" (la requête a peut-être atteint la mauvaise
+        # instance/le mauvais backend) de "un admin en attente existe mais avec un autre
+        # token" (vraie divergence de valeur).
+        pending_count = db.query(models.Utilisateur).filter(models.Utilisateur.admin_setup_token.isnot(None)).count()
+        logger.warning(
+            "POST /v1/setup rejeté : invalid_token (longueur du token reçu=%d, %d compte(s) "
+            "avec un token d'amorçage en attente sur cette instance)",
+            len(payload.token), pending_count,
+        )
         raise HTTPException(status_code=400, detail={"code": "invalid_token", "message": "Lien de configuration invalide."})
     if user.admin_setup_token_used_at is not None:
+        logger.warning("POST /v1/setup rejeté : token_already_used (compte %s, consommé le %s)", user.email, user.admin_setup_token_used_at)
         raise HTTPException(status_code=400, detail={"code": "token_already_used", "message": "Ce lien a déjà été utilisé."})
     if user.admin_setup_token_expires_at and user.admin_setup_token_expires_at.replace(tzinfo=None) < datetime.utcnow():
+        logger.warning(
+            "POST /v1/setup rejeté : token_expired (compte %s, expiré depuis le %s, maintenant %s)",
+            user.email, user.admin_setup_token_expires_at, datetime.utcnow(),
+        )
         raise HTTPException(status_code=400, detail={"code": "token_expired", "message": "Ce lien a expiré. Contactez votre fournisseur SmartTicket pour en recevoir un nouveau."})
 
     new_username = payload.username.strip()
     new_email = payload.email.strip().lower()
     if not new_username:
+        logger.warning("POST /v1/setup rejeté : nom d'utilisateur vide (compte %s)", user.email)
         raise HTTPException(status_code=400, detail="Le nom d'utilisateur ne peut pas être vide.")
     if db.query(models.Utilisateur).filter(models.Utilisateur.username == new_username, models.Utilisateur.id != user.id).first():
+        logger.warning("POST /v1/setup rejeté : nom d'utilisateur déjà utilisé (compte %s)", user.email)
         raise HTTPException(status_code=400, detail="Ce nom d'utilisateur est déjà utilisé.")
     if db.query(models.Utilisateur).filter(models.Utilisateur.email == new_email, models.Utilisateur.id != user.id).first():
+        logger.warning("POST /v1/setup rejeté : email déjà utilisé (compte %s tentait de passer à %s)", user.email, new_email)
         raise HTTPException(status_code=400, detail="Cet email est déjà utilisé.")
 
     # Consommation du token et écriture du mot de passe posées sur le même objet `user` en
