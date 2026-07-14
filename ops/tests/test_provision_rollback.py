@@ -13,6 +13,7 @@ import pytest
 
 import db
 import provision_client
+import render_client  # module réel, non mocké — pour lire ses vraies constantes dans les tests
 
 
 @pytest.fixture(autouse=True)
@@ -65,6 +66,11 @@ def test_full_success_never_calls_delete_and_marks_instance_active(render_mock, 
 
     assert result.status == "active"
     render_mock.delete_resources.assert_not_called()
+    # provision() doit transmettre la version PostgreSQL par défaut à render.create_postgres()
+    # (paramètre requis côté API Render depuis le 2026-07-14, cf. render_client.py) — vérifie
+    # le câblage bout-en-bout, la forme exacte du payload est couverte par test_render_client.py.
+    _, postgres_kwargs = render_mock.create_postgres.call_args
+    assert postgres_kwargs["version"] == render_client.DEFAULT_POSTGRES_VERSION
     row = db.get_instance("acme-success")
     assert row["statut"] == "active"
     assert row["render_backend_service_id"] == "backend-1"

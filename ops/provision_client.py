@@ -13,9 +13,13 @@ Prérequis (cf. docs/FLEET_PROVISIONING_PLAN.md, Phase 0) :
     - Si --domain est fourni : le domaine doit déjà exister et pointer vers Render (wildcard
       DNS), cf. Phase 0. Sans --domain, l'instance reste accessible via son URL *.onrender.com.
 
-ATTENTION : non testé contre un vrai compte Render (cf. render_client.py). Toujours lancer avec
---dry-run d'abord, puis sur une instance de test jetable avant tout client réel (Phase 4 du
-plan).
+ATTENTION : premier essai réel contre un vrai compte Render effectué le 2026-07-14 (cf.
+render_client.py pour le détail des écarts trouvés et corrigés avec le schéma OpenAPI réel de
+Render — la création de la base Postgres a été testée, le rollback déclenché sur cet échec a
+été confirmé fonctionner en pratique). La création des services web (backend/frontend) et
+l'attachement d'un domaine personnalisé restent, eux, non testés en conditions réelles.
+Toujours lancer avec --dry-run d'abord, puis sur une instance de test jetable avant tout
+client réel (Phase 4 du plan).
 
 La logique métier vit dans provision() — une fonction pure (pas d'input(), pas de print()
 comme moyen de retour, uniquement du logging + une valeur de retour) appelable telle quelle
@@ -123,6 +127,7 @@ def _rollback(slug: str, created_resources: list[tuple[str, str, str]], *, error
 def provision(
     *, client_name: str, slug: str, postgres_plan: str, admin_email: str,
     domain: str | None = None, web_plan: str = "starter",
+    postgres_version: str = render.DEFAULT_POSTGRES_VERSION,
     repo: str = DEFAULT_REPO, branch: str = DEFAULT_BRANCH,
 ) -> ProvisionResult:
     """Crée Postgres + backend + frontend Render pour un nouveau client et enregistre
@@ -160,7 +165,7 @@ def provision(
 
         logger.info("Création de la base Postgres '%s'...", db_name)
         postgres = render.create_postgres(
-            name=db_name, owner_id=owner_id, plan=postgres_plan,
+            name=db_name, owner_id=owner_id, plan=postgres_plan, version=postgres_version,
             database_name=slug.replace("-", "_"), database_user="admin",
         )
         postgres_id = postgres["id"]
@@ -278,6 +283,13 @@ def main() -> int:
     parser.add_argument("--slug", required=True, help="Identifiant court, sans espaces (ex: acme-corp)")
     parser.add_argument("--admin-email", required=True, help="Email du compte admin du client (recevra le lien de setup)")
     parser.add_argument("--postgres-plan", required=True, help="Plan Postgres Render (JAMAIS 'free' — aucun backup sur ce plan)")
+    parser.add_argument(
+        "--postgres-version", default=render.DEFAULT_POSTGRES_VERSION,
+        choices=render.SUPPORTED_POSTGRES_VERSIONS,
+        help=f"Version majeure de PostgreSQL (défaut: {render.DEFAULT_POSTGRES_VERSION}, "
+             "alignée sur docker-compose.yml/CI — pgvector supporté sans restriction sur "
+             "Postgres 13+ côté Render)",
+    )
     parser.add_argument("--web-plan", default="starter", help="Plan Render pour les services web (défaut: starter)")
     parser.add_argument("--domain", default=None, help="Suffixe de domaine (ex: smartticket.fr) — sans domaine, l'instance reste sur *.onrender.com")
     parser.add_argument("--repo", default=DEFAULT_REPO, help=f"Repo GitHub à déployer (défaut: {DEFAULT_REPO})")
@@ -298,7 +310,7 @@ def main() -> int:
     if args.dry_run:
         expected_backend_url, expected_frontend_url = build_urls(args.slug, args.domain)
         print("--- DRY RUN : rien ne sera créé ---")
-        print(f"Postgres      : smartticket-{args.slug}-postgres (plan={args.postgres_plan})")
+        print(f"Postgres      : smartticket-{args.slug}-postgres (plan={args.postgres_plan}, version={args.postgres_version})")
         print(f"Backend       : smartticket-{args.slug}-backend (plan={args.web_plan}) — repo={args.repo}@{args.branch}, rootDir=backend")
         print(f"Frontend      : smartticket-{args.slug}-frontend (plan={args.web_plan}) — repo={args.repo}@{args.branch}, rootDir=frontend")
         print(f"Admin email   : {args.admin_email}")
@@ -312,7 +324,7 @@ def main() -> int:
     result = provision(
         client_name=args.name, slug=args.slug, postgres_plan=args.postgres_plan,
         admin_email=args.admin_email, domain=args.domain, web_plan=args.web_plan,
-        repo=args.repo, branch=args.branch,
+        postgres_version=args.postgres_version, repo=args.repo, branch=args.branch,
     )
 
     if result.status != "active":
