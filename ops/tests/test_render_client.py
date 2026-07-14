@@ -35,6 +35,19 @@ def _mock_response(requests_mock, *, status_code=201, json_body=None):
     return response
 
 
+def _response(*, status_code=200, json_body=None, text=""):
+    """Comme _mock_response() mais retourne l'objet SANS le poser sur requests_mock — pour
+    construire une SÉQUENCE de réponses différentes (polling) via side_effect, plutôt qu'une
+    seule réponse fixe via return_value."""
+    response = mock.Mock()
+    response.ok = 200 <= status_code < 300
+    response.status_code = status_code
+    response.content = b"{}" if json_body is not None or status_code >= 300 else b""
+    response.json.return_value = json_body or {}
+    response.text = text
+    return response
+
+
 def test_create_postgres_sends_required_version_field(requests_mock, monkeypatch):
     monkeypatch.setattr(render_client, "RENDER_API_KEY", "test-key")
     _mock_response(requests_mock, json_body={"id": "pg-1"})
@@ -135,3 +148,73 @@ def test_wait_for_deploy_live_returns_true_on_live_status(monkeypatch):
     )
 
     assert render_client.wait_for_deploy_live("svc-1", timeout_seconds=5, poll_interval_seconds=0) is True
+
+
+# --- Race condition trouvée le 2026-07-15 : GET .../connection-info répond 404 juste après
+# la création d'une base Postgres, car son statut est encore 'creating' — cf. render_client.py
+# pour le détail. wait_for_postgres_available() doit polling GET /postgres/{id} (pas
+# connection-info) jusqu'à 'available' avant que provision_client.py n'appelle
+# get_postgres_connection_info().
+
+def test_wait_for_postgres_available_polls_until_status_available(requests_mock, monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", "test-key")
+    monkeypatch.setattr(render_client.time, "sleep", lambda _seconds: None)
+    requests_mock.request.side_effect = [
+        _response(json_body={"id": "pg-1", "status": "creating"}),
+        _response(json_body={"id": "pg-1", "status": "creating"}),
+        _response(json_body={"id": "pg-1", "status": "available"}),
+    ]
+
+    result = render_client.wait_for_postgres_available("pg-1", timeout_seconds=5, poll_interval_seconds=0)
+
+    assert result is True
+    assert requests_mock.request.call_count == 3
+
+
+def test_wait_for_postgres_available_raises_on_recovery_failed(requests_mock, monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", "test-key")
+    _mock_response(requests_mock, json_body={"id": "pg-1", "status": "recovery_failed"})
+
+    with pytest.raises(render_client.RenderAPIError, match="recovery_failed"):
+        render_client.wait_for_postgres_available("pg-1", timeout_seconds=5, poll_interval_seconds=0)
+
+
+def test_wait_for_postgres_available_returns_false_on_timeout(requests_mock, monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", "test-key")
+    monkeypatch.setattr(render_client.time, "sleep", lambda _seconds: None)
+    # Reste bloquée en 'creating' indéfiniment dans ce test — jamais 'available'.
+    _mock_response(requests_mock, json_body={"id": "pg-1", "status": "creating"})
+
+    result = render_client.wait_for_postgres_available("pg-1", timeout_seconds=0, poll_interval_seconds=0)
+
+    assert result is False
+
+
+def test_get_latest_deploy_treats_404_as_not_ready_yet_rather_than_raising(requests_mock, monkeypatch):
+    """Même classe de race condition que sur Postgres, pas reproduite en pratique à ce jour
+    mais rien dans le schéma OpenAPI ne garantit qu'elle ne le sera jamais (cf. commentaire
+    dans get_latest_deploy()) : un 404 juste après la création d'un service ne doit pas
+    faire planter wait_for_deploy_live(), seulement le faire continuer à polling."""
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", "test-key")
+
+    not_found = _response(status_code=404, text='{"message":"not found"}')
+    requests_mock.request.return_value = not_found
+
+    assert render_client.get_latest_deploy("svc-1") is None
+
+
+def test_wait_for_deploy_live_survives_a_transient_404_then_succeeds(requests_mock, monkeypatch):
+    """Le scénario bout en bout demandé : la ressource n'est pas encore prête (404), puis
+    elle l'est (deploy 'live') — wait_for_deploy_live() doit attendre plutôt qu'échouer."""
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", "test-key")
+    monkeypatch.setattr(render_client.time, "sleep", lambda _seconds: None)
+    requests_mock.request.side_effect = [
+        _response(status_code=404, text='{"message":"not found"}'),
+        _response(json_body=[{"cursor": "a", "deploy": {"id": "dep-1", "status": "build_in_progress"}}]),
+        _response(json_body=[{"cursor": "b", "deploy": {"id": "dep-1", "status": "live"}}]),
+    ]
+
+    result = render_client.wait_for_deploy_live("svc-1", timeout_seconds=5, poll_interval_seconds=0)
+
+    assert result is True
+    assert requests_mock.request.call_count == 3
