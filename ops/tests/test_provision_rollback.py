@@ -38,6 +38,10 @@ def notify_mock():
 def _mock_common_steps(render_mock, *, postgres_id: str):
     render_mock.get_owner_id.return_value = "owner-1"
     render_mock.create_postgres.return_value = {"id": postgres_id}
+    # Explicite plutôt que de compter sur la vérité par défaut d'un MagicMock non configuré
+    # (cf. render_client.wait_for_postgres_available(), ajoutée le 2026-07-15 pour la race
+    # condition sur GET .../connection-info juste après la création d'une base Postgres).
+    render_mock.wait_for_postgres_available.return_value = True
     render_mock.get_postgres_connection_info.return_value = {"internalConnectionString": "postgres://x"}
     render_mock.wait_for_deploy_live.return_value = True
 
@@ -222,3 +226,61 @@ class TestFrontendReceivesTheRealBackendUrl:
 
         assert result.status == "active"
         assert any("collision de nom" in record.message for record in caplog.records)
+
+
+class TestPostgresAvailabilityIsAwaitedBeforeConnectionInfo:
+    """Race condition trouvée le 2026-07-15 en conditions réelles : GET
+    .../connection-info répondait 404 ~400ms après POST /postgres, la base étant encore
+    'creating'. provision() doit désormais attendre render.wait_for_postgres_available()
+    et déclencher le rollback normal si l'attente expire, plutôt que de laisser
+    get_postgres_connection_info() échouer bruyamment. Cf. render_client.py et
+    ops/tests/test_render_client.py pour la couverture du polling lui-même."""
+
+    def test_provision_waits_for_postgres_before_fetching_connection_info(self, render_mock, notify_mock):
+        _mock_common_steps(render_mock, postgres_id="pg-8")
+        render_mock.create_web_service.side_effect = [
+            {"id": "backend-8", "serviceDetails": {"url": "https://backend-8.onrender.com"}},
+            {"id": "frontend-8", "serviceDetails": {"url": "https://frontend-8.onrender.com"}},
+        ]
+        notify_mock.send_welcome_email.return_value = True
+
+        manager = mock.Mock()
+        manager.attach_mock(render_mock.wait_for_postgres_available, "wait_for_postgres_available")
+        manager.attach_mock(render_mock.get_postgres_connection_info, "get_postgres_connection_info")
+
+        result = provision_client.provision(
+            client_name="Acme8", slug="acme8", postgres_plan="starter", admin_email="a@acme8.com",
+        )
+
+        assert result.status == "active"
+        # L'ordre exact qui a fait défaut en réel : le polling doit être terminé AVANT le
+        # premier appel à connection-info, jamais l'inverse ni en parallèle.
+        assert [call[0] for call in manager.mock_calls] == [
+            "wait_for_postgres_available", "get_postgres_connection_info",
+        ]
+        render_mock.wait_for_postgres_available.assert_called_once_with("pg-8")
+
+    def test_provision_rolls_back_when_postgres_never_becomes_available(self, render_mock, notify_mock):
+        _mock_common_steps(render_mock, postgres_id="pg-9")
+        # Seule différence avec un run réussi : la base ne devient jamais 'available'.
+        render_mock.wait_for_postgres_available.return_value = False
+        render_mock.delete_resources.return_value = []  # rollback réussi à 100%
+
+        result = provision_client.provision(
+            client_name="Acme9", slug="acme9", postgres_plan="starter", admin_email="a@acme9.com",
+        )
+
+        assert result.status == "failed"
+        assert "ROLLBACK INCOMPLET" not in result.error
+        # get_postgres_connection_info() ne doit jamais être appelée si l'attente échoue —
+        # c'est justement l'appel qui répondait 404 en conditions réelles.
+        render_mock.get_postgres_connection_info.assert_not_called()
+        # Un seul service créé (le backend) au moment de l'échec sur le Postgres : aucun
+        # web service n'a même été tenté.
+        render_mock.create_web_service.assert_not_called()
+        (called_resources,), _ = render_mock.delete_resources.call_args
+        assert [label for label, _, _ in called_resources] == ["base Postgres"]
+        assert [rid for _, _, rid in called_resources] == ["pg-9"]
+
+        assert db.get_instance("acme9") is None
+        assert not db.slug_exists("acme9")

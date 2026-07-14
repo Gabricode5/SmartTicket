@@ -203,6 +203,14 @@ def provision(
         db.update_instance(slug, render_database_id=postgres_id)
 
         logger.info("Attente de la disponibilité de la base...")
+        # VRAI polling sur le statut ('creating' -> 'available') avant connection-info —
+        # sans ça, get_postgres_connection_info() peut répondre 404 alors même que l'ID est
+        # valide : la base existe mais Render n'a pas fini de la provisionner (race
+        # condition confirmée en conditions réelles le 2026-07-15, ~400ms entre la création
+        # et le premier appel connection-info ont suffi à la déclencher).
+        if not render.wait_for_postgres_available(postgres_id):
+            raise RuntimeError(f"La base Postgres {postgres_id} n'est toujours pas 'available' après le délai d'attente.")
+
         connection_info = render.get_postgres_connection_info(postgres_id)
         database_url = connection_info.get("internalConnectionString") or connection_info.get("externalConnectionString")
         if not database_url:
