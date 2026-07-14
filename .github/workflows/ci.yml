@@ -129,8 +129,17 @@ jobs:
       - name: Build de production
         working-directory: frontend
         env:
-          NEXT_PUBLIC_API_URL: http://localhost:8000
+          # Volontairement PAS localhost : le script de vérification qui suit (étape
+          # suivante) rejette justement ce fallback comme signe d'une NEXT_PUBLIC_API_URL
+          # absente/vide au build (cf. régression du 2026-07-14, ops/provision_client.py).
+          # Cette valeur n'a pas besoin de pointer vers un vrai backend — Next.js bake juste
+          # la chaîne dans le rewrite, aucun appel réseau n'a lieu pendant `next build`.
+          NEXT_PUBLIC_API_URL: https://ci-build-placeholder.onrender.com
         run: npm run build
+
+      - name: Vérifier le build de production (rewrite /api/*, route /setup)
+        working-directory: frontend
+        run: node scripts/verify-production-build.mjs
 
       - name: Résumé → GitHub
         if: always()

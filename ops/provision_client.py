@@ -20,8 +20,11 @@ partiel, POST /v1/setup (amorçage du compte admin par token). Bug trouvé et co
 même série d'essais : sans --domain, le frontend recevait NEXT_PUBLIC_API_URL vide à son
 premier build (Next.js bake les rewrites de next.config.ts au build, jamais au runtime) —
 build_urls() prédit maintenant les URLs *.onrender.com par avance au lieu de les découvrir
-après coup. L'attachement d'un domaine personnalisé (--domain), lui, reste non testé en
-conditions réelles (en particulier l'attente du certificat TLS). Toujours lancer avec
+après coup — cf. frontend/scripts/verify-production-build.mjs (lancé en CI juste après
+`next build`), qui fait maintenant échouer explicitement tout build où le rewrite /api/*
+retomberait sur ce fallback localhost. L'attachement d'un domaine personnalisé (--domain),
+lui, reste non testé en conditions réelles (en particulier l'attente du certificat TLS).
+Toujours lancer avec
 --dry-run d'abord, puis sur une instance de test jetable avant tout client réel (Phase 4 du
 plan).
 
