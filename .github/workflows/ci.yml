@@ -145,8 +145,38 @@ jobs:
           echo "| Build Next.js | ✅ |" >> $GITHUB_STEP_SUMMARY
 
   # ─────────────────────────────────────────────
-  # JOB 3 — Déploiement (CD) sur Render
-  # Déclenché UNIQUEMENT si les deux jobs de tests passent
+  # JOB 3 — Outillage flotte (ops/) : pytest
+  # Volontairement PAS dans `needs` du job deploy ci-dessous : ops/ est l'outillage de
+  # vente (provisioning/déprovisioning des instances clientes), jamais déployé avec
+  # l'application (cf. ops/README.md) — un test cassé ici ne doit pas bloquer la livraison
+  # d'un correctif applicatif par ailleurs valide.
+  # ─────────────────────────────────────────────
+  ops-tests:
+    name: "Outillage flotte (ops/) — Tests"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+          cache-dependency-path: ops/requirements-dev.txt
+
+      - name: Installer les dépendances
+        working-directory: ops
+        run: pip install -r requirements-dev.txt
+
+      - name: Lancer les tests
+        working-directory: ops
+        run: pytest
+
+  # ─────────────────────────────────────────────
+  # JOB 4 — Déploiement (CD) sur Render
+  # Déclenché UNIQUEMENT si les deux jobs de tests applicatifs passent
   # et UNIQUEMENT sur un push sur main (pas sur les PRs)
   # ─────────────────────────────────────────────
   deploy:

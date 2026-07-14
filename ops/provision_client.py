@@ -79,6 +79,47 @@ def _shared_secret(env_var: str, required: bool = True) -> str:
     return value or ""
 
 
+def _rollback(slug: str, created_resources: list[tuple[str, str, str]], *, error: str) -> ProvisionResult:
+    """Défait au mieux les ressources Render déjà créées avant l'échec, en ORDRE INVERSE de
+    création — dernière créée, première supprimée (les dépendances éventuelles entre
+    ressources, ex. domaine custom posé sur le frontend, se défont dans le bon sens).
+    Réutilise render_client.delete_resources() : même logique best-effort que
+    delete_client.py (continue même si une suppression échoue), pas réimplémentée ici.
+
+    Politique de slug après échec (délibérée, pas un détail) :
+      - Rollback COMPLET (toutes les ressources supprimées) → la ligne instances.db est
+        retirée : le slug redevient libre, un retry derrière est sûr (aucune ressource
+        Render ne subsiste sous ce nom, donc aucun risque de collision).
+      - Rollback INCOMPLET (au moins une ressource survit) → la ligne est marquée
+        statut='failed' et CONSERVÉE (avec les IDs orphelins dans `notes`) : le slug reste
+        donc "brûlé" (db.slug_exists() continue de le bloquer) tant qu'un humain n'a pas
+        nettoyé manuellement sur le dashboard Render et supprimé la ligne à la main. Le
+        laisser réutilisable ici serait dangereux : retenter provisionnerait de nouvelles
+        ressources avec des noms Render potentiellement déjà pris par les orphelines
+        (smartticket-{slug}-backend, etc.), ou pire, laisserait deux jeux de ressources
+        actifs sous des identités qui se ressemblent sans que personne ne s'en aperçoive.
+    """
+    logger.warning("Rollback de '%s' : suppression de %d ressource(s) déjà créée(s)...", slug, len(created_resources))
+    failed = render.delete_resources(list(reversed(created_resources)))
+
+    if not failed:
+        db.delete_instance_row(slug)
+        logger.info("Rollback de '%s' terminé : ressources supprimées, slug libéré pour un nouvel essai.", slug)
+        return ProvisionResult(slug=slug, status="failed", error=error)
+
+    orphans = "; ".join(f"{label} (id={resource_id})" for label, _, resource_id in failed)
+    rollback_error = (
+        f"{error} — ROLLBACK INCOMPLET : {len(failed)} ressource(s) Render n'ont pas pu être "
+        f"supprimées et restent probablement facturées : {orphans}. Nettoyage manuel requis "
+        f"sur le dashboard Render, puis suppression de la ligne '{slug}' dans instances.db. "
+        f"Le slug '{slug}' reste réservé (statut 'failed') tant que ce nettoyage n'est pas fait "
+        f"— ne PAS relancer le provisioning avec le même slug avant."
+    )
+    logger.error(rollback_error)
+    db.update_instance(slug, statut="failed", notes=orphans)
+    return ProvisionResult(slug=slug, status="failed", error=rollback_error)
+
+
 def provision(
     *, client_name: str, slug: str, postgres_plan: str, admin_email: str,
     domain: str | None = None, web_plan: str = "starter",
@@ -86,7 +127,13 @@ def provision(
 ) -> ProvisionResult:
     """Crée Postgres + backend + frontend Render pour un nouveau client et enregistre
     l'instance dans ops/instances.db. Ne fait aucun appel réseau tant que l'idempotence et
-    la validité du plan Postgres n'ont pas été vérifiées."""
+    la validité du plan Postgres n'ont pas été vérifiées.
+
+    Le slug est réservé dans instances.db (statut 'provisioning') AVANT le moindre appel
+    Render, et chaque ID de ressource y est persisté dès sa création (pas seulement à la
+    fin) : même un crash non rattrapé par le except ci-dessous (process tué, coupure
+    réseau irrécupérable...) laisse une trace exploitable pour un nettoyage manuel. En cas
+    d'échec intercepté, cf. _rollback() ci-dessus pour la suite."""
     db.init_db()
 
     if db.slug_exists(slug):
@@ -97,101 +144,119 @@ def provision(
     db_name = f"smartticket-{slug}-postgres"
 
     secret_key = generate_secret()
-    admin_setup_key = generate_secret()
     vendor_key = generate_secret()
     admin_setup_token = generate_secret()  # jamais un mot de passe : cf. POST /v1/setup côté backend
 
     expected_backend_url, expected_frontend_url = build_urls(slug, domain)
 
-    owner_id = render.get_owner_id()
+    db.insert_instance(client_name=client_name, slug=slug, vendor_key=vendor_key, statut="provisioning")
 
-    logger.info("Création de la base Postgres '%s'...", db_name)
-    postgres = render.create_postgres(
-        name=db_name, owner_id=owner_id, plan=postgres_plan,
-        database_name=slug.replace("-", "_"), database_user="admin",
-    )
-    postgres_id = postgres["id"]
+    # (label, type, id) dans l'ORDRE de création — relu à l'envers par _rollback() en cas
+    # d'échec plus bas.
+    created_resources: list[tuple[str, str, str]] = []
 
-    logger.info("Attente de la disponibilité de la base...")
-    connection_info = render.get_postgres_connection_info(postgres_id)
-    database_url = connection_info.get("internalConnectionString") or connection_info.get("externalConnectionString")
-    if not database_url:
-        return ProvisionResult(slug=slug, status="failed", error="Impossible de récupérer la chaîne de connexion de la base Postgres.")
+    try:
+        owner_id = render.get_owner_id()
 
-    cors_origins = expected_frontend_url or "https://placeholder.onrender.com"
+        logger.info("Création de la base Postgres '%s'...", db_name)
+        postgres = render.create_postgres(
+            name=db_name, owner_id=owner_id, plan=postgres_plan,
+            database_name=slug.replace("-", "_"), database_user="admin",
+        )
+        postgres_id = postgres["id"]
+        created_resources.append(("base Postgres", "postgres", postgres_id))
+        db.update_instance(slug, render_database_id=postgres_id)
 
-    backend_env = {
-        "DATABASE_URL": database_url,
-        "SECRET_KEY": secret_key,
-        "ALGORITHM": "HS256",
-        "ACCESS_TOKEN_EXPIRE_MINUTES": "60",
-        "CORS_ORIGINS": cors_origins,
-        "ADMIN_SETUP_KEY": admin_setup_key,
-        "VENDOR_KEY": vendor_key,
-        "ADMIN_EMAIL": admin_email,
-        "ADMIN_USERNAME": "admin",
-        # Volontairement PAS d'ADMIN_PASSWORD : main.py::run_migrations crée le compte avec
-        # un mot de passe aléatoire inconnu de tous et ce token, en attente de POST /v1/setup.
-        "ADMIN_SETUP_TOKEN": admin_setup_token,
-        "MISTRAL_API_KEY": _shared_secret("MISTRAL_API_KEY"),
-        "EMBED_MODEL": "mistral-embed",
-        "BREVO_API_KEY": _shared_secret("BREVO_API_KEY", required=False),
-    }
+        logger.info("Attente de la disponibilité de la base...")
+        connection_info = render.get_postgres_connection_info(postgres_id)
+        database_url = connection_info.get("internalConnectionString") or connection_info.get("externalConnectionString")
+        if not database_url:
+            raise RuntimeError("Impossible de récupérer la chaîne de connexion de la base Postgres.")
 
-    logger.info("Création du service backend '%s'...", backend_name)
-    backend_service = render.create_web_service(
-        name=backend_name, owner_id=owner_id, repo=repo, branch=branch,
-        root_dir="backend", dockerfile_path="./Dockerfile", env_vars=backend_env,
-        plan=web_plan, health_check_path="/",
-    )
-    backend_service_id = backend_service["id"]
+        cors_origins = expected_frontend_url or "https://placeholder.onrender.com"
 
-    logger.info("Attente du premier déploiement backend (peut prendre plusieurs minutes)...")
-    if not render.wait_for_deploy_live(backend_service_id):
-        logger.warning("Le backend n'est pas encore 'live' après le délai d'attente — vérifie manuellement sur Render.")
+        backend_env = {
+            "DATABASE_URL": database_url,
+            "SECRET_KEY": secret_key,
+            "ALGORITHM": "HS256",
+            "ACCESS_TOKEN_EXPIRE_MINUTES": "60",
+            "CORS_ORIGINS": cors_origins,
+            "VENDOR_KEY": vendor_key,
+            "ADMIN_EMAIL": admin_email,
+            "ADMIN_USERNAME": "admin",
+            # Volontairement PAS d'ADMIN_PASSWORD : main.py::run_migrations crée le compte avec
+            # un mot de passe aléatoire inconnu de tous et ce token, en attente de POST /v1/setup.
+            # Volontairement PAS d'ADMIN_SETUP_KEY non plus : cette variable réactiverait la
+            # route de secours POST /v1/setup-admin (inerte tant qu'elle est absente, cf.
+            # backend/routers/auth.py) sur une instance client de production — cf. décision
+            # documentée dans docs/FLEET_PROVISIONING_PLAN.md.
+            "ADMIN_SETUP_TOKEN": admin_setup_token,
+            "MISTRAL_API_KEY": _shared_secret("MISTRAL_API_KEY"),
+            "EMBED_MODEL": "mistral-embed",
+            "BREVO_API_KEY": _shared_secret("BREVO_API_KEY", required=False),
+        }
 
-    backend_actual_url = expected_backend_url or backend_service.get("serviceDetails", {}).get("url", "")
+        logger.info("Création du service backend '%s'...", backend_name)
+        backend_service = render.create_web_service(
+            name=backend_name, owner_id=owner_id, repo=repo, branch=branch,
+            root_dir="backend", dockerfile_path="./Dockerfile", env_vars=backend_env,
+            plan=web_plan, health_check_path="/",
+        )
+        backend_service_id = backend_service["id"]
+        created_resources.append(("service backend", "service", backend_service_id))
+        db.update_instance(slug, render_backend_service_id=backend_service_id)
 
-    frontend_env = {
-        "NEXT_PUBLIC_API_URL": backend_actual_url,
-    }
+        logger.info("Attente du premier déploiement backend (peut prendre plusieurs minutes)...")
+        if not render.wait_for_deploy_live(backend_service_id):
+            logger.warning("Le backend n'est pas encore 'live' après le délai d'attente — vérifie manuellement sur Render.")
 
-    logger.info("Création du service frontend '%s'...", frontend_name)
-    frontend_service = render.create_web_service(
-        name=frontend_name, owner_id=owner_id, repo=repo, branch=branch,
-        root_dir="frontend", dockerfile_path="./Dockerfile", env_vars=frontend_env,
-        plan=web_plan,
-    )
-    frontend_service_id = frontend_service["id"]
+        backend_actual_url = expected_backend_url or backend_service.get("serviceDetails", {}).get("url", "")
 
-    logger.info("Attente du premier déploiement frontend...")
-    if not render.wait_for_deploy_live(frontend_service_id):
-        logger.warning("Le frontend n'est pas encore 'live' après le délai d'attente — vérifie manuellement sur Render.")
+        frontend_env = {
+            "NEXT_PUBLIC_API_URL": backend_actual_url,
+        }
 
-    frontend_actual_url = expected_frontend_url or frontend_service.get("serviceDetails", {}).get("url", "")
+        logger.info("Création du service frontend '%s'...", frontend_name)
+        frontend_service = render.create_web_service(
+            name=frontend_name, owner_id=owner_id, repo=repo, branch=branch,
+            root_dir="frontend", dockerfile_path="./Dockerfile", env_vars=frontend_env,
+            plan=web_plan,
+        )
+        frontend_service_id = frontend_service["id"]
+        created_resources.append(("service frontend", "service", frontend_service_id))
+        db.update_instance(slug, render_frontend_service_id=frontend_service_id)
 
-    if domain:
-        logger.info("Attachement du domaine personnalisé %s...", frontend_actual_url)
-        render.add_custom_domain(frontend_service_id, f"{slug}.{domain}")
-        # CORS_ORIGINS a déjà été posé sur le domaine final ci-dessus (étape backend) —
-        # rien à corriger ici, contrairement au cas sans domaine juste en dessous.
-    elif not expected_frontend_url:
-        # Sans domaine, l'URL finale du frontend n'était pas connue lors de la création du
-        # backend (CORS_ORIGINS pointait vers un placeholder) — on corrige maintenant.
-        logger.info("Correction de CORS_ORIGINS avec l'URL *.onrender.com réelle du frontend...")
-        backend_env["CORS_ORIGINS"] = frontend_actual_url
-        render.set_env_vars(backend_service_id, backend_env)
+        logger.info("Attente du premier déploiement frontend...")
+        if not render.wait_for_deploy_live(frontend_service_id):
+            logger.warning("Le frontend n'est pas encore 'live' après le délai d'attente — vérifie manuellement sur Render.")
 
-    setup_url = f"{frontend_actual_url}/setup?token={admin_setup_token}"
+        frontend_actual_url = expected_frontend_url or frontend_service.get("serviceDetails", {}).get("url", "")
 
-    db.insert_instance(
-        client_name=client_name, slug=slug,
-        render_backend_service_id=backend_service_id,
-        render_frontend_service_id=frontend_service_id,
-        render_database_id=postgres_id,
+        if domain:
+            logger.info("Attachement du domaine personnalisé %s...", frontend_actual_url)
+            render.add_custom_domain(frontend_service_id, f"{slug}.{domain}")
+            # CORS_ORIGINS a déjà été posé sur le domaine final ci-dessus (étape backend) —
+            # rien à corriger ici, contrairement au cas sans domaine juste en dessous.
+        elif not expected_frontend_url:
+            # Sans domaine, l'URL finale du frontend n'était pas connue lors de la création du
+            # backend (CORS_ORIGINS pointait vers un placeholder) — on corrige maintenant.
+            logger.info("Correction de CORS_ORIGINS avec l'URL *.onrender.com réelle du frontend...")
+            backend_env["CORS_ORIGINS"] = frontend_actual_url
+            render.set_env_vars(backend_service_id, backend_env)
+
+        setup_url = f"{frontend_actual_url}/setup?token={admin_setup_token}"
+
+    except Exception as exc:
+        logger.error(
+            "Échec du provisioning de '%s' après création de %d ressource(s) : %s",
+            slug, len(created_resources), exc, exc_info=True,
+        )
+        return _rollback(slug, created_resources, error=str(exc))
+
+    db.update_instance(
+        slug,
         backend_url=backend_actual_url, frontend_url=frontend_actual_url,
         subdomain=f"{slug}.{domain}" if domain else None,
-        vendor_key=vendor_key, admin_setup_key=admin_setup_key,
         statut="active",
     )
 

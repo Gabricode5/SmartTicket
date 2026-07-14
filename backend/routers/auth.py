@@ -34,15 +34,26 @@ router = APIRouter(tags=["Authentification"])
 ADMIN_SETUP_KEY = os.getenv("ADMIN_SETUP_KEY")
 
 
-@router.post("/setup-admin", summary="Crée ou promeut un compte admin (nécessite X-Setup-Key)")
+@router.post("/setup-admin", summary="[Dev/test uniquement] Crée ou promeut un compte admin (nécessite X-Setup-Key)")
+@limiter.limit(ADMIN_SETUP_RATE_LIMIT)
 def setup_admin(
+    request: Request,
     payload: schemas.UserCreate,
     x_setup_key: str | None = Header(default=None),
     db: Session = Depends(get_db),
 ):
-    # Le bootstrap admin normal se fait automatiquement au démarrage via
-    # ADMIN_EMAIL/ADMIN_USERNAME/ADMIN_PASSWORD (voir main.py). Cet endpoint
-    # n'est qu'un outil de secours, désactivé tant que ADMIN_SETUP_KEY n'est pas défini.
+    """Porte de secours réservée au dev/test local et à la CI (cf. backend/tests/conftest.py,
+    qui fixe ADMIN_SETUP_KEY pour toute la suite) : le bootstrap admin normal se fait
+    automatiquement au démarrage via ADMIN_EMAIL/ADMIN_USERNAME/ADMIN_PASSWORD (voir main.py),
+    et le flux client réel passe par POST /v1/setup à token unique et expirant (cf. plus haut).
+
+    INERTE PAR DÉFAUT sur toute instance de production : ops/provision_client.py ne pose plus
+    ADMIN_SETUP_KEY sur les instances client provisionnées pour la flotte (cf. décision
+    documentée dans docs/FLEET_PROVISIONING_PLAN.md) — sans cette variable d'environnement,
+    la vérification ci-dessous échoue systématiquement (403), quel que soit x_setup_key. Ne
+    JAMAIS définir ADMIN_SETUP_KEY sur une instance client réelle : contrairement à
+    /v1/setup, cette route n'expire jamais et peut réécrire le mot de passe de N'IMPORTE
+    QUEL email existant en le promouvant admin."""
     if not ADMIN_SETUP_KEY or x_setup_key != ADMIN_SETUP_KEY:
         raise HTTPException(status_code=403, detail="Non autorisé.")
     admin_role = db.query(models.Role).filter_by(nom_role="admin").first()

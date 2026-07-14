@@ -94,9 +94,9 @@ faux résultat).
   plan reste à faire avant tout client réel)** :
   1. Crée la base Postgres managée (équivalent du bloc `databases:` de `render.yaml`)
   2. Crée le service backend Docker avec les env vars générées (`SECRET_KEY` aléatoire,
-     `DATABASE_URL` de la DB créée à l'étape 1, `ADMIN_SETUP_KEY` aléatoire propre à
-     l'instance, `BREVO_API_KEY`/`MISTRAL_API_KEY` partagés, `CORS_ORIGINS` pointant
-     directement vers le sous-domaine final `{slug}.smartticket.fr`)
+     `DATABASE_URL` de la DB créée à l'étape 1, `ADMIN_SETUP_TOKEN` aléatoire propre à
+     l'instance (à usage unique, expirant), `BREVO_API_KEY`/`MISTRAL_API_KEY` partagés,
+     `CORS_ORIGINS` pointant directement vers le sous-domaine final `{slug}.smartticket.fr`)
   3. Crée le service frontend Docker avec `NEXT_PUBLIC_API_URL` pointant vers le backend
      créé à l'étape 2
   4. Attache le custom domain `{slug}.smartticket.fr` au service frontend via l'API Render
@@ -106,18 +106,22 @@ faux résultat).
      séparément**, à vérifier lors du premier essai réel si Render ne le fait pas de façon
      transparente
   6. Enregistre l'instance dans la table `instances` (SQLite, cf. Phase 1)
-  7. Affiche `VENDOR_KEY` et un mot de passe admin temporaire une seule fois en console (pas
-     écrit sur disque, pas loggé) — cf. point suivant, ce n'est pas encore le lien
-     d'amorçage sans mot de passe envisagé initialement
-- [ ] **Amorçage du compte admin sans mot de passe en clair** : le backend expose déjà
-  `POST /v1/setup-admin`, protégé par le header `X-Setup-Key` (= `ADMIN_SETUP_KEY`, unique
-  par instance, généré à l'étape 2) — pas besoin d'inventer un nouveau système de token.
-  Il manque toujours une page frontend `/setup?key=...` (nouvelle, à créer, même famille
-  que `/verify-email`/`/reset-password`) qui laisse le client choisir lui-même son
-  username/email/mot de passe admin et appelle `/v1/setup-admin` avec la clé. **Non construite
-  dans cette étape** (hors scope explicite : "Étape A" ne couvrait que les scripts CLI + la
-  table instances) — `provision_client.py` génère en attendant un mot de passe admin
-  temporaire affiché une fois, à faire changer immédiatement par le client
+  7. Affiche `VENDOR_KEY` et le lien `/setup?token=...` une seule fois en console (pas écrit
+     sur disque, pas loggé) — cf. point suivant, aucun mot de passe ne transite jamais en
+     clair côté opérateur
+- [x] **Amorçage du compte admin sans mot de passe en clair** — **implémenté différemment de
+  ce qui était envisagé ci-dessus** : plutôt que de réutiliser `POST /v1/setup-admin` (header
+  `X-Setup-Key` statique, non expirant, réutilisable indéfiniment — pas le bon outil pour un
+  flux client), un mécanisme dédié a été construit : `ADMIN_SETUP_TOKEN` (aléatoire, à usage
+  unique, expirant — `ADMIN_SETUP_TOKEN_EXPIRE_HOURS`, défaut 48h) généré par
+  `provision_client.py` et consommé par une nouvelle route `POST /v1/setup` (`backend/routers/
+  auth.py`) plus une page frontend `/setup?token=...` (même famille que `/verify-email`/
+  `/reset-password`) qui laisse le client choisir username/email/mot de passe. `/setup-admin`
+  reste dans le code mais est **redescendu au rang d'outil de secours dev/test uniquement**
+  (cf. `backend/tests/conftest.py`, qui s'appuie dessus comme raccourci de bootstrap dans une
+  dizaine de fichiers de tests) : `provision_client.py` ne pose plus `ADMIN_SETUP_KEY` sur les
+  instances client, ce qui rend la route inerte (403 systématique) sur toute instance de
+  production, en plus d'un rate limit désormais posé dessus par cohérence avec `/setup`.
 - [x] Gérer l'idempotence : que fait le script si on le relance avec un `slug` déjà utilisé ?
   `provision_client.py` refuse (vérifié réellement : relance sur un slug déjà présent dans
   `instances.db` → erreur explicite, code de sortie 1, aucun appel Render déclenché)
