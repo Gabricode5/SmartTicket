@@ -54,6 +54,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
 
     useEffect(() => {
         loadAll()
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- chargement initial, ne doit pas se relancer au changement de langue
     }, [])
 
     // Full-text search (débounced) sur le contenu des messages + titres de l'utilisateur sélectionné.

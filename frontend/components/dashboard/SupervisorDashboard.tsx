@@ -46,6 +46,7 @@ export default function SupervisorDashboard() {
 
     useEffect(() => {
         loadTeam()
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- chargement initial, ne doit pas se relancer au changement de langue
     }, [])
 
     const handleChangeRole = async (u: UserItem, newRole: "user" | "sav") => {
