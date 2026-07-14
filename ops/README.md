@@ -34,6 +34,19 @@ export MISTRAL_API_KEY=...      # secret partagé entre toutes les instances (po
 export BREVO_API_KEY=...        # optionnel — sans lui, les emails sont juste loggés côté client
 ```
 
+### Tests
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+Couvre aujourd'hui le rollback best-effort de `provision()` sur échec partiel
+(`tests/test_provision_rollback.py`) — succès complet, rollback complet, rollback incomplet,
+et le blocage d'un retry sur un slug "brûlé" — via `render_client`/`notify` entièrement
+mockés (jamais d'appel réseau réel). Aucun autre script du dossier n'a de test dédié pour
+l'instant.
+
 `instances.db` (SQLite) est créé automatiquement au premier appel, dans ce dossier. Il
 n'est jamais versionné (`*.db` déjà ignoré par le `.gitignore` racine) — c'est une base
 locale au poste du vendeur, pas une ressource partagée. **Penser à la sauvegarder** (copier
@@ -106,8 +119,26 @@ sqlite3 ops/instances.db "SELECT slug, client_name, statut, frontend_url, date_c
 - **Panel graphique** (Phase 3 du plan) — explicitement hors scope tant que la gestion en
   CLI + SQL reste confortable (1-5 clients). À reconsidérer seulement si cette limite
   commence réellement à peser.
-- **Rollback automatique sur échec partiel du provisioning** — si une étape échoue après la
-  création de la base Postgres, les ressources déjà créées ne sont pas détruites
-  automatiquement (nettoyage manuel requis pour l'instant).
 - **Métering d'usage Mistral par client** (`usage_mensuel`, Phase 1 du plan) — nécessaire
   avant de pouvoir facturer/plafonner un client à fort usage, pas encore implémenté.
+
+## Rollback sur échec partiel du provisioning
+
+Si une étape de `provision()` échoue en cours de route (après la création d'au moins une
+ressource Render), un rollback best-effort se déclenche automatiquement : les ressources déjà
+créées sont supprimées **en ordre inverse de création**, en continuant même si l'une des
+suppressions échoue (`render_client.delete_resources()`, la même logique que
+`delete_client.py`).
+
+- **Rollback complet** (tout a pu être supprimé) : la ligne est retirée de `instances.db`, le
+  slug redevient utilisable pour un nouvel essai.
+- **Rollback incomplet** (au moins une ressource n'a pas pu être supprimée) : la ligne reste
+  dans `instances.db` avec `statut='failed'` et les IDs Render orphelins dans `notes` — le
+  slug est alors **bloqué** (`slug_exists()` le refuse) tant qu'un humain n'a pas nettoyé
+  manuellement ces ressources sur le dashboard Render et supprimé la ligne à la main. Ne
+  jamais relancer un provisioning sur un slug dans cet état sans ce nettoyage préalable —
+  retenter créerait de nouvelles ressources dont le nom (`smartticket-{slug}-*`) peut déjà
+  être pris par les orphelines encore existantes.
+
+Dans les deux cas, le message d'erreur retourné (`ProvisionResult.error`) liste explicitement
+les ressources non supprimées — jamais masqué.

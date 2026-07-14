@@ -72,6 +72,20 @@ def insert_instance(**fields) -> int:
         return cursor.lastrowid
 
 
+def update_instance(slug: str, **fields) -> None:
+    """Met à jour une partie des colonnes d'une instance déjà présente. Utilisé par
+    provision() (ops/provision_client.py) pour persister chaque ID de ressource Render dès
+    sa création, pas seulement à la toute fin — pour qu'un crash en cours de route laisse
+    toujours une trace exploitable dans instances.db. Comme insert_instance(), `fields` n'est
+    interpolé dans le SQL que pour les NOMS de colonnes, toujours fournis en dur par l'appelant
+    (jamais depuis une entrée utilisateur) — les VALEURS restent paramétrées."""
+    if not fields:
+        return
+    set_clause = ", ".join(f"{key} = ?" for key in fields)
+    with get_connection() as conn:
+        conn.execute(f"UPDATE instances SET {set_clause} WHERE slug = ?", (*fields.values(), slug))
+
+
 def get_instance(slug: str) -> sqlite3.Row | None:
     with get_connection() as conn:
         return conn.execute("SELECT * FROM instances WHERE slug = ?", (slug,)).fetchone()

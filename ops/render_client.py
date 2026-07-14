@@ -9,10 +9,13 @@ de faire confiance à ce module sur un client payant. Toujours tester avec
 `provision_client.py --dry-run` d'abord, puis sur une instance de test (Phase 4 du plan),
 jamais directement sur un client réel.
 """
+import logging
 import os
 import time
 
 import requests
+
+logger = logging.getLogger(__name__)
 
 RENDER_API_BASE = "https://api.render.com/v1"
 RENDER_API_KEY = os.getenv("RENDER_API_KEY")
@@ -143,3 +146,26 @@ def wait_for_deploy_live(service_id: str, *, timeout_seconds: int = 900, poll_in
             raise RenderAPIError(f"Déploiement du service {service_id} en échec : statut '{status}'")
         time.sleep(poll_interval_seconds)
     return False
+
+
+def delete_resources(resources: list[tuple[str, str, str]]) -> list[tuple[str, str, str]]:
+    """Supprime une liste de ressources Render — best-effort, une suppression qui échoue
+    n'empêche pas de tenter les suivantes (même logique que delete_client.py, factorisée ici
+    pour que provision_client.py::_rollback() la réutilise telle quelle plutôt que de la
+    réécrire). `resources` est une liste de tuples (label, type, id) où type vaut 'service'
+    ou 'postgres', DANS L'ORDRE où elles doivent être supprimées (à l'appelant de les passer
+    déjà en ordre inverse de création si c'est un rollback). Ne lève jamais : retourne la
+    sous-liste des entrées qui n'ont PAS pu être supprimées (mêmes tuples, même ordre), pour
+    que l'appelant les logue, les affiche ou les persiste — un échec de suppression ne doit
+    jamais être avalé silencieusement."""
+    failed: list[tuple[str, str, str]] = []
+    for label, resource_type, resource_id in resources:
+        try:
+            if resource_type == "postgres":
+                delete_postgres(resource_id)
+            else:
+                delete_service(resource_id)
+        except RenderAPIError as exc:
+            logger.error("Échec de suppression (%s, id=%s) : %s", label, resource_id, exc)
+            failed.append((label, resource_type, resource_id))
+    return failed

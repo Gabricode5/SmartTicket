@@ -14,6 +14,7 @@ Usage :
 ATTENTION : non testé contre un vrai compte Render, cf. render_client.py.
 """
 import argparse
+import logging
 import sys
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -22,6 +23,8 @@ if hasattr(sys.stdout, "reconfigure"):
 
 import db
 import render_client as render
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
 
 def main() -> int:
@@ -52,18 +55,16 @@ def main() -> int:
             print("Confirmation invalide — annulation.")
             return 1
 
-    errors = []
-    for label, deleter in [
-        ("service backend", lambda: render.delete_service(instance["render_backend_service_id"])),
-        ("service frontend", lambda: render.delete_service(instance["render_frontend_service_id"])),
-        ("base Postgres", lambda: render.delete_postgres(instance["render_database_id"])),
-    ]:
-        try:
-            print(f"Suppression du {label}...")
-            deleter()
-        except render.RenderAPIError as exc:
-            print(f"  Échec ({label}) : {exc}", file=sys.stderr)
-            errors.append(label)
+    resources = [
+        ("service backend", "service", instance["render_backend_service_id"]),
+        ("service frontend", "service", instance["render_frontend_service_id"]),
+        ("base Postgres", "postgres", instance["render_database_id"]),
+    ]
+    print("Suppression des ressources Render (backend, frontend, Postgres)...")
+    # render.delete_resources() : même boucle best-effort qu'avant (continue même si une
+    # suppression échoue), désormais partagée avec le rollback de provision_client.py plutôt
+    # que réimplémentée ici.
+    failed = render.delete_resources(resources)
 
     if args.keep_row:
         db.update_instance_status(args.slug, "supprimee")
@@ -72,8 +73,9 @@ def main() -> int:
         db.delete_instance_row(args.slug)
         print("Ligne retirée de instances.db.")
 
-    if errors:
-        print(f"\nAttention : échec sur {', '.join(errors)} — vérifier manuellement sur le dashboard Render (ressources potentiellement encore facturées).", file=sys.stderr)
+    if failed:
+        details = ", ".join(f"{label} (id={resource_id})" for label, _, resource_id in failed)
+        print(f"\nAttention : échec sur {details} — vérifier manuellement sur le dashboard Render (ressources potentiellement encore facturées).", file=sys.stderr)
         return 1
 
     print(f"\nInstance '{args.slug}' décommissionnée.")
