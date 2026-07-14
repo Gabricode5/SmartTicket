@@ -1,12 +1,13 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import ForgotPasswordPage from "@/app/(auth)/forgot-password/page";
 import { mockFetch, jsonResponse } from "../test-utils/fetchMock";
+import { LocaleProvider } from "@/lib/i18n/LocaleContext";
 
 describe("ForgotPasswordPage", () => {
   it("shows a check-your-email confirmation after submitting", async () => {
     const fetchMock = mockFetch(() => jsonResponse({ message: "ok" }));
 
-    render(<ForgotPasswordPage />);
+    render(<ForgotPasswordPage />, { wrapper: LocaleProvider });
     fireEvent.change(screen.getByLabelText(/adresse email/i), { target: { value: "me@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: /envoyer le lien/i }));
 
@@ -22,7 +23,7 @@ describe("ForgotPasswordPage", () => {
   it("shows an error if the request fails", async () => {
     mockFetch(() => jsonResponse({}, 500));
 
-    render(<ForgotPasswordPage />);
+    render(<ForgotPasswordPage />, { wrapper: LocaleProvider });
     fireEvent.change(screen.getByLabelText(/adresse email/i), { target: { value: "me@example.com" } });
     fireEvent.click(screen.getByRole("button", { name: /envoyer le lien/i }));
 

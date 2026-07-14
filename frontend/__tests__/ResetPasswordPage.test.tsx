@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import ResetPasswordPage from "@/app/(auth)/reset-password/page";
 import { mockFetch, jsonResponse } from "../test-utils/fetchMock";
+import { LocaleProvider } from "@/lib/i18n/LocaleContext";
 
 let searchParams = new URLSearchParams();
 jest.mock("next/navigation", () => ({
@@ -16,7 +17,7 @@ describe("ResetPasswordPage", () => {
   it("resets the password and shows a success screen", async () => {
     const fetchMock = mockFetch(() => jsonResponse({ message: "ok" }));
 
-    render(<ResetPasswordPage />);
+    render(<ResetPasswordPage />, { wrapper: LocaleProvider });
     fireEvent.change(screen.getByLabelText(/nouveau mot de passe/i), { target: { value: "password123" } });
     fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), { target: { value: "password123" } });
     fireEvent.click(screen.getByRole("button", { name: /réinitialiser le mot de passe/i }));
@@ -33,7 +34,7 @@ describe("ResetPasswordPage", () => {
   it("shows a mismatch error and does not submit when passwords differ", async () => {
     const fetchMock = mockFetch(() => jsonResponse({ message: "ok" }));
 
-    render(<ResetPasswordPage />);
+    render(<ResetPasswordPage />, { wrapper: LocaleProvider });
     fireEvent.change(screen.getByLabelText(/nouveau mot de passe/i), { target: { value: "password123" } });
     fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), { target: { value: "different456" } });
     fireEvent.click(screen.getByRole("button", { name: /réinitialiser le mot de passe/i }));
@@ -47,7 +48,7 @@ describe("ResetPasswordPage", () => {
   it("shows the server error when the token is invalid or expired", async () => {
     mockFetch(() => jsonResponse({ detail: "Lien de réinitialisation invalide ou expiré" }, 400));
 
-    render(<ResetPasswordPage />);
+    render(<ResetPasswordPage />, { wrapper: LocaleProvider });
     fireEvent.change(screen.getByLabelText(/nouveau mot de passe/i), { target: { value: "password123" } });
     fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), { target: { value: "password123" } });
     fireEvent.click(screen.getByRole("button", { name: /réinitialiser le mot de passe/i }));

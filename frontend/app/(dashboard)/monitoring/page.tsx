@@ -13,6 +13,8 @@ import {
     Lightbulb, BookOpen, Wrench, Zap, Download, FileText,
 } from "lucide-react"
 import { downloadCsv } from "@/lib/csv"
+import { useLocale } from "@/lib/i18n/LocaleContext"
+import type { Messages } from "@/lib/i18n/translations"
 
 type LatencyEntry = { name: string; latence_ms: number; appels: number }
 type AlertEntry = { level: "warning" | "critical"; metric: string; message: string; recommendation?: string; value: number; threshold: number }
@@ -47,13 +49,6 @@ type AiMetrics = {
     negative_rate: number
 }
 
-const PERIODS = [
-    { label: "7 Jours", days: 7 },
-    { label: "30 Jours", days: 30 },
-    { label: "90 Jours", days: 90 },
-    { label: "Année", days: 365 },
-]
-
 function fmtLatency(ms: number | null): string {
     if (ms === null) return "–"
     return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`
@@ -61,6 +56,14 @@ function fmtLatency(ms: number | null): string {
 
 export default function MonitoringPage() {
     const router = useRouter()
+    const { messages: t, locale } = useLocale()
+    const timeLocale = locale === "fr" ? "fr-FR" : "en-US"
+    const PERIODS = [
+        { label: t.monitoring.periods.d7, days: 7 },
+        { label: t.monitoring.periods.d30, days: 30 },
+        { label: t.monitoring.periods.d90, days: 90 },
+        { label: t.monitoring.periods.year, days: 365 },
+    ]
     const [days, setDays] = useState(30)
     const [metrics, setMetrics] = useState<AiMetrics | null>(null)
     const [isLoading, setIsLoading] = useState(true)
@@ -72,13 +75,13 @@ export default function MonitoringPage() {
         if (!metrics) return
         downloadCsv(`monitoring-ia-smartticket-${new Date().toISOString().slice(0, 10)}.csv`, [
             {
-                title: "Évolution de la latence",
-                headers: ["Jour", "Latence moyenne (ms)", "Appels"],
-                rows: metrics.latency_trend.map((t) => [t.name, t.latence_ms, t.appels]),
+                title: t.monitoring.csvLatencyTitle,
+                headers: t.monitoring.csvLatencyHeaders,
+                rows: metrics.latency_trend.map((entry) => [entry.name, entry.latence_ms, entry.appels]),
             },
             {
-                title: "Enrichissements de la base de connaissances",
-                headers: ["Date", "Chunks ajoutés"],
+                title: t.monitoring.csvKbTitle,
+                headers: t.monitoring.csvKbHeaders,
                 rows: metrics.kb_events.map((e) => [e.date, e.chunks]),
             },
         ])
@@ -150,7 +153,7 @@ export default function MonitoringPage() {
                 <div>
                     <div className="flex items-center gap-2 mb-1">
                         <Activity className="h-5 w-5 text-indigo-500" />
-                        <h1 className="text-2xl font-bold tracking-tight">Monitoring du modèle IA</h1>
+                        <h1 className="text-2xl font-bold tracking-tight">{t.monitoring.title}</h1>
                         <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">Mistral AI</span>
                         {metrics?.model_name && (
                             <span className="text-xs font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">
@@ -158,7 +161,7 @@ export default function MonitoringPage() {
                             </span>
                         )}
                     </div>
-                    <p className="text-muted-foreground">Latence, taux d&apos;erreur et qualité RAG du modèle en production.</p>
+                    <p className="text-muted-foreground">{t.monitoring.subtitle}</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <div className="flex bg-muted/50 p-1 rounded-lg">
@@ -174,7 +177,7 @@ export default function MonitoringPage() {
                         <Download className="h-4 w-4 mr-1.5" /> CSV
                     </Button>
                     <Button variant="outline" size="sm" onClick={handleExportPdf} disabled={isLoading || exportingPdf}>
-                        <FileText className="h-4 w-4 mr-1.5" /> {exportingPdf ? "…" : "PDF"}
+                        <FileText className="h-4 w-4 mr-1.5" /> {exportingPdf ? t.monitoring.exportingPdf : t.monitoring.exportPdf}
                     </Button>
                 </div>
             </div>
@@ -190,10 +193,10 @@ export default function MonitoringPage() {
                                     className={`flex items-start gap-3 rounded-lg border px-4 py-3 text-sm ${alert.level === "critical" ? "bg-red-50 border-red-200 text-red-800" : "bg-amber-50 border-amber-200 text-amber-800"}`}>
                                     {alert.level === "critical" ? <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" /> : <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />}
                                     <div className="flex-1">
-                                        <span className="font-semibold">{alert.level === "critical" ? "Critique" : "Attention"} — </span>
+                                        <span className="font-semibold">{alert.level === "critical" ? t.monitoring.critical : t.monitoring.warning} — </span>
                                         {alert.message}
                                         <span className="ml-2 text-xs opacity-70">
-                                            (seuil : {alert.threshold}{alert.metric === "latency" ? "ms" : "%"})
+                                            {t.monitoring.thresholdSuffix(alert.threshold, alert.metric === "latency" ? "ms" : "%")}
                                         </span>
                                         {alert.recommendation && (
                                             <p className="mt-1 text-xs opacity-80">→ {alert.recommendation}</p>
@@ -205,54 +208,57 @@ export default function MonitoringPage() {
                     ) : (
                         <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
                             <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
-                            <span>Toutes les métriques du modèle sont dans les seuils normaux.</span>
+                            <span>{t.monitoring.allNormal}</span>
                         </div>
                     )
                 )}
 
                 {/* KB Score */}
-                {!isLoading && metrics && <KbScoreCard score={metrics.kb_score} totalCalls={metrics.total_calls} negativeRate={metrics.negative_rate} />}
+                {!isLoading && metrics && <KbScoreCard score={metrics.kb_score} totalCalls={metrics.total_calls} negativeRate={metrics.negative_rate} t={t} />}
 
                 {/* Status Mistral */}
-                <MistralStatusCard status={mistralStatus} loading={statusLoading} onRefresh={fetchMistralStatus} />
+                <MistralStatusCard status={mistralStatus} loading={statusLoading} onRefresh={fetchMistralStatus} t={t} timeLocale={timeLocale} />
 
                 {/* KPIs */}
                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-                    <KpiCard title="Appels totaux"
+                    <KpiCard title={t.monitoring.totalCalls}
                         value={isLoading ? "…" : (metrics?.total_calls?.toLocaleString() ?? "0")}
-                        trend={`sur ${days} jours`} trendUp={true}
+                        trend={t.monitoring.overDays(days)} trendUp={true}
                         icon={<Activity className="h-4 w-4 text-indigo-500" />} />
-                    <KpiCard title="Latence moyenne"
+                    <KpiCard title={t.monitoring.avgLatency}
                         value={isLoading ? "…" : fmtLatency(metrics?.avg_latency_ms ?? null)}
-                        trend={metrics?.total_calls ? `sur ${metrics.total_calls} appels` : "aucune donnée"}
+                        trend={metrics?.total_calls ? t.monitoring.overCalls(metrics.total_calls) : t.monitoring.noData}
                         trendUp={metrics?.avg_latency_ms == null || metrics.avg_latency_ms < 5000}
                         icon={<Clock className="h-4 w-4 text-blue-500" />}
                         prev={metrics?.prev_latency_ms ?? null}
                         curr={metrics?.avg_latency_ms ?? null}
+                        vsPreviousLabel={t.monitoring.vsPrevious}
                         lowerIsBetter />
-                    <KpiCard title="Taux d'erreur"
+                    <KpiCard title={t.monitoring.errorRate}
                         value={isLoading ? "…" : `${metrics?.error_rate ?? 0}%`}
-                        trend={metrics?.total_calls ? `${metrics.total_calls} appels analysés` : "aucun appel"}
+                        trend={metrics?.total_calls ? t.monitoring.callsAnalyzed(metrics.total_calls) : t.monitoring.noCalls}
                         trendUp={(metrics?.error_rate ?? 0) <= 5}
                         icon={<ShieldAlert className="h-4 w-4 text-red-400" />}
                         prev={metrics?.prev_error_rate ?? null}
                         curr={metrics?.error_rate ?? null}
+                        vsPreviousLabel={t.monitoring.vsPrevious}
                         lowerIsBetter />
-                    <KpiCard title="Sans contexte RAG"
+                    <KpiCard title={t.monitoring.noContext}
                         value={isLoading ? "…" : `${metrics?.no_context_rate ?? 0}%`}
-                        trend="requêtes sans résultat KB"
+                        trend={t.monitoring.noContextTrend}
                         trendUp={(metrics?.no_context_rate ?? 0) <= 30}
                         icon={<Database className="h-4 w-4 text-emerald-500" />}
                         prev={metrics?.prev_no_context_rate ?? null}
                         curr={metrics?.no_context_rate ?? null}
+                        vsPreviousLabel={t.monitoring.vsPrevious}
                         lowerIsBetter />
                 </div>
 
                 {/* Recommandations + Historique */}
                 {!isLoading && metrics && (
                     <div className="grid gap-6 lg:grid-cols-2">
-                        <RecommendationsCard metrics={metrics} />
-                        <ImprovementHistoryCard metrics={metrics} days={days} />
+                        <RecommendationsCard metrics={metrics} t={t} />
+                        <ImprovementHistoryCard metrics={metrics} days={days} t={t} />
                     </div>
                 )}
 
@@ -260,16 +266,16 @@ export default function MonitoringPage() {
                 <div className="grid gap-6 lg:grid-cols-3">
                     <Card className="lg:col-span-2">
                         <CardHeader>
-                            <CardTitle>Évolution de la latence</CardTitle>
+                            <CardTitle>{t.monitoring.latencyChartTitle}</CardTitle>
                             <CardDescription>
-                                Temps moyen de génération par jour (ms) — du premier au dernier token.
+                                {t.monitoring.latencyChartDesc}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
                             {!metrics?.latency_trend?.length ? (
                                 <div className="flex flex-col items-center justify-center h-[260px] text-muted-foreground text-sm gap-2">
                                     <Activity className="h-8 w-8 text-muted-foreground/40" />
-                                    <span>Aucune donnée — les métriques s&apos;accumulent au fil des échanges.</span>
+                                    <span>{t.monitoring.noLatencyData}</span>
                                 </div>
                             ) : (
                                 <div className="h-[260px] w-full">
@@ -280,10 +286,10 @@ export default function MonitoringPage() {
                                             <YAxis stroke="#64748B" fontSize={12} tickLine={false} axisLine={false} tickFormatter={v => `${v}ms`} />
                                             <Tooltip
                                                 contentStyle={{ backgroundColor: "#fff", borderRadius: "8px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
-                                                formatter={(value: number | undefined) => [value != null ? `${value}ms` : "–", "Latence"]}
+                                                formatter={(value: number | undefined) => [value != null ? `${value}ms` : "–", t.monitoring.latencyTooltipLabel]}
                                             />
                                             <Legend wrapperStyle={{ paddingTop: "12px" }} iconType="circle" />
-                                            <Line type="monotone" dataKey="latence_ms" name="Latence (ms)" stroke="#4f46e5" strokeWidth={2} dot={{ r: 3, fill: "#4f46e5" }} activeDot={{ r: 5 }} />
+                                            <Line type="monotone" dataKey="latence_ms" name={`${t.monitoring.latencyTooltipLabel} (ms)`} stroke="#4f46e5" strokeWidth={2} dot={{ r: 3, fill: "#4f46e5" }} activeDot={{ r: 5 }} />
                                             {metrics?.kb_events?.map((e, i) => (
                                                 <ReferenceLine key={i} x={e.date} stroke="#10b981" strokeDasharray="4 2"
                                                     label={{ value: "KB+", position: "insideTopRight", fontSize: 10, fill: "#10b981" }} />
@@ -299,15 +305,15 @@ export default function MonitoringPage() {
                     <div className="space-y-4">
                         <Card>
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Requêtes sans contexte RAG</CardTitle>
+                                <CardTitle className="text-sm font-medium text-muted-foreground">{t.monitoring.noContextCardTitle}</CardTitle>
                                 <Database className="h-4 w-4 text-amber-400" />
                             </CardHeader>
                             <CardContent>
                                 <div className="text-2xl font-bold">{isLoading ? "…" : `${metrics?.no_context_rate ?? 0}%`}</div>
-                                <p className="text-xs text-muted-foreground mt-1">des requêtes sans résultat KB</p>
+                                <p className="text-xs text-muted-foreground mt-1">{t.monitoring.noContextOfRequests}</p>
                                 {!isLoading && (metrics?.no_context_rate ?? 0) > 50 && (
                                     <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
-                                        <AlertTriangle className="h-3 w-3" /> Enrichir la base de connaissances
+                                        <AlertTriangle className="h-3 w-3" /> {t.monitoring.enrichKbSuggestion}
                                     </p>
                                 )}
                             </CardContent>
@@ -315,14 +321,14 @@ export default function MonitoringPage() {
 
                         <Card>
                             <CardHeader className="pb-2">
-                                <CardTitle className="text-sm font-medium text-muted-foreground">Seuils configurés</CardTitle>
+                                <CardTitle className="text-sm font-medium text-muted-foreground">{t.monitoring.thresholdsTitle}</CardTitle>
                             </CardHeader>
                             <CardContent className="space-y-2 text-xs text-muted-foreground">
-                                <div className="flex justify-between"><span>Latence warning</span><span className="font-mono">5 000ms</span></div>
-                                <div className="flex justify-between"><span>Latence critique</span><span className="font-mono">10 000ms</span></div>
-                                <div className="flex justify-between"><span>Erreurs warning</span><span className="font-mono">5%</span></div>
-                                <div className="flex justify-between"><span>Erreurs critique</span><span className="font-mono">15%</span></div>
-                                <div className="flex justify-between"><span>Sans contexte</span><span className="font-mono">70%</span></div>
+                                <div className="flex justify-between"><span>{t.monitoring.thresholdLatencyWarning}</span><span className="font-mono">5 000ms</span></div>
+                                <div className="flex justify-between"><span>{t.monitoring.thresholdLatencyCritical}</span><span className="font-mono">10 000ms</span></div>
+                                <div className="flex justify-between"><span>{t.monitoring.thresholdErrorsWarning}</span><span className="font-mono">5%</span></div>
+                                <div className="flex justify-between"><span>{t.monitoring.thresholdErrorsCritical}</span><span className="font-mono">15%</span></div>
+                                <div className="flex justify-between"><span>{t.monitoring.thresholdNoContext}</span><span className="font-mono">70%</span></div>
                             </CardContent>
                         </Card>
                     </div>
@@ -334,18 +340,21 @@ export default function MonitoringPage() {
 
 type KbLevel = { label: string; message: string; color: string; bg: string; border: string; bar: string }
 
-const KB_LEVELS: [number, KbLevel][] = [
-    [75, { label: "Excellente", message: "La base de connaissances est bien alimentée. Le modèle dispose d'un contexte riche pour répondre aux questions.",          color: "text-emerald-700", bg: "bg-emerald-50",  border: "border-emerald-200", bar: "bg-emerald-500" }],
-    [50, { label: "Correcte",   message: "Quelques lacunes détectées. Enrichir la base de connaissances améliorerait la qualité des réponses de l'IA.",              color: "text-amber-700",   bg: "bg-amber-50",   border: "border-amber-200",   bar: "bg-amber-400"   }],
-    [25, { label: "Insuffisante", message: "La base de connaissances manque de contenu. L'IA répond souvent sans contexte — enrichissement recommandé.",             color: "text-orange-700",  bg: "bg-orange-50",  border: "border-orange-200",  bar: "bg-orange-500"  }],
-    [0,  { label: "Critique",   message: "La base de connaissances est trop pauvre. Le modèle ne peut pas répondre correctement — enrichissement urgent nécessaire.", color: "text-red-700",     bg: "bg-red-50",     border: "border-red-200",     bar: "bg-red-500"     }],
-]
+function getKbLevels(t: Messages): [number, KbLevel][] {
+    return [
+        [75, { label: t.monitoring.kbLevels.excellent.label, message: t.monitoring.kbLevels.excellent.message, color: "text-emerald-700", bg: "bg-emerald-50", border: "border-emerald-200", bar: "bg-emerald-500" }],
+        [50, { label: t.monitoring.kbLevels.correct.label, message: t.monitoring.kbLevels.correct.message, color: "text-amber-700", bg: "bg-amber-50", border: "border-amber-200", bar: "bg-amber-400" }],
+        [25, { label: t.monitoring.kbLevels.insufficient.label, message: t.monitoring.kbLevels.insufficient.message, color: "text-orange-700", bg: "bg-orange-50", border: "border-orange-200", bar: "bg-orange-500" }],
+        [0, { label: t.monitoring.kbLevels.critical.label, message: t.monitoring.kbLevels.critical.message, color: "text-red-700", bg: "bg-red-50", border: "border-red-200", bar: "bg-red-500" }],
+    ]
+}
 
-function getKbLevel(score: number): KbLevel {
-    for (const [threshold, level] of KB_LEVELS) {
+function getKbLevel(score: number, t: Messages): KbLevel {
+    const levels = getKbLevels(t)
+    for (const [threshold, level] of levels) {
         if (score >= threshold) return level
     }
-    return KB_LEVELS[KB_LEVELS.length - 1][1]
+    return levels[levels.length - 1][1]
 }
 
 function KbScoreInfo({ open, onToggle }: { open: boolean; onToggle: () => void }) {
@@ -358,7 +367,7 @@ function KbScoreInfo({ open, onToggle }: { open: boolean; onToggle: () => void }
     )
 }
 
-function KbScoreCard({ score, totalCalls, negativeRate }: { score: number | null; totalCalls: number; negativeRate: number }) {
+function KbScoreCard({ score, totalCalls, negativeRate, t }: { score: number | null; totalCalls: number; negativeRate: number; t: Messages }) {
     const [infoOpen, setInfoOpen] = useState(false)
 
     if (totalCalls < 5) {
@@ -366,14 +375,14 @@ function KbScoreCard({ score, totalCalls, negativeRate }: { score: number | null
             <Card className="border-border">
                 <CardContent className="py-4 flex items-center gap-3 text-sm text-muted-foreground">
                     <Database className="h-4 w-4 flex-shrink-0" />
-                    <span>Score de santé KB indisponible — au moins 5 appels IA nécessaires pour calculer le score (<strong>{totalCalls}</strong> enregistrés).</span>
+                    <span>{t.monitoring.kbUnavailablePrefix}<strong>{totalCalls}</strong>{t.monitoring.kbUnavailableSuffix}</span>
                 </CardContent>
             </Card>
         )
     }
 
     const s = score ?? 0
-    const level = getKbLevel(s)
+    const level = getKbLevel(s, t)
 
     return (
         <Card className={`border ${level.border} ${level.bg}`}>
@@ -390,31 +399,31 @@ function KbScoreCard({ score, totalCalls, negativeRate }: { score: number | null
                         <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2 mb-0.5">
                                 <span className={`text-sm font-semibold ${level.color}`}>
-                                    Base de connaissances — {level.label}
+                                    {t.monitoring.kbTitlePrefix} {level.label}
                                 </span>
                                 <span className={`text-xs font-bold ${level.color}`}>{s}/100</span>
                                 <KbScoreInfo open={infoOpen} onToggle={() => setInfoOpen(o => !o)} />
                             </div>
                             <p className={`text-xs ${level.color} opacity-80`}>{level.message}</p>
                             {negativeRate > 0 && (
-                                <p className="text-[10px] text-red-500 mt-0.5">👎 {negativeRate}% de pouces rouges sur la période</p>
+                                <p className="text-[10px] text-red-500 mt-0.5">{t.monitoring.negativeRate(negativeRate)}</p>
                             )}
                             {infoOpen && (
                                 <div className="mt-3 p-3 bg-slate-900 text-white text-xs rounded-lg space-y-1.5">
-                                    <p className="font-semibold mb-2">Comment ce score est-il calculé ?</p>
+                                    <p className="font-semibold mb-2">{t.monitoring.howCalculated}</p>
                                     <div className="flex justify-between gap-2 text-slate-300">
-                                        <span>📦 Contexte récupéré (chunks KB trouvés)</span>
+                                        <span>{t.monitoring.contextRetrieved}</span>
                                         <span className="font-bold text-white shrink-0">× 40%</span>
                                     </div>
                                     <div className="flex justify-between gap-2 text-slate-300">
-                                        <span>👎 Satisfaction utilisateur (pouces rouges)</span>
+                                        <span>{t.monitoring.userSatisfaction}</span>
                                         <span className="font-bold text-white shrink-0">× 40%</span>
                                     </div>
                                     <div className="flex justify-between gap-2 text-slate-300">
-                                        <span>⚙️ Fiabilité technique (taux d&apos;erreur)</span>
+                                        <span>{t.monitoring.technicalReliability}</span>
                                         <span className="font-bold text-white shrink-0">× 20%</span>
                                     </div>
-                                    <p className="mt-2 text-slate-400 text-[10px] pt-1 border-t border-slate-700">Sans retour utilisateur, la satisfaction est considérée parfaite. Le score diminue uniquement en cas de pouce rouge.</p>
+                                    <p className="mt-2 text-slate-400 text-[10px] pt-1 border-t border-slate-700">{t.monitoring.noFeedbackNote}</p>
                                 </div>
                             )}
                         </div>
@@ -422,7 +431,7 @@ function KbScoreCard({ score, totalCalls, negativeRate }: { score: number | null
                     <div className="flex items-center gap-3 flex-shrink-0">
                         <div className="w-32">
                             <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
-                                <span>Score KB</span><span>{s}%</span>
+                                <span>{t.monitoring.kbScoreLabel}</span><span>{s}%</span>
                             </div>
                             <div className="h-2 w-full rounded-full bg-white/60 border border-white/40 overflow-hidden">
                                 <div className={`h-full rounded-full transition-all duration-500 ${level.bar}`} style={{ width: `${s}%` }} />
@@ -431,7 +440,7 @@ function KbScoreCard({ score, totalCalls, negativeRate }: { score: number | null
                         {s < 75 && (
                             <a href="/knowledge-base"
                                 className={`text-xs font-semibold px-3 py-1.5 rounded-lg border ${level.border} ${level.color} bg-white/70 hover:bg-white transition-colors whitespace-nowrap`}>
-                                Enrichir la KB →
+                                {t.monitoring.enrichKb}
                             </a>
                         )}
                     </div>
@@ -441,16 +450,18 @@ function KbScoreCard({ score, totalCalls, negativeRate }: { score: number | null
     )
 }
 
-const STATUS_CONFIG = {
-    operational: { label: "Opérationnel", dot: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-    degraded:    { label: "Dégradé",      dot: "bg-amber-500",   badge: "bg-amber-50 text-amber-700 border-amber-200" },
-    outage:      { label: "Panne",        dot: "bg-red-500",     badge: "bg-red-50 text-red-700 border-red-200" },
-    unknown:     { label: "Inconnu",      dot: "bg-slate-400",   badge: "bg-slate-50 text-slate-600 border-slate-200" },
+function getStatusConfig(t: Messages) {
+    return {
+        operational: { label: t.monitoring.statusLabels.operational, dot: "bg-emerald-500", badge: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+        degraded: { label: t.monitoring.statusLabels.degraded, dot: "bg-amber-500", badge: "bg-amber-50 text-amber-700 border-amber-200" },
+        outage: { label: t.monitoring.statusLabels.outage, dot: "bg-red-500", badge: "bg-red-50 text-red-700 border-red-200" },
+        unknown: { label: t.monitoring.statusLabels.unknown, dot: "bg-slate-400", badge: "bg-slate-50 text-slate-600 border-slate-200" },
+    }
 }
 
-function MistralStatusCard({ status, loading, onRefresh }: { status: MistralStatus | null; loading: boolean; onRefresh: () => void }) {
+function MistralStatusCard({ status, loading, onRefresh, t, timeLocale }: { status: MistralStatus | null; loading: boolean; onRefresh: () => void; t: Messages; timeLocale: string }) {
     const overall = status?.overall ?? "unknown"
-    const cfg = STATUS_CONFIG[overall]
+    const cfg = getStatusConfig(t)[overall]
 
     return (
         <Card>
@@ -458,7 +469,7 @@ function MistralStatusCard({ status, loading, onRefresh }: { status: MistralStat
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                         <div className={`w-2.5 h-2.5 rounded-full ${cfg.dot} ${overall === "operational" ? "animate-pulse" : ""}`} />
-                        <CardTitle className="text-base">Status Mistral AI</CardTitle>
+                        <CardTitle className="text-base">{t.monitoring.mistralStatusTitle}</CardTitle>
                         <a href="https://status.mistral.ai" target="_blank" rel="noopener noreferrer"
                             className="text-muted-foreground hover:text-foreground transition-colors">
                             <ExternalLink className="h-3.5 w-3.5" />
@@ -467,7 +478,7 @@ function MistralStatusCard({ status, loading, onRefresh }: { status: MistralStat
                     <div className="flex items-center gap-2">
                         {status?.fetched_at && (
                             <span className="text-xs text-muted-foreground">
-                                {new Date(status.fetched_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                                {new Date(status.fetched_at).toLocaleTimeString(timeLocale, { hour: "2-digit", minute: "2-digit" })}
                             </span>
                         )}
                         <button onClick={onRefresh} disabled={loading}
@@ -478,9 +489,9 @@ function MistralStatusCard({ status, loading, onRefresh }: { status: MistralStat
                 </div>
                 <div className="flex items-center gap-2 mt-1">
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${cfg.badge}`}>
-                        {loading ? "Chargement…" : cfg.label}
+                        {loading ? t.monitoring.loadingStatus : cfg.label}
                     </span>
-                    <CardDescription className="text-xs">Mis à jour toutes les 60 secondes</CardDescription>
+                    <CardDescription className="text-xs">{t.monitoring.updatedEvery60s}</CardDescription>
                 </div>
             </CardHeader>
             <CardContent>
@@ -493,14 +504,14 @@ function MistralStatusCard({ status, loading, onRefresh }: { status: MistralStat
                 ) : status?.components?.length ? (
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                         {status.components.map((c) => {
-                            const s = STATUS_CONFIG[c.status]
+                            const s = getStatusConfig(t)[c.status]
                             return (
                                 <div key={c.name} className="flex items-center gap-2 rounded-lg border px-3 py-2 bg-muted/50">
                                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${s.dot}`} />
                                     <div className="min-w-0">
                                         <p className="text-xs font-medium truncate">{c.name}</p>
                                         {c.uptime && (
-                                            <p className="text-[10px] text-muted-foreground">{c.uptime} uptime</p>
+                                            <p className="text-[10px] text-muted-foreground">{c.uptime} {t.monitoring.uptimeSuffix}</p>
                                         )}
                                     </div>
                                 </div>
@@ -510,7 +521,7 @@ function MistralStatusCard({ status, loading, onRefresh }: { status: MistralStat
                 ) : (
                     <div className="flex items-center gap-2 text-sm text-muted-foreground py-2">
                         <AlertTriangle className="h-4 w-4" />
-                        <span>Impossible de récupérer le status. <a href="https://status.mistral.ai" target="_blank" rel="noopener noreferrer" className="underline">Voir directement →</a></span>
+                        <span>{t.monitoring.statusUnavailable} <a href="https://status.mistral.ai" target="_blank" rel="noopener noreferrer" className="underline">{t.monitoring.seeDirectly}</a></span>
                     </div>
                 )}
             </CardContent>
@@ -520,64 +531,64 @@ function MistralStatusCard({ status, loading, onRefresh }: { status: MistralStat
 
 type Reco = { icon: React.ReactNode; title: string; detail: string; action?: { label: string; href: string } }
 
-function buildRecommendations(m: AiMetrics): Reco[] {
+function buildRecommendations(m: AiMetrics, t: Messages): Reco[] {
     const recos: Reco[] = []
 
     if (m.no_context_rate > 30) {
         recos.push({
             icon: <BookOpen className="h-4 w-4 text-amber-500" />,
-            title: "Enrichir la base de connaissances",
-            detail: `${m.no_context_rate}% des questions n'obtiennent aucun contexte RAG. Ajouter des documents couvrant les sujets fréquents réduira les réponses génériques.`,
-            action: { label: "Gérer la base de connaissances →", href: "/knowledge-base" },
+            title: t.monitoring.recoEnrichKbTitle,
+            detail: t.monitoring.recoEnrichKbDetail(m.no_context_rate),
+            action: { label: t.monitoring.recoManageKb, href: "/knowledge-base" },
         })
     }
 
     if (m.avg_latency_ms !== null && m.avg_latency_ms > 5000) {
         recos.push({
             icon: <Zap className="h-4 w-4 text-yellow-500" />,
-            title: "Latence élevée détectée",
-            detail: `Latence moyenne de ${m.avg_latency_ms}ms. Envisager de réduire le paramètre KB_MAX_CONTEXT_CHARS pour limiter la taille du prompt envoyé au modèle.`,
+            title: t.monitoring.recoHighLatencyTitle,
+            detail: t.monitoring.recoHighLatencyDetail(m.avg_latency_ms),
         })
     }
 
     if (m.error_rate > 5) {
         recos.push({
             icon: <Wrench className="h-4 w-4 text-red-500" />,
-            title: "Vérifier la configuration de l'API Mistral",
-            detail: `Taux d'erreur de ${m.error_rate}%. Vérifier que la clé MISTRAL_API_KEY est valide et que les quotas de l'API ne sont pas atteints.`,
+            title: t.monitoring.recoCheckApiTitle,
+            detail: t.monitoring.recoCheckApiDetail(m.error_rate),
         })
     }
 
     if (m.avg_rag_chunks < 1 && m.total_calls > 0) {
         recos.push({
             icon: <Database className="h-4 w-4 text-muted-foreground" />,
-            title: "Aucun chunk RAG récupéré en moyenne",
-            detail: "Le modèle répond sans contexte issu de la base de connaissances. Vérifier que les embeddings ont bien été générés lors de l'ingestion des documents.",
-            action: { label: "Gérer la base de connaissances →", href: "/knowledge-base" },
+            title: t.monitoring.recoNoChunksTitle,
+            detail: t.monitoring.recoNoChunksDetail,
+            action: { label: t.monitoring.recoManageKb, href: "/knowledge-base" },
         })
     }
 
     if (recos.length === 0) {
         recos.push({
             icon: <CheckCircle2 className="h-4 w-4 text-emerald-500" />,
-            title: "Modèle en bonne santé",
-            detail: "Toutes les métriques sont dans les seuils acceptables. Continuer à collecter du feedback utilisateur pour affiner la base de connaissances.",
+            title: t.monitoring.recoHealthyTitle,
+            detail: t.monitoring.recoHealthyDetail,
         })
     }
 
     return recos
 }
 
-function RecommendationsCard({ metrics }: { metrics: AiMetrics }) {
-    const recos = buildRecommendations(metrics)
+function RecommendationsCard({ metrics, t }: { metrics: AiMetrics; t: Messages }) {
+    const recos = buildRecommendations(metrics, t)
     return (
         <Card>
             <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
                     <Lightbulb className="h-4 w-4 text-yellow-500" />
-                    <CardTitle className="text-base">Recommandations d&apos;amélioration</CardTitle>
+                    <CardTitle className="text-base">{t.monitoring.recommendationsTitle}</CardTitle>
                 </div>
-                <CardDescription>Actions concrètes basées sur les métriques actuelles pour améliorer le modèle de façon itérative.</CardDescription>
+                <CardDescription>{t.monitoring.recommendationsSubtitle}</CardDescription>
             </CardHeader>
             <CardContent>
                 <div className="space-y-3">
@@ -601,21 +612,21 @@ function RecommendationsCard({ metrics }: { metrics: AiMetrics }) {
     )
 }
 
-function DeltaBadge({ curr, prev, lowerIsBetter }: { curr: number | null; prev: number | null; lowerIsBetter?: boolean }) {
+function DeltaBadge({ curr, prev, lowerIsBetter, vsPreviousLabel }: { curr: number | null; prev: number | null; lowerIsBetter?: boolean; vsPreviousLabel: string }) {
     if (curr === null || prev === null || prev === 0) return null
     const pct = Math.round(((curr - prev) / prev) * 100)
     if (pct === 0) return null
     const improved = lowerIsBetter ? pct < 0 : pct > 0
     return (
         <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ml-2 ${improved ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"}`}>
-            {pct > 0 ? "+" : ""}{pct}% vs préc.
+            {pct > 0 ? "+" : ""}{pct}% {vsPreviousLabel}
         </span>
     )
 }
 
-function KpiCard({ title, value, trend, trendUp, icon, curr, prev, lowerIsBetter }: {
+function KpiCard({ title, value, trend, trendUp, icon, curr, prev, lowerIsBetter, vsPreviousLabel }: {
     title: string; value: string; trend: string; trendUp: boolean; icon: React.ReactNode
-    curr?: number | null; prev?: number | null; lowerIsBetter?: boolean
+    curr?: number | null; prev?: number | null; lowerIsBetter?: boolean; vsPreviousLabel?: string
 }) {
     return (
         <Card>
@@ -626,7 +637,7 @@ function KpiCard({ title, value, trend, trendUp, icon, curr, prev, lowerIsBetter
             <CardContent>
                 <div className="flex items-baseline">
                     <span className="text-2xl font-bold">{value}</span>
-                    <DeltaBadge curr={curr ?? null} prev={prev ?? null} lowerIsBetter={lowerIsBetter} />
+                    {vsPreviousLabel && <DeltaBadge curr={curr ?? null} prev={prev ?? null} lowerIsBetter={lowerIsBetter} vsPreviousLabel={vsPreviousLabel} />}
                 </div>
                 <p className="text-xs text-muted-foreground flex items-center mt-1">
                     {trendUp ? <TrendingUp className="h-3 w-3 text-green-500 mr-1" /> : <TrendingDown className="h-3 w-3 text-red-500 mr-1" />}
@@ -637,14 +648,14 @@ function KpiCard({ title, value, trend, trendUp, icon, curr, prev, lowerIsBetter
     )
 }
 
-function ImprovementHistoryCard({ metrics, days }: { metrics: AiMetrics; days: number }) {
+function ImprovementHistoryCard({ metrics, days, t }: { metrics: AiMetrics; days: number; t: Messages }) {
     const hasKbEvents = metrics.kb_events?.length > 0
     const hasPrev = metrics.prev_latency_ms !== null || metrics.prev_error_rate !== null || metrics.prev_no_context_rate !== null
 
     const deltas: { label: string; prev: number | null; curr: number | null; unit: string; lowerIsBetter: boolean }[] = [
-        { label: "Latence", prev: metrics.prev_latency_ms, curr: metrics.avg_latency_ms, unit: "ms", lowerIsBetter: true },
-        { label: "Taux d'erreur", prev: metrics.prev_error_rate, curr: metrics.error_rate, unit: "%", lowerIsBetter: true },
-        { label: "Sans contexte", prev: metrics.prev_no_context_rate, curr: metrics.no_context_rate, unit: "%", lowerIsBetter: true },
+        { label: t.monitoring.deltaLabels.latency, prev: metrics.prev_latency_ms, curr: metrics.avg_latency_ms, unit: "ms", lowerIsBetter: true },
+        { label: t.monitoring.deltaLabels.errorRate, prev: metrics.prev_error_rate, curr: metrics.error_rate, unit: "%", lowerIsBetter: true },
+        { label: t.monitoring.deltaLabels.noContext, prev: metrics.prev_no_context_rate, curr: metrics.no_context_rate, unit: "%", lowerIsBetter: true },
     ]
 
     return (
@@ -652,32 +663,32 @@ function ImprovementHistoryCard({ metrics, days }: { metrics: AiMetrics; days: n
             <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
                     <Activity className="h-4 w-4 text-indigo-500" />
-                    <CardTitle className="text-base">Historique des améliorations</CardTitle>
+                    <CardTitle className="text-base">{t.monitoring.historyTitle}</CardTitle>
                 </div>
-                <CardDescription>Boucle itérative : enrichissements KB et impact sur les métriques.</CardDescription>
+                <CardDescription>{t.monitoring.historySubtitle}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 {/* KB events timeline */}
                 <div>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Enrichissements KB sur {days} jours</p>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t.monitoring.kbEventsOverDays(days)}</p>
                     {hasKbEvents ? (
                         <div className="space-y-1.5">
                             {metrics.kb_events.map((e, i) => (
                                 <div key={i} className="flex items-center gap-2 text-sm">
                                     <div className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
                                     <span className="font-mono text-xs text-muted-foreground w-12">{e.date}</span>
-                                    <span className="text-xs">{e.chunks} chunks ajoutés à la base de connaissances</span>
+                                    <span className="text-xs">{t.monitoring.chunksAdded(e.chunks)}</span>
                                 </div>
                             ))}
                         </div>
                     ) : (
-                        <p className="text-xs text-muted-foreground italic">Aucun enrichissement sur cette période.</p>
+                        <p className="text-xs text-muted-foreground italic">{t.monitoring.noEnrichments}</p>
                     )}
                 </div>
 
                 {/* Period comparison */}
                 <div>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Impact mesuré (vs {days} jours précédents)</p>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">{t.monitoring.impactMeasured(days)}</p>
                     {hasPrev ? (
                         <div className="space-y-2">
                             {deltas.filter(d => d.prev !== null && d.curr !== null).map((d, i) => {
@@ -701,7 +712,7 @@ function ImprovementHistoryCard({ metrics, days }: { metrics: AiMetrics; days: n
                             })}
                         </div>
                     ) : (
-                        <p className="text-xs text-muted-foreground italic">Pas assez de données sur la période précédente.</p>
+                        <p className="text-xs text-muted-foreground italic">{t.monitoring.notEnoughData}</p>
                     )}
                 </div>
             </CardContent>

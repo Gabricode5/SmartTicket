@@ -25,6 +25,7 @@ import {
     X,
 } from "lucide-react"
 import { Streamdown } from "streamdown"
+import { useLocale } from "@/lib/i18n/LocaleContext"
 
 type ChatMessage = {
     id: string
@@ -50,39 +51,20 @@ function makeId(): string {
 // que spécifiques à un métier (l'ancienne version, centrée Stripe/CVV/litige, supposait à tort
 // que chaque client déployé traite des paiements Stripe — faux pour la plupart des clients de
 // cette plateforme multi-tenant). Alignées sur l'exemple déjà utilisé sur la landing page.
-const SUGGESTIONS = [
-    {
-        title: "Suivre ma commande",
-        desc: "Statut et livraison",
-        icon: <Smile className="h-4 w-4 text-amber-500" />,
-        prompt: "Comment puis-je suivre ma commande ?"
-    },
-    {
-        title: "Retour ou remboursement",
-        desc: "Politique de retour",
-        icon: <FileText className="h-4 w-4 text-blue-500" />,
-        prompt: "Quelle est la politique de retour ou de remboursement ?"
-    },
-    {
-        title: "Contacter un agent",
-        desc: "Besoin d'une aide humaine",
-        icon: <MessageCircle className="h-4 w-4 text-emerald-500" />,
-        prompt: "Comment puis-je être mis en relation avec un agent humain ?"
-    },
-    {
-        title: "Mon compte",
-        desc: "Gérer mes informations",
-        icon: <Zap className="h-4 w-4 text-purple-500" />,
-        prompt: "Comment modifier les informations de mon compte ?"
-    },
+const SUGGESTION_ICONS = [
+    <Smile key="smile" className="h-4 w-4 text-amber-500" />,
+    <FileText key="file" className="h-4 w-4 text-blue-500" />,
+    <MessageCircle key="chat" className="h-4 w-4 text-emerald-500" />,
+    <Zap key="zap" className="h-4 w-4 text-purple-500" />,
 ]
 
-const TRANSFER_REASONS = [
-    { key: "technique", label: "Technique", color: "bg-sky-100 text-sky-700 border-sky-200 hover:bg-sky-200" },
-    { key: "complexe", label: "Complexe", color: "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200" },
-    { key: "sensible", label: "Sensible", color: "bg-red-100 text-red-700 border-red-200 hover:bg-red-200" },
-    { key: "autre", label: "Autre", color: "bg-violet-100 text-violet-700 border-violet-200 hover:bg-violet-200" },
-]
+const TRANSFER_REASON_KEYS = ["technique", "complexe", "sensible", "autre"] as const
+const TRANSFER_REASON_COLORS: Record<string, string> = {
+    technique: "bg-sky-100 text-sky-700 border-sky-200 hover:bg-sky-200",
+    complexe: "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200",
+    sensible: "bg-red-100 text-red-700 border-red-200 hover:bg-red-200",
+    autre: "bg-violet-100 text-violet-700 border-violet-200 hover:bg-violet-200",
+}
 
 export default function AiAssistantPage() {
     const params = useParams()
@@ -91,6 +73,10 @@ export default function AiAssistantPage() {
     const sessionIdNumber = Number(sessionId)
 
     const { user: currentUser } = useCurrentUser()
+    const { messages: t, locale } = useLocale()
+    const timeLocale = locale === "fr" ? "fr-FR" : "en-US"
+    const SUGGESTIONS = t.chat.suggestions.map((s, i) => ({ ...s, icon: SUGGESTION_ICONS[i] }))
+    const TRANSFER_REASONS = TRANSFER_REASON_KEYS.map((key) => ({ key, label: t.common.reasons[key], color: TRANSFER_REASON_COLORS[key] }))
 
     const [messages, setMessages] = useState<ChatMessage[]>([])
     const [input, setInput] = useState("")
@@ -105,7 +91,7 @@ export default function AiAssistantPage() {
     const [isResolving, setIsResolving] = useState(false)
     const bottomRef = useRef<HTMLDivElement | null>(null)
 
-    const username = currentUser?.username ?? "Utilisateur"
+    const username = currentUser?.username ?? t.chat.defaultUsername
 
     useEffect(() => {
         if (currentUser && ["sav", "admin", "superviseur"].includes(currentUser.role)) {
@@ -123,7 +109,7 @@ export default function AiAssistantPage() {
             try {
                 const response = await fetch(`/api/messages?session_id=${sessionIdNumber}`)
                 if (response.status === 401) {
-                    setError("Session expirée. Veuillez vous reconnecter.")
+                    setError(t.chat.sessionExpired)
                     return
                 }
                 if (!response.ok) return
@@ -135,8 +121,8 @@ export default function AiAssistantPage() {
                     role: item.type_envoyeur === "ai" ? "ai" : item.type_envoyeur === "sav" ? "sav" : "user",
                     content: item.contenu ?? "",
                     createdAt: item.date_creation
-                        ? new Date(item.date_creation).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
-                        : new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+                        ? new Date(item.date_creation).toLocaleTimeString(timeLocale, { hour: "2-digit", minute: "2-digit" })
+                        : new Date().toLocaleTimeString(timeLocale, { hour: "2-digit", minute: "2-digit" }),
                     feedback: (item.feedback === 1 || item.feedback === -1) ? item.feedback : null,
                 }))
                 setMessages(normalized)
@@ -145,6 +131,7 @@ export default function AiAssistantPage() {
             }
         }
         loadMessages()
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- chargement initial des messages, ne doit pas se relancer au changement de langue
     }, [sessionIdNumber])
 
     useEffect(() => {
@@ -187,15 +174,15 @@ export default function AiAssistantPage() {
                             role: item.type_envoyeur === "ai" ? "ai" : item.type_envoyeur === "sav" ? "sav" : "user",
                             content: item.contenu ?? "",
                             createdAt: item.date_creation
-                                ? new Date(item.date_creation).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
-                                : new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+                                ? new Date(item.date_creation).toLocaleTimeString(timeLocale, { hour: "2-digit", minute: "2-digit" })
+                                : new Date().toLocaleTimeString(timeLocale, { hour: "2-digit", minute: "2-digit" }),
                             feedback: null,
                         })))
                     }
                 }
             }
         } catch {
-            setError("Impossible de contacter le serveur.")
+            setError(t.chat.contactServerError)
         } finally {
             setIsTransferring(false)
         }
@@ -217,18 +204,18 @@ export default function AiAssistantPage() {
                             role: item.type_envoyeur === "ai" ? "ai" : item.type_envoyeur === "sav" ? "sav" : "user",
                             content: item.contenu ?? "",
                             createdAt: item.date_creation
-                                ? new Date(item.date_creation).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
-                                : new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }),
+                                ? new Date(item.date_creation).toLocaleTimeString(timeLocale, { hour: "2-digit", minute: "2-digit" })
+                                : new Date().toLocaleTimeString(timeLocale, { hour: "2-digit", minute: "2-digit" }),
                             feedback: null,
                         })))
                     }
                 }
             } else {
                 const data = await res.json().catch(() => null)
-                setError(data?.detail || "Impossible de reprendre la conversation avec l'IA.")
+                setError(data?.detail || t.chat.cannotResumeAi)
             }
         } catch {
-            setError("Impossible de contacter le serveur.")
+            setError(t.chat.contactServerError)
         } finally {
             setIsResolving(false)
         }
@@ -257,7 +244,7 @@ export default function AiAssistantPage() {
         const trimmed = (customPrompt ?? input).trim()
         if (!trimmed || isSending) return
         if (isClosed) {
-            setError("Cette conversation est clôturée. Vous ne pouvez plus envoyer de message.")
+            setError(t.chat.closedNoMessage)
             return
         }
 
@@ -265,14 +252,14 @@ export default function AiAssistantPage() {
             id: makeId(),
             role: "user",
             content: trimmed,
-            createdAt: new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+            createdAt: new Date().toLocaleTimeString(timeLocale, { hour: "2-digit", minute: "2-digit" })
         }
         setMessages(prev => [...prev, userMessage])
         setInput("")
 
         if (!aiEnabled || isTransferred) {
             try {
-                if (!Number.isFinite(sessionIdNumber)) { setError("Session invalide."); return }
+                if (!Number.isFinite(sessionIdNumber)) { setError(t.chat.invalidSession); return }
                 const response = await fetch("/api/messages", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -281,28 +268,28 @@ export default function AiAssistantPage() {
                 if (!response.ok) {
                     if (response.status === 401) {
                         setMessages(prev => prev.filter(m => m.id !== userMessage.id))
-                        setError("Session expirée. Veuillez vous reconnecter.")
+                        setError(t.chat.sessionExpired)
                         return
                     }
                     const data = await response.json()
                     setMessages(prev => prev.filter(m => m.id !== userMessage.id))
                     if (response.status === 400 && data?.detail === "Cette conversation est clôturée.") setIsClosed(true)
-                    setError(data?.detail || "Erreur lors de l'enregistrement du message.")
+                    setError(data?.detail || t.chat.saveMessageError)
                 }
             } catch {
                 setMessages(prev => prev.filter(m => m.id !== userMessage.id))
-                setError("Impossible de contacter le serveur.")
+                setError(t.chat.contactServerError)
             }
             return
         }
 
         setIsSending(true)
         const streamId = makeId()
-        const now = new Date().toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+        const now = new Date().toLocaleTimeString(timeLocale, { hour: "2-digit", minute: "2-digit" })
         setMessages(prev => [...prev, { id: streamId, role: "ai", content: "", createdAt: now, feedback: null }])
 
         try {
-            if (!Number.isFinite(sessionIdNumber)) { setError("Session invalide."); setIsSending(false); return }
+            if (!Number.isFinite(sessionIdNumber)) { setError(t.chat.invalidSession); setIsSending(false); return }
             const response = await fetch(
                 `/api/ask?question=${encodeURIComponent(trimmed)}&session_id=${sessionIdNumber}&mode=rag_llm`,
                 { method: "POST", credentials: "include" }
@@ -311,7 +298,7 @@ export default function AiAssistantPage() {
                 const data = await response.json().catch(() => null)
                 setMessages(prev => prev.filter(m => m.id !== userMessage.id && m.id !== streamId))
                 if (response.status === 400 && data?.detail === "Cette conversation est clôturée.") setIsClosed(true)
-                setError(data?.detail || "Erreur de l'assistant IA.")
+                setError(data?.detail || t.chat.aiAssistantError)
                 setIsSending(false)
                 return
             }
@@ -326,7 +313,7 @@ export default function AiAssistantPage() {
             }
         } catch {
             setMessages(prev => prev.filter(m => m.id !== userMessage.id && m.id !== streamId))
-            setError("Erreur de connexion au serveur.")
+            setError(t.chat.connectionError)
         } finally {
             setIsSending(false)
         }
@@ -345,13 +332,13 @@ export default function AiAssistantPage() {
                         <h2 className="font-bold text-sm text-foreground">{username} <span className="text-muted-foreground font-normal ml-1">#S{sessionId}</span></h2>
                         <p className={`text-[11px] font-medium flex items-center gap-1 ${isClosed ? "text-muted-foreground" : isTransferred ? "text-amber-600" : "text-green-600"}`}>
                             <span className={`h-1.5 w-1.5 rounded-full ${isClosed ? "bg-muted-foreground" : isTransferred ? "bg-amber-500 animate-pulse" : "bg-green-500 animate-pulse"}`}></span>
-                            {isClosed ? "Conversation clôturée" : isTransferred ? "En attente d'un agent SAV" : "Assistant IA Actif"}
+                            {isClosed ? t.chat.closedStatus : isTransferred ? t.chat.waitingForAgent : t.chat.aiActiveStatus}
                         </p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label="Rechercher dans la conversation"><Search className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label="Plus d'options"><MoreVertical className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label={t.chat.searchAriaLabel}><Search className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" className="text-muted-foreground" aria-label={t.chat.moreOptionsAriaLabel}><MoreVertical className="h-4 w-4" /></Button>
                 </div>
             </header>
 
@@ -364,8 +351,8 @@ export default function AiAssistantPage() {
                             <div className="bg-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-xl shadow-indigo-100 mb-6">
                                 <Bot className="h-9 w-9 text-white" />
                             </div>
-                            <h1 className="text-3xl font-black text-foreground tracking-tight">Prêt à booster votre SAV ?</h1>
-                            <p className="text-muted-foreground text-sm max-w-sm mx-auto">Choisissez une action rapide ou posez votre question ci-dessous.</p>
+                            <h1 className="text-3xl font-black text-foreground tracking-tight">{t.chat.heroTitle}</h1>
+                            <p className="text-muted-foreground text-sm max-w-sm mx-auto">{t.chat.heroSubtitle}</p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full px-4">
                             {SUGGESTIONS.map((s, i) => (
@@ -414,7 +401,7 @@ export default function AiAssistantPage() {
                                     </div>
                                     <div className="flex items-center gap-2 px-2 mt-1">
                                         <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-tighter">
-                                            {m.role === "user" ? username : m.role === "sav" ? "Agent SAV" : "Assistant IA"} • {m.createdAt}
+                                            {m.role === "user" ? username : m.role === "sav" ? t.chat.agentLabel : t.chat.aiLabel} • {m.createdAt}
                                         </span>
                                         {m.role === "ai" && m.content && !(isSending && isLastMessage(m.id)) && (
                                             <div className="flex items-center gap-0.5">
@@ -422,7 +409,7 @@ export default function AiAssistantPage() {
                                                     type="button"
                                                     disabled={m.feedback !== null && m.feedback !== undefined}
                                                     onClick={() => handleFeedback(m.id, -1)}
-                                                    aria-label="Marquer comme mauvaise réponse"
+                                                    aria-label={t.chat.badFeedbackAriaLabel}
                                                     className={`p-0.5 rounded transition-colors disabled:cursor-default ${m.feedback === -1 ? "text-red-500" : "text-muted-foreground hover:text-foreground"}`}
                                                 >
                                                     <ThumbsDown className={`h-3.5 w-3.5 ${m.feedback === -1 ? "fill-red-500" : ""}`} />
@@ -446,8 +433,8 @@ export default function AiAssistantPage() {
                             <Headphones className="h-4 w-4 flex-shrink-0" />
                             <span>
                                 {hasSavReply
-                                    ? "Un agent SAV a répondu à votre demande."
-                                    : "En attente d'un agent SAV — un agent humain va vous répondre prochainement."}
+                                    ? t.chat.agentReplied
+                                    : t.chat.waitingForAgentLong}
                             </span>
                         </div>
                         {hasSavReply && (
@@ -458,7 +445,7 @@ export default function AiAssistantPage() {
                                 className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1 rounded-full border border-amber-200 bg-card text-amber-700 hover:bg-amber-100 transition-colors text-xs font-bold uppercase disabled:opacity-50"
                             >
                                 <Bot className="h-3.5 w-3.5" />
-                                {isResolving ? "…" : "Reprendre avec l'IA"}
+                                {isResolving ? "…" : t.chat.resumeWithAi}
                             </button>
                         )}
                     </div>
@@ -469,8 +456,8 @@ export default function AiAssistantPage() {
                     <div className="px-6 py-3 border-b border-border bg-muted/60">
                         <div className="max-w-4xl mx-auto">
                             <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Pourquoi souhaitez-vous parler à un agent ?</span>
-                                <button onClick={() => setShowTransferPanel(false)} aria-label="Fermer le panneau de transfert" className="text-muted-foreground hover:text-foreground">
+                                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t.chat.whyTalkToAgent}</span>
+                                <button onClick={() => setShowTransferPanel(false)} aria-label={t.chat.closeTransferPanelAriaLabel} className="text-muted-foreground hover:text-foreground">
                                     <X className="h-4 w-4" />
                                 </button>
                             </div>
@@ -496,7 +483,7 @@ export default function AiAssistantPage() {
                             <div className="flex items-center gap-2">
                                 <div className="flex items-center gap-3 bg-muted px-3 py-1.5 rounded-full border border-border">
                                     <Switch checked={aiEnabled} onCheckedChange={setAiEnabled} disabled={isClosed || isTransferred} className="data-[state=checked]:bg-indigo-600" />
-                                    <span className="text-[11px] font-bold text-muted-foreground uppercase">IA Active</span>
+                                    <span className="text-[11px] font-bold text-muted-foreground uppercase">{t.chat.aiActiveLabel}</span>
                                 </div>
                                 {!isClosed && !isTransferred && (
                                     <button
@@ -504,18 +491,18 @@ export default function AiAssistantPage() {
                                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border bg-muted text-muted-foreground hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 transition-colors text-[11px] font-bold uppercase"
                                     >
                                         <Headphones className="h-3.5 w-3.5" />
-                                        Agent humain
+                                        {t.chat.humanAgent}
                                     </button>
                                 )}
                             </div>
                             <Badge variant="outline" className="text-indigo-600 border-indigo-100 gap-1 text-[10px] py-1">
-                                <Sparkles className="h-3 w-3" /> Chiffrement actif
+                                <Sparkles className="h-3 w-3" /> {t.chat.encryptionActive}
                             </Badge>
                         </div>
                         {error ? <p className="text-sm text-red-600" role="alert">{error}</p> : null}
                         <form onSubmit={handleSend} className="relative group">
                             <label htmlFor="chat-input" className="sr-only">
-                                {isClosed ? "Conversation clôturée" : isTransferred ? "Message à l'agent SAV" : "Question à l'assistant IA"}
+                                {isClosed ? t.chat.closedLabel : isTransferred ? t.chat.messageToAgent : t.chat.questionToAi}
                             </label>
                             <Input
                                 id="chat-input"
@@ -524,16 +511,16 @@ export default function AiAssistantPage() {
                                 disabled={isClosed || isSending}
                                 placeholder={
                                     isClosed
-                                        ? "Cette conversation est clôturée."
+                                        ? t.chat.placeholderClosed
                                         : isTransferred
-                                            ? "Envoyez un message à l'agent SAV..."
-                                            : "Posez votre question à l'assistant..."
+                                            ? t.chat.placeholderTransferred
+                                            : t.chat.placeholderActive
                                 }
                                 className="h-14 pl-6 pr-24 rounded-2xl border-2 border-border focus-visible:ring-indigo-500 bg-muted/30 transition-all text-base"
                             />
                             <div className="absolute right-2 top-2 flex items-center gap-1">
                                 <Button type="submit" disabled={isClosed || isSending || !input.trim()} size="sm" className="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all">
-                                    <Send className="h-4 w-4 mr-2" /> {isSending ? "Calcul..." : "Envoyer"}
+                                    <Send className="h-4 w-4 mr-2" /> {isSending ? t.chat.sending : t.chat.sendButton}
                                 </Button>
                             </div>
                         </form>

@@ -5,10 +5,12 @@ import { useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { ArrowLeft, CheckCircle2, Eye, EyeOff } from "lucide-react"
+import { useLocale } from "@/lib/i18n/LocaleContext"
 
 function ResetPasswordContent() {
     const searchParams = useSearchParams()
     const token = searchParams.get("token")
+    const { messages: t } = useLocale()
 
     const [password, setPassword] = useState("")
     const [confirmPassword, setConfirmPassword] = useState("")
@@ -23,9 +25,9 @@ function ResetPasswordContent() {
         event.preventDefault()
         setError("")
 
-        if (!token) { setError("Lien de réinitialisation invalide."); return }
-        if (password.length < 6) { setError("Le mot de passe doit contenir au moins 6 caractères."); return }
-        if (password !== confirmPassword) { setError("Les mots de passe ne correspondent pas."); return }
+        if (!token) { setError(t.resetPassword.invalidLink); return }
+        if (password.length < 6) { setError(t.resetPassword.passwordTooShort); return }
+        if (password !== confirmPassword) { setError(t.resetPassword.passwordsDontMatch); return }
 
         setIsLoading(true)
         try {
@@ -38,10 +40,10 @@ function ResetPasswordContent() {
                 setSuccess(true)
             } else {
                 const data = await response.json().catch(() => ({}))
-                setError(typeof data.detail === "string" ? data.detail : "Lien invalide ou expiré.")
+                setError(typeof data.detail === "string" ? data.detail : t.resetPassword.invalidOrExpiredLink)
             }
         } catch {
-            setError("Impossible de contacter le serveur.")
+            setError(t.resetPassword.networkError)
         } finally {
             setIsLoading(false)
         }
@@ -55,7 +57,7 @@ function ResetPasswordContent() {
                     className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 transition-colors group"
                 >
                     <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
-                    Retour à l&apos;accueil
+                    {t.login.backToHome}
                 </Link>
                 <div className="flex items-center gap-2 font-bold text-slate-800">
                     <Image src="/logo_smartticket.png" alt="SmartTicket" width={28} height={28} className="h-7 w-7" />
@@ -69,15 +71,15 @@ function ResetPasswordContent() {
                         {success ? (
                             <div className="text-center">
                                 <CheckCircle2 className="h-12 w-12 text-emerald-600 mx-auto mb-4" />
-                                <h1 className="text-xl font-bold text-slate-900">Mot de passe réinitialisé !</h1>
+                                <h1 className="text-xl font-bold text-slate-900">{t.resetPassword.successTitle}</h1>
                                 <p className="text-slate-500 text-sm mt-2 mb-6">
-                                    Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.
+                                    {t.resetPassword.successBody}
                                 </p>
                                 <Link
                                     href="/login"
                                     className="inline-block w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-colors"
                                 >
-                                    Se connecter
+                                    {t.resetPassword.login}
                                 </Link>
                             </div>
                         ) : (
@@ -86,8 +88,8 @@ function ResetPasswordContent() {
                                     <div className="inline-flex items-center justify-center w-12 h-12 mb-4">
                                         <Image src="/logo_smartticket.png" alt="SmartTicket" width={48} height={48} className="w-12 h-12" />
                                     </div>
-                                    <h1 className="text-2xl font-bold text-slate-900">Nouveau mot de passe</h1>
-                                    <p className="text-slate-500 text-sm mt-1">Choisissez un nouveau mot de passe pour votre compte</p>
+                                    <h1 className="text-2xl font-bold text-slate-900">{t.resetPassword.title}</h1>
+                                    <p className="text-slate-500 text-sm mt-1">{t.resetPassword.subtitle}</p>
                                 </div>
 
                                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -99,7 +101,7 @@ function ResetPasswordContent() {
                                     )}
 
                                     <div className="space-y-1.5">
-                                        <label htmlFor="password" className="block text-sm font-medium text-slate-700">Nouveau mot de passe</label>
+                                        <label htmlFor="password" className="block text-sm font-medium text-slate-700">{t.resetPassword.newPasswordLabel}</label>
                                         <div className="relative">
                                             <input
                                                 id="password"
@@ -117,7 +119,7 @@ function ResetPasswordContent() {
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700">Confirmer le mot de passe</label>
+                                        <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700">{t.resetPassword.confirmPasswordLabel}</label>
                                         <input
                                             id="confirmPassword"
                                             type={showPassword ? "text" : "password"}
@@ -131,7 +133,7 @@ function ResetPasswordContent() {
                                             }`}
                                         />
                                         {!passwordsMatch && (
-                                            <p className="text-xs text-red-500">Les mots de passe ne correspondent pas.</p>
+                                            <p className="text-xs text-red-500">{t.resetPassword.passwordsDontMatch}</p>
                                         )}
                                     </div>
 
@@ -140,7 +142,7 @@ function ResetPasswordContent() {
                                         disabled={isLoading}
                                         className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors"
                                     >
-                                        {isLoading ? "Réinitialisation…" : "Réinitialiser le mot de passe"}
+                                        {isLoading ? t.resetPassword.resetting : t.resetPassword.resetPassword}
                                     </button>
                                 </form>
                             </>

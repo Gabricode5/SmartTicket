@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import SetupPage from "@/app/(auth)/setup/page";
 import { mockFetch, jsonResponse } from "../test-utils/fetchMock";
+import { LocaleProvider } from "@/lib/i18n/LocaleContext";
 
 let searchParams = new URLSearchParams();
 jest.mock("next/navigation", () => ({
@@ -26,7 +27,7 @@ describe("SetupPage", () => {
   it("completes setup and shows a success screen", async () => {
     const fetchMock = mockFetch(() => jsonResponse({ message: "ok" }));
 
-    render(<SetupPage />);
+    render(<SetupPage />, { wrapper: LocaleProvider });
     fillAndSubmit();
 
     await waitFor(() => {
@@ -43,7 +44,7 @@ describe("SetupPage", () => {
   it("shows a mismatch error and does not submit when passwords differ", async () => {
     const fetchMock = mockFetch(() => jsonResponse({ message: "ok" }));
 
-    render(<SetupPage />);
+    render(<SetupPage />, { wrapper: LocaleProvider });
     fireEvent.change(screen.getByLabelText(/nom d'utilisateur/i), { target: { value: "acme_admin" } });
     fireEvent.change(screen.getByLabelText(/adresse email/i), { target: { value: "admin@acme.com" } });
     fireEvent.change(screen.getByLabelText(/^mot de passe$/i), { target: { value: VALID_PASSWORD } });
@@ -57,7 +58,7 @@ describe("SetupPage", () => {
   it("rejects a password under 12 characters client-side without submitting", async () => {
     const fetchMock = mockFetch(() => jsonResponse({ message: "ok" }));
 
-    render(<SetupPage />);
+    render(<SetupPage />, { wrapper: LocaleProvider });
     fireEvent.change(screen.getByLabelText(/nom d'utilisateur/i), { target: { value: "acme_admin" } });
     fireEvent.change(screen.getByLabelText(/adresse email/i), { target: { value: "admin@acme.com" } });
     fireEvent.change(screen.getByLabelText(/^mot de passe$/i), { target: { value: "short11char" } });
@@ -75,7 +76,7 @@ describe("SetupPage", () => {
   ])("shows a dedicated message for the %s error state", async (code, expectedText) => {
     mockFetch(() => jsonResponse({ detail: { code, message: "server message" } }, 400));
 
-    render(<SetupPage />);
+    render(<SetupPage />, { wrapper: LocaleProvider });
     fillAndSubmit();
 
     expect(await screen.findByText(expectedText)).toBeInTheDocument();
@@ -84,7 +85,7 @@ describe("SetupPage", () => {
   it("shows a generic server error (e.g. duplicate email) inline instead of the token screen", async () => {
     mockFetch(() => jsonResponse({ detail: "Cet email est déjà utilisé." }, 400));
 
-    render(<SetupPage />);
+    render(<SetupPage />, { wrapper: LocaleProvider });
     fillAndSubmit();
 
     expect(await screen.findByText("Cet email est déjà utilisé.")).toBeInTheDocument();
@@ -94,7 +95,7 @@ describe("SetupPage", () => {
   it("shows the invalid-token screen immediately when no token is present in the URL", async () => {
     searchParams = new URLSearchParams();
 
-    render(<SetupPage />);
+    render(<SetupPage />, { wrapper: LocaleProvider });
     fillAndSubmit();
 
     expect(await screen.findByText(/lien de configuration est invalide/i)).toBeInTheDocument();

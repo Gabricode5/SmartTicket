@@ -5,18 +5,14 @@ import { useSearchParams } from "next/navigation"
 import Image from "next/image"
 import Link from "next/link"
 import { ArrowLeft, CheckCircle2, Eye, EyeOff, XCircle } from "lucide-react"
+import { useLocale } from "@/lib/i18n/LocaleContext"
 
 type TokenErrorCode = "invalid_token" | "token_already_used" | "token_expired"
-
-const TOKEN_ERROR_MESSAGES: Record<TokenErrorCode, string> = {
-    invalid_token: "Ce lien de configuration est invalide. Vérifiez que vous avez copié l'adresse complète, ou contactez votre fournisseur SmartTicket pour en recevoir un nouveau.",
-    token_already_used: "Ce lien a déjà été utilisé pour configurer le compte. Si ce n'est pas vous, contactez immédiatement votre fournisseur SmartTicket.",
-    token_expired: "Ce lien a expiré. Contactez votre fournisseur SmartTicket pour en recevoir un nouveau.",
-}
 
 function SetupContent() {
     const searchParams = useSearchParams()
     const token = searchParams.get("token")
+    const { messages: t } = useLocale()
 
     const [username, setUsername] = useState("")
     const [email, setEmail] = useState("")
@@ -36,9 +32,9 @@ function SetupContent() {
         setTokenErrorCode(null)
 
         if (!token) { setTokenErrorCode("invalid_token"); return }
-        if (!username.trim()) { setError("Le nom d'utilisateur ne peut pas être vide."); return }
-        if (password.length < 12) { setError("Le mot de passe doit contenir au moins 12 caractères (compte administrateur)."); return }
-        if (password !== confirmPassword) { setError("Les mots de passe ne correspondent pas."); return }
+        if (!username.trim()) { setError(t.setup.usernameEmpty); return }
+        if (password.length < 12) { setError(t.setup.passwordTooShort); return }
+        if (password !== confirmPassword) { setError(t.setup.passwordsDontMatch); return }
 
         setIsLoading(true)
         try {
@@ -52,13 +48,13 @@ function SetupContent() {
                 return
             }
             const data = await response.json().catch(() => ({}))
-            if (data.detail && typeof data.detail === "object" && data.detail.code in TOKEN_ERROR_MESSAGES) {
+            if (data.detail && typeof data.detail === "object" && data.detail.code in t.setup.tokenErrors) {
                 setTokenErrorCode(data.detail.code as TokenErrorCode)
             } else {
-                setError(typeof data.detail === "string" ? data.detail : "Une erreur est survenue.")
+                setError(typeof data.detail === "string" ? data.detail : t.setup.genericError)
             }
         } catch {
-            setError("Impossible de contacter le serveur.")
+            setError(t.setup.networkError)
         } finally {
             setIsLoading(false)
         }
@@ -72,7 +68,7 @@ function SetupContent() {
                     className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 transition-colors group"
                 >
                     <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
-                    Retour à l&apos;accueil
+                    {t.login.backToHome}
                 </Link>
                 <div className="flex items-center gap-2 font-bold text-slate-800">
                     <Image src="/logo_smartticket.png" alt="SmartTicket" width={28} height={28} className="h-7 w-7" />
@@ -86,23 +82,23 @@ function SetupContent() {
                         {success ? (
                             <div className="text-center">
                                 <CheckCircle2 className="h-12 w-12 text-emerald-600 mx-auto mb-4" />
-                                <h1 className="text-xl font-bold text-slate-900">Configuration terminée !</h1>
+                                <h1 className="text-xl font-bold text-slate-900">{t.setup.successTitle}</h1>
                                 <p className="text-slate-500 text-sm mt-2 mb-6">
-                                    Votre compte administrateur est prêt. Vous pouvez maintenant vous connecter.
+                                    {t.setup.successBody}
                                 </p>
                                 <Link
                                     href="/login"
                                     className="inline-block w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-colors"
                                 >
-                                    Se connecter
+                                    {t.setup.login}
                                 </Link>
                             </div>
                         ) : tokenErrorCode ? (
                             <div className="text-center">
                                 <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-                                <h1 className="text-xl font-bold text-slate-900">Lien indisponible</h1>
+                                <h1 className="text-xl font-bold text-slate-900">{t.setup.unavailableLinkTitle}</h1>
                                 <p className="text-slate-500 text-sm mt-2">
-                                    {TOKEN_ERROR_MESSAGES[tokenErrorCode]}
+                                    {t.setup.tokenErrors[tokenErrorCode]}
                                 </p>
                             </div>
                         ) : (
@@ -111,8 +107,8 @@ function SetupContent() {
                                     <div className="inline-flex items-center justify-center w-12 h-12 mb-4">
                                         <Image src="/logo_smartticket.png" alt="SmartTicket" width={48} height={48} className="w-12 h-12" />
                                     </div>
-                                    <h1 className="text-2xl font-bold text-slate-900">Configurer votre compte</h1>
-                                    <p className="text-slate-500 text-sm mt-1">Choisissez vos identifiants administrateur SmartTicket</p>
+                                    <h1 className="text-2xl font-bold text-slate-900">{t.setup.title}</h1>
+                                    <p className="text-slate-500 text-sm mt-1">{t.setup.subtitle}</p>
                                 </div>
 
                                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -124,7 +120,7 @@ function SetupContent() {
                                     )}
 
                                     <div className="space-y-1.5">
-                                        <label htmlFor="username" className="block text-sm font-medium text-slate-700">Nom d&apos;utilisateur</label>
+                                        <label htmlFor="username" className="block text-sm font-medium text-slate-700">{t.setup.usernameLabel}</label>
                                         <input
                                             id="username"
                                             type="text"
@@ -136,7 +132,7 @@ function SetupContent() {
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <label htmlFor="email" className="block text-sm font-medium text-slate-700">Adresse email</label>
+                                        <label htmlFor="email" className="block text-sm font-medium text-slate-700">{t.setup.emailLabel}</label>
                                         <input
                                             id="email"
                                             type="email"
@@ -148,8 +144,8 @@ function SetupContent() {
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <label htmlFor="password" className="block text-sm font-medium text-slate-700">Mot de passe</label>
-                                        <p className="text-xs text-slate-400">Au moins 12 caractères — ce compte administre votre instance SmartTicket.</p>
+                                        <label htmlFor="password" className="block text-sm font-medium text-slate-700">{t.setup.passwordLabel}</label>
+                                        <p className="text-xs text-slate-400">{t.setup.passwordHint}</p>
                                         <div className="relative">
                                             <input
                                                 id="password"
@@ -167,7 +163,7 @@ function SetupContent() {
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700">Confirmer le mot de passe</label>
+                                        <label htmlFor="confirmPassword" className="block text-sm font-medium text-slate-700">{t.setup.confirmPasswordLabel}</label>
                                         <input
                                             id="confirmPassword"
                                             type={showPassword ? "text" : "password"}
@@ -181,7 +177,7 @@ function SetupContent() {
                                             }`}
                                         />
                                         {!passwordsMatch && (
-                                            <p className="text-xs text-red-500">Les mots de passe ne correspondent pas.</p>
+                                            <p className="text-xs text-red-500">{t.setup.passwordsDontMatch}</p>
                                         )}
                                     </div>
 
@@ -190,7 +186,7 @@ function SetupContent() {
                                         disabled={isLoading}
                                         className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors"
                                     >
-                                        {isLoading ? "Configuration…" : "Configurer mon compte"}
+                                        {isLoading ? t.setup.configuring : t.setup.configureAccount}
                                     </button>
                                 </form>
                             </>

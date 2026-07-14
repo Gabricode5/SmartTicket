@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import SignUpPage from "@/app/(auth)/sign-up/page";
 import { mockFetch, jsonResponse } from "../test-utils/fetchMock";
+import { LocaleProvider } from "@/lib/i18n/LocaleContext";
 
 function fillRequiredFields() {
   fireEvent.change(screen.getByLabelText(/prénom/i), { target: { value: "Jean" } });
@@ -16,7 +17,7 @@ describe("SignUpPage", () => {
   it("shows a check-your-email screen instead of redirecting after registration", async () => {
     mockFetch(() => jsonResponse({ id: 1, email: "jean@example.com", email_verified: false }, 201));
 
-    render(<SignUpPage />);
+    render(<SignUpPage />, { wrapper: LocaleProvider });
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: /créer mon compte/i }));
 
@@ -28,7 +29,7 @@ describe("SignUpPage", () => {
   it("shows the server error and stays on the form when registration fails", async () => {
     mockFetch(() => jsonResponse({ detail: "Cet email est déjà utilisé." }, 400));
 
-    render(<SignUpPage />);
+    render(<SignUpPage />, { wrapper: LocaleProvider });
     fillRequiredFields();
     fireEvent.click(screen.getByRole("button", { name: /créer mon compte/i }));
 

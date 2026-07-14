@@ -5,10 +5,12 @@ import { Badge } from "@/components/ui/badge"
 import { Users, Headphones, UserCheck, UserX, ChevronLeft, ChevronRight, ShieldCheck } from "lucide-react"
 import type { UserItem } from "./types"
 import SavDashboard from "./SavDashboard"
+import { useLocale } from "@/lib/i18n/LocaleContext"
 
 const PAGE_SIZE = 8
 
 export default function SupervisorDashboard() {
+    const { messages: t } = useLocale()
     const [users, setUsers] = useState<UserItem[]>([])
     const [savUsers, setSavUsers] = useState<UserItem[]>([])
     const [error, setError] = useState<string | null>(null)
@@ -26,17 +28,17 @@ export default function SupervisorDashboard() {
                 fetch("/api/users?role=sav"),
             ])
             if (usersRes.status === 401 || savRes.status === 401) {
-                setError("Session expirée. Veuillez vous reconnecter.")
+                setError(t.supervisor.sessionExpired)
                 return
             }
             if (!usersRes.ok || !savRes.ok) {
-                setError("Impossible de charger l'équipe.")
+                setError(t.supervisor.loadTeamError)
                 return
             }
             setUsers(await usersRes.json())
             setSavUsers(await savRes.json())
         } catch {
-            setError("Erreur réseau.")
+            setError(t.supervisor.networkError)
         } finally {
             setIsLoading(false)
         }
@@ -57,12 +59,12 @@ export default function SupervisorDashboard() {
             })
             const data = await res.json()
             if (!res.ok) {
-                setError(res.status === 401 ? "Session expirée." : data?.detail || "Impossible de modifier le rôle.")
+                setError(res.status === 401 ? t.supervisor.sessionExpired : data?.detail || t.supervisor.roleChangeError)
                 return
             }
             await loadTeam()
         } catch {
-            setError("Erreur réseau.")
+            setError(t.supervisor.networkError)
         } finally {
             setUpdatingUserId(null)
         }
@@ -76,8 +78,8 @@ export default function SupervisorDashboard() {
                         <ShieldCheck className="h-5 w-5 text-white" />
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold tracking-tight text-foreground">Espace Superviseur SAV</h1>
-                        <p className="text-xs text-muted-foreground">Gestion de l&apos;équipe SAV &amp; support client</p>
+                        <h1 className="text-xl font-bold tracking-tight text-foreground">{t.supervisor.title}</h1>
+                        <p className="text-xs text-muted-foreground">{t.supervisor.subtitle}</p>
                     </div>
                 </div>
             </header>
@@ -99,17 +101,17 @@ export default function SupervisorDashboard() {
                                     <Users className="h-4 w-4 text-blue-600" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-semibold text-foreground">Utilisateurs</p>
-                                    <p className="text-xs text-muted-foreground">Promouvoir en agent SAV</p>
+                                    <p className="text-sm font-semibold text-foreground">{t.supervisor.usersTitle}</p>
+                                    <p className="text-xs text-muted-foreground">{t.supervisor.usersSubtitle}</p>
                                 </div>
                             </div>
                             <Badge className="bg-blue-50 text-blue-600 border-blue-100 text-xs font-semibold">{users.length}</Badge>
                         </div>
                         <div className="divide-y divide-slate-50">
                             {isLoading ? (
-                                <div className="px-5 py-8 text-center text-sm text-muted-foreground">Chargement...</div>
+                                <div className="px-5 py-8 text-center text-sm text-muted-foreground">{t.supervisor.loading}</div>
                             ) : users.length === 0 ? (
-                                <div className="px-5 py-8 text-center text-sm text-muted-foreground">Aucun utilisateur</div>
+                                <div className="px-5 py-8 text-center text-sm text-muted-foreground">{t.supervisor.noUsers}</div>
                             ) : users.slice((usersPage - 1) * PAGE_SIZE, usersPage * PAGE_SIZE).map((u) => (
                                 <div key={u.id} className="px-4 py-3 flex items-center justify-between hover:bg-muted/80">
                                     <div className="flex items-center gap-3 min-w-0">
@@ -127,7 +129,7 @@ export default function SupervisorDashboard() {
                                         className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors disabled:opacity-50 flex-shrink-0"
                                     >
                                         <UserCheck className="h-3 w-3" />
-                                        {updatingUserId === u.id ? "..." : "SAV"}
+                                        {updatingUserId === u.id ? "..." : t.supervisor.promote}
                                     </button>
                                 </div>
                             ))}
@@ -153,17 +155,17 @@ export default function SupervisorDashboard() {
                                     <Headphones className="h-4 w-4 text-emerald-600" />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-semibold text-foreground">Agents SAV</p>
-                                    <p className="text-xs text-muted-foreground">Rétrograder en utilisateur</p>
+                                    <p className="text-sm font-semibold text-foreground">{t.supervisor.savTitle}</p>
+                                    <p className="text-xs text-muted-foreground">{t.supervisor.savSubtitle}</p>
                                 </div>
                             </div>
                             <Badge className="bg-emerald-50 text-emerald-600 border-emerald-100 text-xs font-semibold">{savUsers.length}</Badge>
                         </div>
                         <div className="divide-y divide-slate-50">
                             {isLoading ? (
-                                <div className="px-5 py-8 text-center text-sm text-muted-foreground">Chargement...</div>
+                                <div className="px-5 py-8 text-center text-sm text-muted-foreground">{t.supervisor.loading}</div>
                             ) : savUsers.length === 0 ? (
-                                <div className="px-5 py-8 text-center text-sm text-muted-foreground">Aucun agent SAV</div>
+                                <div className="px-5 py-8 text-center text-sm text-muted-foreground">{t.supervisor.noSav}</div>
                             ) : savUsers.slice((savPage - 1) * PAGE_SIZE, savPage * PAGE_SIZE).map((u) => (
                                 <div key={u.id} className="px-4 py-3 flex items-center justify-between hover:bg-muted/80">
                                     <div className="flex items-center gap-3 min-w-0">
@@ -181,7 +183,7 @@ export default function SupervisorDashboard() {
                                         className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-200 transition-colors disabled:opacity-50 flex-shrink-0"
                                     >
                                         <UserX className="h-3 w-3" />
-                                        {updatingUserId === u.id ? "..." : "Retirer"}
+                                        {updatingUserId === u.id ? "..." : t.supervisor.demote}
                                     </button>
                                 </div>
                             ))}

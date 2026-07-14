@@ -1,6 +1,7 @@
 import { render, screen, waitFor, fireEvent } from "@testing-library/react";
 import AiAssistantPage from "@/app/(chat)/ai-assistant/[id]/page";
 import { mockFetch, jsonResponse } from "../test-utils/fetchMock";
+import { LocaleProvider } from "@/lib/i18n/LocaleContext";
 
 jest.mock("next/navigation", () => ({
   useParams: () => ({ id: "7" }),
@@ -37,7 +38,7 @@ describe("AiAssistantPage — reprise de la main par l'IA", () => {
       return jsonResponse({}, 404);
     });
 
-    render(<AiAssistantPage />);
+    render(<AiAssistantPage />, { wrapper: LocaleProvider });
 
     expect(await screen.findByText("Un agent SAV a répondu à votre demande.")).toBeInTheDocument();
     const resumeButton = screen.getByRole("button", { name: /reprendre avec l'ia/i });
@@ -60,7 +61,7 @@ describe("AiAssistantPage — reprise de la main par l'IA", () => {
       return jsonResponse({}, 404);
     });
 
-    render(<AiAssistantPage />);
+    render(<AiAssistantPage />, { wrapper: LocaleProvider });
 
     expect(await screen.findByText("En attente d'un agent SAV — un agent humain va vous répondre prochainement.")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /reprendre avec l'ia/i })).not.toBeInTheDocument();

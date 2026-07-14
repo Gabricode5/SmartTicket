@@ -1,6 +1,7 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import SettingsPage from "@/app/(dashboard)/settings/page";
 import { mockFetch, jsonResponse } from "../test-utils/fetchMock";
+import { LocaleProvider } from "@/lib/i18n/LocaleContext";
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ push: jest.fn(), refresh: jest.fn() }),
@@ -21,7 +22,7 @@ describe("SettingsPage — email verification banner", () => {
   it("shows nothing when the email is already verified", async () => {
     mockFetch((url) => (url === "/api/me" ? jsonResponse(baseMe) : jsonResponse({}, 404)));
 
-    render(<SettingsPage />);
+    render(<SettingsPage />, { wrapper: LocaleProvider });
     await screen.findByDisplayValue("alice@example.com");
     expect(screen.queryByText(/confirmez votre nouvelle adresse/i)).not.toBeInTheDocument();
   });
@@ -31,7 +32,7 @@ describe("SettingsPage — email verification banner", () => {
       url === "/api/me" ? jsonResponse({ ...baseMe, email_verified: false }) : jsonResponse({}, 404)
     );
 
-    render(<SettingsPage />);
+    render(<SettingsPage />, { wrapper: LocaleProvider });
     expect(await screen.findByText(/confirmez votre nouvelle adresse/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /renvoyer l'email/i })).toBeInTheDocument();
   });
@@ -45,7 +46,7 @@ describe("SettingsPage — email verification banner", () => {
           : jsonResponse({}, 404)
     );
 
-    render(<SettingsPage />);
+    render(<SettingsPage />, { wrapper: LocaleProvider });
     fireEvent.click(await screen.findByRole("button", { name: /renvoyer l'email/i }));
 
     await waitFor(() => {
@@ -66,7 +67,7 @@ describe("SettingsPage — email verification banner", () => {
       return jsonResponse({}, 404);
     });
 
-    render(<SettingsPage />);
+    render(<SettingsPage />, { wrapper: LocaleProvider });
     await screen.findByDisplayValue("alice@example.com");
     expect(screen.queryByText(/confirmez votre nouvelle adresse/i)).not.toBeInTheDocument();
 
