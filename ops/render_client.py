@@ -1,13 +1,16 @@
 """Client léger pour l'API REST Render (https://api.render.com/v1).
 
-ATTENTION : non validé contre un vrai compte Render (cf. Phase 0 de docs/FLEET_PROVISIONING_PLAN.md,
-case encore non cochée) — les noms d'endpoints et la forme exacte des payloads ci-dessous
-sont basés sur la documentation publique Render au moment de l'écriture, mais l'API évolue
-et certains détails (nommage précis des champs `serviceDetails`, comportement exact de
-l'attente du certificat TLS...) doivent être confirmés avec un premier appel réel avant
-de faire confiance à ce module sur un client payant. Toujours tester avec
-`provision_client.py --dry-run` d'abord, puis sur une instance de test (Phase 4 du plan),
-jamais directement sur un client réel.
+ATTENTION : partiellement validé contre un vrai compte Render seulement (cf. Phase 0 de
+docs/FLEET_PROVISIONING_PLAN.md). Premier essai réel (2026-07-14) : POST /postgres a échoué
+avec `{"message":"version is required"}` — corrigé, avec vérification du schéma OpenAPI réel
+(https://api-docs.render.com/v1.0/openapi/render-public-api-1.json) pour TOUS les endpoints
+utilisés ci-dessous plutôt que de deviner champ par champ à chaque nouvel échec. Plusieurs
+autres écarts entre la doc publique lue initialement et le schéma réel ont été trouvés et
+corrigés au même moment (cf. commentaires inline : `runtime` vs `env`, enveloppes de réponse
+`service`/`deploy`...). Le comportement exact de l'attente du certificat TLS sur un domaine
+personnalisé (`add_custom_domain`) reste, lui, non vérifié — pas encore testé en pratique.
+Toujours tester avec `provision_client.py --dry-run` d'abord, puis sur une instance de test
+(Phase 4 du plan), jamais directement sur un client réel.
 """
 import logging
 import os
@@ -21,6 +24,15 @@ RENDER_API_BASE = "https://api.render.com/v1"
 RENDER_API_KEY = os.getenv("RENDER_API_KEY")
 
 DEFAULT_REGION = "frankfurt"  # Cohérent avec render.yaml existant (UE, RGPD)
+
+# Valeurs exactes du schéma postgresVersion de l'API Render (vérifiées sur le schéma OpenAPI
+# réel le 2026-07-14, pas devinées) — toujours des chaînes, jamais des entiers.
+SUPPORTED_POSTGRES_VERSIONS = ("11", "12", "13", "14", "15", "16", "17", "18")
+# Alignée sur docker-compose.yml et .github/workflows/ci.yml (image pgvector/pgvector:pg18,
+# déjà la version validée partout ailleurs dans le projet) et confirmée par la doc Render
+# (render.com/docs/postgresql-extensions) : pgvector supporté sans restriction de version
+# maximale sur Postgres 13+.
+DEFAULT_POSTGRES_VERSION = "18"
 
 
 class RenderAPIError(RuntimeError):
@@ -57,12 +69,23 @@ def get_owner_id() -> str:
     return owners[0]["owner"]["id"]
 
 
-def create_postgres(*, name: str, owner_id: str, plan: str, database_name: str, database_user: str, region: str = DEFAULT_REGION) -> dict:
+def create_postgres(
+    *, name: str, owner_id: str, plan: str, database_name: str, database_user: str,
+    version: str = DEFAULT_POSTGRES_VERSION, region: str = DEFAULT_REGION,
+) -> dict:
     """Plan JAMAIS 'free' pour une instance client — décision actée le 2026-07-09
     (docs/FLEET_PROVISIONING_PLAN.md, Phase 0) : le plan gratuit Render n'offre aucun
-    backup automatique. `plan` doit être un plan payant (ex: 'starter')."""
+    backup automatique. `plan` doit être un plan payant (ex: 'starter').
+
+    `version` est REQUIS par l'API Render (champ absent avant le 2026-07-14, premier échec
+    réel : `{"message":"version is required"}`) — cf. SUPPORTED_POSTGRES_VERSIONS ci-dessus."""
     if plan.lower() == "free":
         raise RenderAPIError("Plan Postgres 'free' refusé pour une instance client — aucun backup automatique sur ce plan.")
+    if version not in SUPPORTED_POSTGRES_VERSIONS:
+        raise RenderAPIError(
+            f"Version PostgreSQL '{version}' non supportée par l'API Render. "
+            f"Valeurs acceptées : {', '.join(SUPPORTED_POSTGRES_VERSIONS)}."
+        )
     return _request("POST", "/postgres", json={
         "name": name,
         "ownerId": owner_id,
@@ -70,6 +93,7 @@ def create_postgres(*, name: str, owner_id: str, plan: str, database_name: str, 
         "region": region,
         "databaseName": database_name,
         "databaseUser": database_user,
+        "version": version,
     })
 
 
@@ -82,7 +106,12 @@ def create_web_service(
     dockerfile_path: str, env_vars: dict[str, str], plan: str, health_check_path: str = "/",
     region: str = DEFAULT_REGION,
 ) -> dict:
-    return _request("POST", "/services", json={
+    """`serviceDetails.runtime` (pas `env`, déprécié côté API malgré son nom trompeur) et
+    `serviceDetails.envSpecificDetails.dockerfilePath` (pas `dockerDetails` à la racine de
+    serviceDetails) — vérifié sur le schéma OpenAPI réel (webServiceDetailsPOST.required =
+    ["runtime"], envSpecificDetailsPOST = oneOf[dockerDetailsPOST, nativeEnvironmentDetailsPOST]),
+    pas deviné depuis la doc publique."""
+    response = _request("POST", "/services", json={
         "type": "web_service",
         "name": name,
         "ownerId": owner_id,
@@ -91,13 +120,18 @@ def create_web_service(
         "rootDir": root_dir,
         "envVars": [{"key": k, "value": v} for k, v in env_vars.items()],
         "serviceDetails": {
-            "env": "docker",
-            "dockerDetails": {"dockerfilePath": dockerfile_path},
+            "runtime": "docker",
+            "envSpecificDetails": {"dockerfilePath": dockerfile_path},
             "plan": plan,
             "region": region,
             "healthCheckPath": health_check_path,
         },
     })
+    # POST /services renvoie {"service": {...}, "deployId": "..."}, pas le service
+    # directement (schéma de réponse `serviceAndDeploy`) — on ne renvoie que `service` pour
+    # que les appelants puissent lire `.["id"]`/`.["serviceDetails"]` sans connaître cette
+    # enveloppe. `backend_service["id"]` aurait levé un KeyError sans ce déballage.
+    return response["service"]
 
 
 def set_env_vars(service_id: str, env_vars: dict[str, str]) -> dict:
@@ -116,8 +150,12 @@ def get_service(service_id: str) -> dict:
 
 
 def get_latest_deploy(service_id: str) -> dict | None:
+    # GET .../deploys renvoie [{"cursor": ..., "deploy": {...}}], pas les deploys
+    # directement (schéma de réponse `deployList` -> items `deployWithCursor`) — sans ce
+    # déballage, deploy.get("status") ne trouve jamais rien et wait_for_deploy_live()
+    # attend le timeout complet (900s) à chaque appel, y compris sur un déploiement réussi.
     deploys = _request("GET", f"/services/{service_id}/deploys?limit=1")
-    return deploys[0] if deploys else None
+    return deploys[0]["deploy"] if deploys else None
 
 
 def trigger_deploy(service_id: str) -> dict:
@@ -142,7 +180,7 @@ def wait_for_deploy_live(service_id: str, *, timeout_seconds: int = 900, poll_in
         status = deploy.get("status") if deploy else None
         if status == "live":
             return True
-        if status in {"build_failed", "update_failed", "canceled", "deactivated"}:
+        if status in {"build_failed", "update_failed", "canceled", "deactivated", "pre_deploy_failed"}:
             raise RenderAPIError(f"Déploiement du service {service_id} en échec : statut '{status}'")
         time.sleep(poll_interval_seconds)
     return False
