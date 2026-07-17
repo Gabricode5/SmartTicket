@@ -32,7 +32,10 @@ client.
 - [ ] Décider quels secrets sont **partagés** entre tous les clients vs **uniques par
   instance** :
   - Uniques par instance (obligatoire) : `SECRET_KEY`, `DATABASE_URL`, `ADMIN_SETUP_KEY` (cf. Phase 2)
-  - Partagés au démarrage (à revoir dès qu'un métering fiable existe, cf. Phase 1) : `MISTRAL_API_KEY`, `BREVO_API_KEY`
+  - Partagés au démarrage (à revoir dès qu'un métering fiable existe, cf. Phase 1) : `MISTRAL_API_KEY`, `BREVO_API_KEY`, `SMTP_FROM`
+    (cette dernière **obligatoire** dès que `BREVO_API_KEY` est définie — doit être une adresse
+    validée dans Brevo → Senders, sinon 401 silencieux sur tous les emails, bug réel du
+    2026-07-16, cf. `ops/README.md`)
 - [x] Vérifier la **politique de backup** du plan Render retenu — **tranché (2026-07-09)** :
   le plan Free (celui de l'instance de démo actuelle) n'offre **aucun backup automatique**
   (onglet "Recovery" présent dans le dashboard mais sans point-in-time recovery ni snapshots
@@ -95,7 +98,7 @@ faux résultat).
   1. Crée la base Postgres managée (équivalent du bloc `databases:` de `render.yaml`)
   2. Crée le service backend Docker avec les env vars générées (`SECRET_KEY` aléatoire,
      `DATABASE_URL` de la DB créée à l'étape 1, `ADMIN_SETUP_TOKEN` aléatoire propre à
-     l'instance (à usage unique, expirant), `BREVO_API_KEY`/`MISTRAL_API_KEY` partagés,
+     l'instance (à usage unique, expirant), `BREVO_API_KEY`/`MISTRAL_API_KEY`/`SMTP_FROM` partagés,
      `CORS_ORIGINS` pointant directement vers le sous-domaine final `{slug}.smartticket.fr`)
   3. Crée le service frontend Docker avec `NEXT_PUBLIC_API_URL` pointant vers le backend
      créé à l'étape 2

@@ -284,3 +284,66 @@ class TestPostgresAvailabilityIsAwaitedBeforeConnectionInfo:
 
         assert db.get_instance("acme9") is None
         assert not db.slug_exists("acme9")
+
+
+class TestSmtpFromSenderValidation:
+    """Bug réel du 2026-07-16 : Brevo répondait 401 sur les emails de vérification/reset de
+    l'instance provisionnée. La clé BREVO_API_KEY était valide — le problème venait de
+    l'adresse expéditrice (backend/email_utils.py retombait sur son défaut
+    "no-reply@smartticket.app", jamais validée dans Brevo → Senders), et l'échec était
+    intercepté et seulement loggé côté backend, donc invisible. provision() doit maintenant
+    refuser de démarrer si BREVO_API_KEY est définie sans SMTP_FROM, et transmettre SMTP_FROM
+    à chaque instance provisionnée pour que son backend l'utilise aussi."""
+
+    def test_provision_raises_before_any_render_call_when_brevo_key_set_without_smtp_from(
+        self, render_mock, notify_mock, monkeypatch,
+    ):
+        monkeypatch.setenv("BREVO_API_KEY", "test-brevo-key")
+        monkeypatch.delenv("SMTP_FROM", raising=False)
+
+        with pytest.raises(RuntimeError, match="SMTP_FROM"):
+            provision_client.provision(
+                client_name="Acme10", slug="acme10", postgres_plan="starter", admin_email="a@acme10.com",
+            )
+
+        # Échec avant le moindre appel Render, et rien de persisté dans instances.db —
+        # exactement comme les échecs de validation existants (ex: slug déjà pris).
+        render_mock.get_owner_id.assert_not_called()
+        render_mock.create_postgres.assert_not_called()
+        assert db.get_instance("acme10") is None
+
+    def test_provision_does_not_raise_when_brevo_key_absent_even_without_smtp_from(self, render_mock, notify_mock):
+        """Sans BREVO_API_KEY (email juste loggé côté client, cf. notify.py), l'absence de
+        SMTP_FROM est sans conséquence — ne doit pas bloquer un provisioning de test."""
+        _mock_common_steps(render_mock, postgres_id="pg-11")
+        render_mock.create_web_service.side_effect = [
+            {"id": "backend-11", "serviceDetails": {"url": "https://backend-11.onrender.com"}},
+            {"id": "frontend-11", "serviceDetails": {"url": "https://frontend-11.onrender.com"}},
+        ]
+        notify_mock.send_welcome_email.return_value = True
+
+        result = provision_client.provision(
+            client_name="Acme11", slug="acme11", postgres_plan="starter", admin_email="a@acme11.com",
+        )
+
+        assert result.status == "active"
+
+    def test_provision_passes_smtp_from_to_backend_env(self, render_mock, notify_mock, monkeypatch):
+        monkeypatch.setenv("BREVO_API_KEY", "test-brevo-key")
+        monkeypatch.setenv("SMTP_FROM", "gabriel.guery10@gmail.com")
+        _mock_common_steps(render_mock, postgres_id="pg-12")
+        render_mock.create_web_service.side_effect = [
+            {"id": "backend-12", "serviceDetails": {"url": "https://backend-12.onrender.com"}},
+            {"id": "frontend-12", "serviceDetails": {"url": "https://frontend-12.onrender.com"}},
+        ]
+        notify_mock.send_welcome_email.return_value = True
+
+        result = provision_client.provision(
+            client_name="Acme12", slug="acme12", postgres_plan="starter", admin_email="a@acme12.com",
+        )
+
+        assert result.status == "active"
+        backend_call_kwargs = render_mock.create_web_service.call_args_list[0].kwargs
+        # C'est ce champ qui était absent avant le correctif — le backend de l'instance
+        # provisionnée retombait silencieusement sur une adresse expéditrice non validée.
+        assert backend_call_kwargs["env_vars"]["SMTP_FROM"] == "gabriel.guery10@gmail.com"

@@ -10,6 +10,14 @@ Prérequis (cf. docs/FLEET_PROVISIONING_PLAN.md, Phase 0) :
     - RENDER_API_KEY exporté dans l'environnement
     - MISTRAL_API_KEY / BREVO_API_KEY exportés (secrets partagés entre clients pour l'instant,
       cf. décision Phase 0 — à revoir une fois le métering par instance en place)
+    - Si BREVO_API_KEY est exportée : SMTP_FROM DOIT l'être aussi, avec une adresse validée
+      dans Brevo → Senders (sans quoi Brevo répond 401 sur CHAQUE envoi — l'email de
+      bienvenue ops/notify.py ET, plus grave, les emails de vérification/reset de TOUTES les
+      instances provisionnées, cf. bug réel du 2026-07-16 : seule gabriel.guery10@gmail.com
+      était validée, "no-reply@smartticket.app" ne l'était pas et échouait silencieusement,
+      l'erreur étant interceptée et seulement loggée côté backend/email_utils.py). En
+      production, valider une adresse sur le domaine (ex: noreply@smartticket.fr, avec
+      SPF/DKIM) plutôt qu'une adresse Gmail.
     - Si --domain est fourni : le domaine doit déjà exister et pointer vers Render (wildcard
       DNS), cf. Phase 0. Sans --domain, l'instance reste accessible via son URL *.onrender.com.
 
@@ -36,6 +44,7 @@ ne jamais faire de vrai appel réseau), affiche le résultat pour un humain.
 """
 import argparse
 import logging
+import os
 import secrets
 import sys
 from dataclasses import dataclass
@@ -103,7 +112,6 @@ def build_urls(slug: str, domain: str | None) -> tuple[str, str]:
 
 
 def _shared_secret(env_var: str, required: bool = True) -> str:
-    import os
     value = os.getenv(env_var)
     if not value and required:
         raise RuntimeError(f"{env_var} manquante dans l'environnement du script (secret partagé entre instances, cf. Phase 0 du plan).")
@@ -179,6 +187,24 @@ def provision(
     vendor_key = generate_secret()
     admin_setup_token = generate_secret()  # jamais un mot de passe : cf. POST /v1/setup côté backend
 
+    brevo_api_key = _shared_secret("BREVO_API_KEY", required=False)
+    smtp_from = os.getenv("SMTP_FROM", "")
+    if brevo_api_key and not smtp_from:
+        # Échec Brevo 401 réel du 2026-07-16 : le sender par défaut de backend/email_utils.py
+        # ("no-reply@smartticket.app") n'est validé nulle part dans Brevo → Senders. Toutes
+        # les instances provisionnées sans SMTP_FROM explicite auraient donc leurs emails de
+        # vérification/reset qui échouent en 401, SILENCIEUSEMENT (l'exception est
+        # interceptée et seulement loggée côté backend, jamais remontée à l'utilisateur) —
+        # mieux vaut échouer fort ici, avant de créer quoi que ce soit sur Render.
+        raise RuntimeError(
+            "BREVO_API_KEY est définie mais SMTP_FROM ne l'est pas : chaque instance "
+            "provisionnée utiliserait l'adresse expéditrice par défaut de "
+            "backend/email_utils.py, qui n'est validée dans aucun compte Brevo → Senders. "
+            "Tous les emails (vérification, reset) échoueraient en 401 sans que personne ne "
+            "s'en aperçoive. Exportez SMTP_FROM avec une adresse validée dans Brevo avant de "
+            "relancer le provisioning."
+        )
+
     # Toujours non vides désormais (cf. build_urls()) — utilisées directement pour
     # CORS_ORIGINS et NEXT_PUBLIC_API_URL dès la création des services, sans avoir besoin
     # d'un deuxième déploiement correctif après coup.
@@ -234,7 +260,15 @@ def provision(
             "ADMIN_SETUP_TOKEN": admin_setup_token,
             "MISTRAL_API_KEY": _shared_secret("MISTRAL_API_KEY"),
             "EMBED_MODEL": "mistral-embed",
-            "BREVO_API_KEY": _shared_secret("BREVO_API_KEY", required=False),
+            "BREVO_API_KEY": brevo_api_key,
+            # Sans ça, backend/email_utils.py retombait sur son défaut
+            # ("no-reply@smartticket.app"), jamais validé dans Brevo → Senders : les emails de
+            # vérification/reset de CHAQUE instance provisionnée échouaient en 401 sans que
+            # personne ne s'en aperçoive (bug réel du 2026-07-16). Garanti non vide à ce point
+            # si brevo_api_key est non vide (cf. le fail-fast plus haut) ; sinon transmis quand
+            # même tel quel (vide ou une valeur explicite) pour rester cohérent avec le défaut
+            # SMTP_FROM du backend si un jour SMTP_HOST est aussi câblé ici.
+            "SMTP_FROM": smtp_from,
         }
 
         logger.info("Création du service backend '%s'...", backend_name)

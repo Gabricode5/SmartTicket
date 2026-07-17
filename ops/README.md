@@ -32,7 +32,23 @@ pip install -r requirements.txt
 export RENDER_API_KEY=...       # Render → Account Settings → API Keys
 export MISTRAL_API_KEY=...      # secret partagé entre toutes les instances (pour l'instant)
 export BREVO_API_KEY=...        # optionnel — sans lui, les emails sont juste loggés côté client
+export SMTP_FROM=...            # OBLIGATOIRE si BREVO_API_KEY est définie, cf. ci-dessous
 ```
+
+**`SMTP_FROM` doit être une adresse validée dans Brevo → Senders** (Brevo répond 401 sur
+*tout* envoi sinon — bug réel rencontré le 2026-07-16 : la clé API était valide, seule
+l'adresse expéditrice ne l'était pas). Cette variable sert deux usages distincts :
+
+- L'email de bienvenue envoyé par `notify.py` à la fin du provisioning (lien de setup).
+- Sans elle, `provision()` **refuse de démarrer** dès que `BREVO_API_KEY` est définie (échec
+  rapide, avant tout appel Render) : injectée dans l'environnement de CHAQUE instance
+  provisionnée pour que `backend/email_utils.py` (emails de vérification/reset) l'utilise
+  aussi — sans quoi le backend serait retombé sur son adresse par défaut
+  (`no-reply@smartticket.app`), jamais validée nulle part, et ses emails auraient échoué en
+  401 silencieusement (l'erreur est interceptée et seulement loggée côté backend).
+
+En test : une adresse Gmail validée manuellement suffit. En production : une adresse sur le
+domaine (ex: `noreply@smartticket.fr`) avec SPF/DKIM configurés côté Brevo.
 
 ### Tests
 
