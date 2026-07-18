@@ -57,6 +57,17 @@ def _require_api_key() -> str:
     return RENDER_API_KEY
 
 
+def ensure_configured() -> None:
+    """Valide que RENDER_API_KEY est présente, sans faire le moindre appel réseau — permet
+    à un script appelant d'échouer vite, AVANT toute action destructive ou modification
+    d'instances.db. Bug réel du 2026-07-16 (delete_client.py) : sans cette validation en
+    amont, une clé manquante faisait échouer les 3 suppressions Render (chacune levant cette
+    même erreur, interceptée individuellement par delete_resources()) mais le script
+    retirait quand même la ligne d'instances.db ensuite — 3 ressources facturées, plus
+    aucune trace pour les retrouver."""
+    _require_api_key()
+
+
 def _request(method: str, path: str, **kwargs) -> dict:
     api_key = _require_api_key()
     headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}

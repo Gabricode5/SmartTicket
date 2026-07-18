@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS instances (
     notes TEXT
 );
 """
-# statut : provisioning | active | suspendue | supprimee
+# statut : provisioning | active | suspendue | supprimee | failed | deletion_failed
 
 
 @contextmanager

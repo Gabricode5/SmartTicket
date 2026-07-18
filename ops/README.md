@@ -122,7 +122,16 @@ python delete_client.py --slug acme-corp --keep-row        # garde une trace dan
 ```
 
 Action **irréversible** côté Render (suppression définitive de la base du client, y compris
-ses backups). Confirmation explicite requise sauf `--yes`.
+ses backups). Confirmation explicite requise sauf `--yes`. `RENDER_API_KEY` est validée dès
+le départ (avant la confirmation, avant toute suppression) — une clé manquante ne doit jamais
+permettre d'atteindre la modification d'`instances.db` (bug réel du 2026-07-16, cf. section
+suivante).
+
+Si au moins une des 3 suppressions Render échoue, la ligne **n'est jamais retirée** —
+symétrique du rollback de `provision()` ci-dessous : elle reste dans `instances.db` avec
+`statut='deletion_failed'` et les IDs des ressources orphelines dans `notes`, pour qu'elles
+restent traçables. `--keep-row` n'a d'effet que sur le cas de succès complet (statut
+`'supprimee'` au lieu du retrait pur et simple) ; en cas d'échec la ligne reste de toute façon.
 
 ## Consulter la flotte (CLI + SQL, pas d'interface)
 

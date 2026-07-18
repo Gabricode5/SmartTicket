@@ -49,6 +49,12 @@ def main() -> int:
         print("--- DRY RUN : rien ne sera supprimé ---")
         return 0
 
+    try:
+        render.ensure_configured()
+    except render.RenderAPIError as exc:
+        print(f"Erreur : {exc}", file=sys.stderr)
+        return 1
+
     if not args.yes:
         answer = input(f"\nSupprimer DÉFINITIVEMENT l'instance '{args.slug}' et toutes ses données ? Tape le slug pour confirmer : ")
         if answer.strip() != args.slug:
@@ -66,17 +72,32 @@ def main() -> int:
     # que réimplémentée ici.
     failed = render.delete_resources(resources)
 
+    if failed:
+        # Ne JAMAIS retirer/modifier la ligne tant qu'une ressource Render survit : c'est le
+        # seul registre qui permette de la retrouver pour un nettoyage manuel. Même logique
+        # que _rollback() dans provision_client.py sur un rollback incomplet (statut='failed'
+        # + IDs orphelins dans notes, ligne conservée) — bug réel du 2026-07-16 corrigé ici :
+        # une RENDER_API_KEY manquante faisait échouer les 3 suppressions, mais la ligne
+        # était quand même retirée juste après, rendant les 3 ressources facturées introuvables.
+        details = "; ".join(f"{label} (id={resource_id})" for label, _, resource_id in failed)
+        db.update_instance(args.slug, statut="deletion_failed", notes=details)
+        print(
+            f"\nÉCHEC PARTIEL : {details} — vérifier manuellement sur le dashboard Render "
+            "(ressources potentiellement encore facturées). La ligne reste dans "
+            f"instances.db (statut 'deletion_failed', IDs dans notes) : NE PAS relancer "
+            "aveuglément, nettoyer sur Render puis relancer ce script (il retentera "
+            "uniquement les ressources encore référencées) ou supprimer la ligne à la main "
+            "une fois le nettoyage confirmé.",
+            file=sys.stderr,
+        )
+        return 1
+
     if args.keep_row:
         db.update_instance_status(args.slug, "supprimee")
         print("Ligne conservée dans instances.db avec statut 'supprimee'.")
     else:
         db.delete_instance_row(args.slug)
         print("Ligne retirée de instances.db.")
-
-    if failed:
-        details = ", ".join(f"{label} (id={resource_id})" for label, _, resource_id in failed)
-        print(f"\nAttention : échec sur {details} — vérifier manuellement sur le dashboard Render (ressources potentiellement encore facturées).", file=sys.stderr)
-        return 1
 
     print(f"\nInstance '{args.slug}' décommissionnée.")
     return 0
