@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>SmartTicket — Gestion de flotte (local)</title>
+<style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+    h1 { font-size: 1.4rem; }
+    .warning { background: #fff3cd; color: #664d03; border: 1px solid #ffe69c; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
+    .danger { background: #f8d7da; color: #58151c; border: 1px solid #f1aeb5; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid #ddd; font-size: 0.9rem; vertical-align: top; }
+    th { font-weight: 600; color: #555; }
+    .badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600; }
+    .badge-active { background: #d1e7dd; color: #0a3622; }
+    .badge-provisioning { background: #cfe2ff; color: #052c65; }
+    .badge-failed, .badge-deletion_failed { background: #f8d7da; color: #58151c; }
+    .badge-suspendue, .badge-supprimee { background: #e2e3e5; color: #41464b; }
+    .health-ok { color: #0a3622; }
+    .health-unreachable { color: #b02a37; font-weight: 600; }
+    .health-non_verifie { color: #888; }
+    .missing { color: #b02a37; font-weight: 600; }
+    a { color: #0d6efd; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .links a { display: block; }
+    footer { margin-top: 2rem; font-size: 0.8rem; color: #888; }
+</style>
+</head>
+<body>
+    <h1>Gestion de flotte SmartTicket — local uniquement</h1>
+
+    {% if not render_available %}
+    <div class="warning">
+        RENDER_API_KEY absente ou API Render injoignable : la liste ci-dessous vient
+        uniquement d'instances.db, sans croisement (statuts Render, orphelines, liens
+        dashboard désactivés).
+    </div>
+    {% endif %}
+
+    <table>
+        <thead>
+            <tr>
+                <th>Client</th><th>Slug</th><th>Statut</th><th>Plan</th><th>Créée le</th>
+                <th>Santé (GET /)</th><th>Render</th><th>Liens</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for i in instances %}
+            <tr>
+                <td>{{ i.client_name }}</td>
+                <td>{{ i.slug }}</td>
+                <td><span class="badge badge-{{ i.statut }}">{{ i.statut }}</span></td>
+                <td>{{ i.plan or "—" }}</td>
+                <td>{{ i.date_creation }}</td>
+                <td class="health-{{ i.health_status }}">{{ i.health_detail or i.health_status }}</td>
+                <td>{% if i.render_resource_missing %}<span class="missing">ressource(s) introuvable(s)</span>{% elif render_available %}ok{% else %}—{% endif %}</td>
+                <td class="links">
+                    {% if i.frontend_url %}<a href="{{ i.frontend_url }}" target="_blank">Frontend</a>{% endif %}
+                    {% if i.backend_url %}<a href="{{ i.backend_url }}" target="_blank">Backend</a>{% endif %}
+                    {% if i.render_dashboard_backend %}<a href="{{ i.render_dashboard_backend }}" target="_blank">Dashboard backend</a>{% endif %}
+                    {% if i.render_dashboard_frontend %}<a href="{{ i.render_dashboard_frontend }}" target="_blank">Dashboard frontend</a>{% endif %}
+                    {% if i.render_dashboard_postgres %}<a href="{{ i.render_dashboard_postgres }}" target="_blank">Dashboard Postgres</a>{% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="8">Aucune instance dans instances.db.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% if orphans %}
+    <div class="danger">
+        <strong>{{ orphans|length }} ressource(s) Render sans ligne correspondante dans
+        instances.db</strong> — probablement facturées sans trace locale (cf.
+        audit_render_resources.py pour le détail) :
+        <ul>
+        {% for o in orphans %}
+            <li>{{ o.name }} ({{ o.type }}, id={{ o.id }}) — <a href="{{ o.dashboard }}" target="_blank">dashboard</a></li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <footer>
+        Cette page tourne uniquement sur ce poste (127.0.0.1) et peut créer/suspendre/
+        supprimer des ressources Render payantes — ne jamais l'exposer publiquement.
+    </footer>
+</body>
+</html>

@@ -394,6 +394,10 @@ def provision(
         slug,
         backend_url=backend_url, frontend_url=frontend_url,
         subdomain=f"{slug}.{domain}" if domain else None,
+        # Complète une colonne déjà existante en base mais jamais renseignée jusqu'ici — pas
+        # un changement de logique métier, juste la valeur qu'on connaît déjà (postgres_plan)
+        # écrite là où elle était censée l'être. Utile pour la page de gestion (Partie B).
+        plan_tarifaire=postgres_plan,
         statut="active",
     )
 

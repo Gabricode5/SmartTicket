@@ -147,6 +147,27 @@ de création, URL dashboard) et signale celles qui n'ont **aucune ligne correspo
 Prérequis) ou pour retrouver d'éventuelles ressources orphelines laissées par un
 `delete_client.py` antérieur au correctif du 2026-07-16.
 
+### `fleet_admin.py` — page de gestion de flotte (LOCALE UNIQUEMENT)
+
+```bash
+cd ops && python fleet_admin.py
+# -> http://127.0.0.1:8765
+```
+
+⚠️ **Ne tourne QUE sur ce poste, ne jamais l'exposer au-delà de 127.0.0.1** (pas de
+`--host 0.0.0.0`, pas de reverse proxy public) : dès la Partie B.2/B.3, cette page peut
+suspendre, réactiver ou créer des ressources Render **payantes**. Elle n'est jamais déployée
+(comme le reste de `ops/`) et ne réimplémente rien : elle lit `instances.db`, appelle l'API
+Render en lecture (mêmes fonctions que `audit_render_resources.py`) et
+`provision()`/`delete_client()` directement.
+
+État actuel (Partie B.1 — lecture) : liste des instances croisée avec l'API Render (statut,
+ressources manquantes, ressources orphelines), santé (ping direct du `GET /` de chaque
+instance — un service Render peut être "live" alors que l'appli plante au runtime), liens
+dashboard. Dégrade proprement sans `RENDER_API_KEY` (reste utilisable en local-only).
+Suspendre/réactiver et créer une instance depuis la page arrivent dans les parties
+suivantes.
+
 ## Consulter la flotte (CLI + SQL, pas d'interface)
 
 ```bash
@@ -155,9 +176,10 @@ sqlite3 ops/instances.db "SELECT slug, client_name, statut, frontend_url, date_c
 
 ## Ce qui n'est volontairement pas fait ici
 
-- **Panel graphique** (Phase 3 du plan) — explicitement hors scope tant que la gestion en
-  CLI + SQL reste confortable (1-5 clients). À reconsidérer seulement si cette limite
-  commence réellement à peser.
+- **Panel graphique hébergé, multi-utilisateur** (Phase 3 du plan) — distinct de
+  `fleet_admin.py` ci-dessus (local, mono-utilisateur, jamais exposé) : reste hors scope
+  tant que la gestion à ce niveau reste confortable (1-5 clients). À reconsidérer seulement
+  si cette limite commence réellement à peser.
 - **Métering d'usage Mistral par client** (`usage_mensuel`, Phase 1 du plan) — nécessaire
   avant de pouvoir facturer/plafonner un client à fort usage, pas encore implémenté.
 
