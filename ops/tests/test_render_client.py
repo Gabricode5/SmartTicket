@@ -267,3 +267,47 @@ def test_wait_for_deploy_live_survives_a_transient_404_then_succeeds(requests_mo
 
     assert result is True
     assert requests_mock.request.call_count == 3
+
+
+# --- Panne réseau pendant un rollback, trouvée en conditions réelles le 2026-08-14 : une
+# coupure DNS transitoire pendant wait_for_postgres_available() a fait échouer le
+# provisioning (normal), MAIS la tentative de rollback qui a suivi a elle-même essuyé une
+# panne réseau lors du DELETE — et cette requests.exceptions.ConnectionError brute n'était
+# interceptée nulle part (delete_resources() ne catchait QUE RenderAPIError), faisant planter
+# tout le script avec une trace Python brute au lieu de rester best-effort comme documenté.
+
+def test_request_wraps_network_failures_into_render_api_error(monkeypatch):
+    """Contrairement aux autres tests de ce fichier, on ne mocke PAS le module `requests` en
+    bloc (ça remplacerait aussi `requests.exceptions.*` par un Mock, et `except
+    requests.exceptions.RequestException` planterait avec un TypeError au lieu de catcher
+    quoi que ce soit) — seule la fonction `requests.request` est patchée, le reste du module
+    (dont ses vraies classes d'exception) reste intact."""
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", "test-key")
+    monkeypatch.setattr(
+        render_client.requests, "request",
+        mock.Mock(side_effect=render_client.requests.exceptions.ConnectionError("Temporary failure in name resolution")),
+    )
+
+    with pytest.raises(render_client.RenderAPIError, match="échec réseau"):
+        render_client.get_postgres("pg-1")
+
+
+def test_delete_resources_skips_resources_with_missing_id_without_calling_the_api(monkeypatch):
+    """Une instance dont le provisioning a échoué avant la création du backend/frontend a ces
+    IDs à None en base — delete_client.py les passe malgré tout à delete_resources(), qui ne
+    doit ni tenter un DELETE dessus (littéralement "/services/None" avant ce correctif), ni
+    les compter comme des échecs de suppression trompeurs."""
+    delete_service_mock = mock.Mock()
+    delete_postgres_mock = mock.Mock()
+    monkeypatch.setattr(render_client, "delete_service", delete_service_mock)
+    monkeypatch.setattr(render_client, "delete_postgres", delete_postgres_mock)
+
+    failed = render_client.delete_resources([
+        ("service backend", "service", None),
+        ("service frontend", "service", ""),
+        ("base Postgres", "postgres", "pg-1"),
+    ])
+
+    assert failed == []
+    delete_service_mock.assert_not_called()
+    delete_postgres_mock.assert_called_once_with("pg-1")

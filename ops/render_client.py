@@ -73,7 +73,19 @@ def _request(method: str, path: str, **kwargs) -> dict:
     headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
     if "json" in kwargs:
         headers["Content-Type"] = "application/json"
-    response = requests.request(method, f"{RENDER_API_BASE}{path}", headers=headers, timeout=30, **kwargs)
+    try:
+        response = requests.request(method, f"{RENDER_API_BASE}{path}", headers=headers, timeout=30, **kwargs)
+    except requests.exceptions.RequestException as exc:
+        # Panne réseau (DNS, coupure, timeout, connexion réinitialisée...) plutôt qu'une
+        # réponse HTTP d'erreur — bug réel du 2026-08-14 : une coupure réseau transitoire
+        # PENDANT le rollback d'un provisioning a fait remonter une requests.exceptions.
+        # ConnectionError brute, non catchée par delete_resources() (qui n'attrape QUE
+        # RenderAPIError) : le script a planté avec une trace Python brute au lieu de
+        # continuer best-effort comme documenté, laissant instances.db bloquée en statut
+        # 'provisioning' (ni 'failed' ni supprimée). RenderAPIError est maintenant le SEUL
+        # type d'erreur que lève ce module, panne réseau ou réponse HTTP en échec — un seul
+        # except à écrire dans tout le code appelant.
+        raise RenderAPIError(f"{method} {path} -> échec réseau : {exc}") from exc
     if not response.ok:
         raise RenderAPIError(f"{method} {path} -> {response.status_code}: {response.text}", status_code=response.status_code)
     return response.json() if response.content else {}
@@ -305,9 +317,18 @@ def delete_resources(resources: list[tuple[str, str, str]]) -> list[tuple[str, s
     déjà en ordre inverse de création si c'est un rollback). Ne lève jamais : retourne la
     sous-liste des entrées qui n'ont PAS pu être supprimées (mêmes tuples, même ordre), pour
     que l'appelant les logue, les affiche ou les persiste — un échec de suppression ne doit
-    jamais être avalé silencieusement."""
+    jamais être avalé silencieusement.
+
+    Un `resource_id` manquant (None/vide) est ignoré silencieusement, PAS tenté ni compté
+    comme un échec — bug réel du 2026-08-14 : une instance dont le provisioning avait échoué
+    avant la création du backend/frontend (IDs encore NULL en base) faisait tenter un DELETE
+    littéralement sur "/services/None" par delete_client.py, rapporté comme un échec de
+    suppression trompeur pour une ressource qui n'a jamais existé."""
     failed: list[tuple[str, str, str]] = []
     for label, resource_type, resource_id in resources:
+        if not resource_id:
+            logger.debug("Ressource '%s' jamais créée (id manquant) — ignorée, rien à supprimer.", label)
+            continue
         try:
             if resource_type == "postgres":
                 delete_postgres(resource_id)
