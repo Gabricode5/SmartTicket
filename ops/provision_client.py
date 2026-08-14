@@ -82,15 +82,26 @@ def generate_secret(length: int = 32) -> str:
     return secrets.token_urlsafe(length)
 
 
-def backend_service_name(slug: str) -> str:
-    return f"smartticket-{slug}-backend"
+def generate_render_suffix() -> str:
+    """6 caractères hex (secrets.token_hex(3), ~16M combinaisons) ajoutés au nom de CHAQUE
+    ressource Render créée par un provisioning donné — cf. backend_service_name() ci-dessous
+    pour le pourquoi (réutilisation immédiate d'un slug)."""
+    return secrets.token_hex(3)
 
 
-def frontend_service_name(slug: str) -> str:
-    return f"smartticket-{slug}-frontend"
+def backend_service_name(slug: str, render_suffix: str) -> str:
+    return f"smartticket-{slug}-{render_suffix}-backend"
 
 
-def build_urls(slug: str, domain: str | None) -> tuple[str, str]:
+def frontend_service_name(slug: str, render_suffix: str) -> str:
+    return f"smartticket-{slug}-{render_suffix}-frontend"
+
+
+def postgres_name(slug: str, render_suffix: str) -> str:
+    return f"smartticket-{slug}-{render_suffix}-postgres"
+
+
+def build_urls(slug: str, domain: str | None, render_suffix: str) -> tuple[str, str]:
     """Retourne (backend_url, frontend_url) — TOUJOURS prédites à l'avance, jamais
     découvertes après coup depuis la réponse de l'API Render. Avec --domain, ce sont les
     URLs du domaine personnalisé (posé plus tard via add_custom_domain). Sans --domain,
@@ -105,10 +116,26 @@ def build_urls(slug: str, domain: str | None) -> tuple[str, str]:
     réévalué ni par `next start` ni par un redeploy à chaud, seul un nouveau build compte) —
     donc le fallback "http://localhost:8000" restait figé dans l'image, et tous les appels
     /api/* du frontend déployé échouaient en 404 (proxy Next.js vers un localhost qui
-    n'écoute rien dans le conteneur frontend)."""
+    n'écoute rien dans le conteneur frontend).
+
+    Bug trouvé le 2026-07-17 : un slug tout juste supprimé (delete_client.py) puis
+    immédiatement réutilisé pour un nouveau provisioning produisait un 404 sur /setup. Le
+    schéma OpenAPI de Render confirme que `name` (POST /services comme POST /postgres) "must
+    be unique within the workspace" — une vraie contrainte, pas supposée — mais ne dit rien
+    sur le DÉLAI de libération d'un nom après suppression côté Render, ni sur la propagation
+    DNS/edge du sous-domaine *.onrender.com : deux détails opérationnels hors du contrat
+    d'API, donc invérifiables depuis le schéma. Plutôt que de deviner ce délai et polling
+    dessus, render_suffix (généré à CHAQUE provisioning, jamais réutilisé) rend le nom de
+    CHAQUE ressource Render globalement neuf : il ne peut plus jamais entrer en collision
+    avec une ressource récemment supprimée sous le même slug métier, quel que soit le délai
+    réel de libération/propagation côté Render. Le slug métier (colonne `slug` d'
+    instances.db, URL avec --domain) reste, lui, inchangé et propre."""
     if domain:
         return f"https://{slug}-api.{domain}", f"https://{slug}.{domain}"
-    return f"https://{backend_service_name(slug)}.onrender.com", f"https://{frontend_service_name(slug)}.onrender.com"
+    return (
+        f"https://{backend_service_name(slug, render_suffix)}.onrender.com",
+        f"https://{frontend_service_name(slug, render_suffix)}.onrender.com",
+    )
 
 
 def _shared_secret(env_var: str, required: bool = True) -> str:
@@ -179,9 +206,10 @@ def provision(
     if db.slug_exists(slug):
         return ProvisionResult(slug=slug, status="failed", error=f"Le slug '{slug}' existe déjà dans ops/instances.db.")
 
-    backend_name = backend_service_name(slug)
-    frontend_name = frontend_service_name(slug)
-    db_name = f"smartticket-{slug}-postgres"
+    render_suffix = generate_render_suffix()
+    backend_name = backend_service_name(slug, render_suffix)
+    frontend_name = frontend_service_name(slug, render_suffix)
+    db_name = postgres_name(slug, render_suffix)
 
     secret_key = generate_secret()
     vendor_key = generate_secret()
@@ -208,7 +236,7 @@ def provision(
     # Toujours non vides désormais (cf. build_urls()) — utilisées directement pour
     # CORS_ORIGINS et NEXT_PUBLIC_API_URL dès la création des services, sans avoir besoin
     # d'un deuxième déploiement correctif après coup.
-    backend_url, frontend_url = build_urls(slug, domain)
+    backend_url, frontend_url = build_urls(slug, domain, render_suffix)
 
     db.insert_instance(client_name=client_name, slug=slug, vendor_key=vendor_key, statut="provisioning")
 
@@ -392,17 +420,19 @@ def main() -> int:
         return 1
 
     if args.dry_run:
-        backend_url, frontend_url = build_urls(args.slug, args.domain)
+        render_suffix = generate_render_suffix()
+        backend_url, frontend_url = build_urls(args.slug, args.domain, render_suffix)
         print("--- DRY RUN : rien ne sera créé ---")
-        print(f"Postgres      : smartticket-{args.slug}-postgres (plan={args.postgres_plan}, version={args.postgres_version})")
-        print(f"Backend       : {backend_service_name(args.slug)} (plan={args.web_plan}) — repo={args.repo}@{args.branch}, rootDir=backend")
+        print(f"Postgres      : {postgres_name(args.slug, render_suffix)} (plan={args.postgres_plan}, version={args.postgres_version})")
+        print(f"Backend       : {backend_service_name(args.slug, render_suffix)} (plan={args.web_plan}) — repo={args.repo}@{args.branch}, rootDir=backend")
         print(f"              URL prédite : {backend_url}")
-        print(f"Frontend      : {frontend_service_name(args.slug)} (plan={args.web_plan}) — repo={args.repo}@{args.branch}, rootDir=frontend")
+        print(f"Frontend      : {frontend_service_name(args.slug, render_suffix)} (plan={args.web_plan}) — repo={args.repo}@{args.branch}, rootDir=frontend")
         print(f"              URL prédite : {frontend_url}")
         print(f"              NEXT_PUBLIC_API_URL sera posée à : {backend_url}")
         print(f"Admin email   : {args.admin_email}")
         if not args.domain:
             print("Domaine       : aucun — URLs *.onrender.com ci-dessus (déterministes, cf. build_urls())")
+        print(f"Suffixe Render: {render_suffix} (exemple — régénéré à chaque exécution réelle, cf. generate_render_suffix())")
         print("Secrets générés (non affichés en dry-run — regénérés à chaque exécution réelle)")
         return 0
 

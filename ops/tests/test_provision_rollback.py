@@ -155,10 +155,12 @@ class TestFrontendReceivesTheRealBackendUrl:
 
     def test_provision_passes_non_empty_backend_url_to_frontend_without_domain(self, render_mock, notify_mock):
         _mock_common_steps(render_mock, postgres_id="pg-5")
-        render_mock.create_web_service.side_effect = [
-            {"id": "backend-5", "serviceDetails": {"url": "https://smartticket-acme5-backend.onrender.com"}},
-            {"id": "frontend-5", "serviceDetails": {"url": "https://smartticket-acme5-frontend.onrender.com"}},
-        ]
+        # L'URL "réellement rapportée" par Render écho le nom demandé — le nom porte
+        # désormais un render_suffix aléatoire (cf. TestSlugReuseGeneratesFreshRenderNames
+        # plus bas), donc plus moyen de le figer en dur dans le test sans le rendre fragile.
+        render_mock.create_web_service.side_effect = lambda *, name, **kwargs: {
+            "id": f"{name}-id", "serviceDetails": {"url": f"https://{name}.onrender.com"},
+        }
         notify_mock.send_welcome_email.return_value = True
 
         result = provision_client.provision(
@@ -175,12 +177,12 @@ class TestFrontendReceivesTheRealBackendUrl:
         assert api_url, "NEXT_PUBLIC_API_URL ne doit jamais être vide au moment du build frontend"
         assert "localhost" not in api_url
         assert "placeholder" not in api_url
-        assert api_url == "https://smartticket-acme5-backend.onrender.com"
+        assert api_url.startswith("https://smartticket-acme5-") and api_url.endswith("-backend.onrender.com")
 
         # CORS_ORIGINS côté backend doit, symétriquement, pointer vers le frontend dès le
         # premier déploiement (même bug potentiel, sens inverse).
         cors_origins = backend_call_kwargs["env_vars"]["CORS_ORIGINS"]
-        assert cors_origins == "https://smartticket-acme5-frontend.onrender.com"
+        assert cors_origins.startswith("https://smartticket-acme5-") and cors_origins.endswith("-frontend.onrender.com")
 
         # provision() ne doit plus jamais avoir besoin de republier les env vars du backend
         # après coup (l'ancien mécanisme de correction post-hoc a été retiré : l'URL est
@@ -347,3 +349,67 @@ class TestSmtpFromSenderValidation:
         # C'est ce champ qui était absent avant le correctif — le backend de l'instance
         # provisionnée retombait silencieusement sur une adresse expéditrice non validée.
         assert backend_call_kwargs["env_vars"]["SMTP_FROM"] == "gabriel.guery10@gmail.com"
+
+
+class TestSlugReuseGeneratesFreshRenderNames:
+    """Bug réel du 2026-07-17 : un slug tout juste supprimé (delete_client.py) puis
+    immédiatement réutilisé pour un nouveau provisioning produisait un 404 sur /setup. Le
+    schéma OpenAPI de Render confirme que `name` doit être unique DANS LE WORKSPACE pour
+    POST /services comme POST /postgres ("must be unique within the workspace") — une
+    contrainte réelle, pas supposée — mais ne documente ni le délai de libération d'un nom
+    après suppression côté Render, ni la propagation DNS/edge du sous-domaine associé : deux
+    détails opérationnels hors du contrat d'API, invérifiables depuis le schéma seul.
+    render_suffix (cf. generate_render_suffix() dans provision_client.py), généré à CHAQUE
+    provisioning et jamais réutilisé, rend le nom de chaque ressource Render globalement
+    neuf — il ne peut plus jamais entrer en collision avec une ressource récemment
+    supprimée sous le même slug métier, quel que soit le délai réel côté Render."""
+
+    def test_reprovisioning_the_same_slug_after_deprovisioning_succeeds_with_fresh_render_names(
+        self, render_mock, notify_mock,
+    ):
+        render_mock.get_owner_id.return_value = "owner-1"
+        # Les noms Render "réellement créés" échoent le nom demandé — capture directement ce
+        # que provision() a choisi comme nom, sans dépendre d'une valeur figée en dur.
+        render_mock.create_postgres.side_effect = lambda *, name, **kwargs: {"id": f"{name}-id"}
+        render_mock.wait_for_postgres_available.return_value = True
+        render_mock.get_postgres_connection_info.return_value = {"internalConnectionString": "postgres://x"}
+        render_mock.wait_for_deploy_live.return_value = True
+        render_mock.create_web_service.side_effect = lambda *, name, **kwargs: {
+            "id": f"{name}-id", "serviceDetails": {"url": f"https://{name}.onrender.com"},
+        }
+        notify_mock.send_welcome_email.return_value = True
+
+        first = provision_client.provision(
+            client_name="Acme13", slug="acme13", postgres_plan="starter", admin_email="a@acme13.com",
+        )
+        assert first.status == "active"
+        first_postgres_name = render_mock.create_postgres.call_args_list[0].kwargs["name"]
+        first_backend_name = render_mock.create_web_service.call_args_list[0].kwargs["name"]
+        first_frontend_name = render_mock.create_web_service.call_args_list[1].kwargs["name"]
+
+        # "Deprovisioning" — un slug supprimé redevient immédiatement disponible (même effet
+        # sur instances.db qu'un delete_client.py réussi, ou qu'un rollback COMPLET de
+        # provision() lui-même : la ligne est simplement retirée).
+        db.delete_instance_row("acme13")
+
+        second = provision_client.provision(
+            client_name="Acme13", slug="acme13", postgres_plan="starter", admin_email="a@acme13.com",
+        )
+
+        assert second.status == "active", f"le re-provisioning du même slug doit réussir : {second.error}"
+        second_postgres_name = render_mock.create_postgres.call_args_list[1].kwargs["name"]
+        second_backend_name = render_mock.create_web_service.call_args_list[2].kwargs["name"]
+        second_frontend_name = render_mock.create_web_service.call_args_list[3].kwargs["name"]
+
+        # Le coeur du correctif : même slug métier, mais noms Render TOUJOURS différents —
+        # plus aucune collision possible avec les ressources tout juste supprimées.
+        assert second_postgres_name != first_postgres_name
+        assert second_backend_name != first_backend_name
+        assert second_frontend_name != first_frontend_name
+        assert second_postgres_name.startswith("smartticket-acme13-")
+        assert second_backend_name.startswith("smartticket-acme13-")
+        assert second_frontend_name.startswith("smartticket-acme13-")
+
+        # Le slug métier, lui, reste inchangé et propre en base — seul le nom Render varie.
+        row = db.get_instance("acme13")
+        assert row["slug"] == "acme13"
