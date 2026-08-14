@@ -6,8 +6,17 @@ testée directement. La route "/" est testée séparément via FastAPI TestClien
 HTTP en mémoire, pas de serveur réseau réel) pour vérifier que le rendu HTML ne plante pas et
 contient les informations attendues.
 
+La suspension/réactivation (Partie B.2) est en plus couverte par un vrai serveur HTTP local
+(fixture `fake_instance_server`, http.server standard) qui simule le coupe-circuit
+d'abonnement d'une vraie instance (GET/PUT /v1/instance/subscription-status protégé par
+X-Vendor-Key, cf. backend/routers/instance.py) — pas juste des mocks, un aller-retour HTTP
+réel en localhost pour le scénario suspend -> 402 -> reactivate demandé.
+
 Lancer : cd ops && pip install -r requirements-dev.txt && pytest
 """
+import json
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest import mock
 
 import pytest
@@ -36,6 +45,54 @@ def render_mock():
 
 def _insert(*, slug, client_name="Client", statut="active", **extra):
     db.insert_instance(client_name=client_name, slug=slug, statut=statut, **extra)
+
+
+class _FakeInstanceHandler(BaseHTTPRequestHandler):
+    """Simule backend/routers/instance.py : GET/PUT /v1/instance/subscription-status,
+    protégé par X-Vendor-Key, statut partagé via self.server.state."""
+
+    def _authorized(self) -> bool:
+        return self.headers.get("X-Vendor-Key") == self.server.vendor_key  # type: ignore[attr-defined]
+
+    def do_GET(self):
+        if self.path != "/v1/instance/subscription-status":
+            self.send_response(404); self.end_headers(); return
+        if not self._authorized():
+            self.send_response(403); self.end_headers(); return
+        body = json.dumps({"status": self.server.state["status"], "reason": None}).encode()  # type: ignore[attr-defined]
+        self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers()
+        self.wfile.write(body)
+
+    def do_PUT(self):
+        if self.path != "/v1/instance/subscription-status":
+            self.send_response(404); self.end_headers(); return
+        if not self._authorized():
+            self.send_response(403); self.end_headers(); return
+        length = int(self.headers.get("Content-Length", 0))
+        payload = json.loads(self.rfile.read(length))
+        self.server.state["status"] = payload["status"]  # type: ignore[attr-defined]
+        body = json.dumps({"status": payload["status"], "reason": payload.get("reason")}).encode()
+        self.send_response(200); self.send_header("Content-Type", "application/json"); self.end_headers()
+        self.wfile.write(body)
+
+    def log_message(self, *args):
+        pass
+
+
+@pytest.fixture
+def fake_instance_server():
+    """Un vrai serveur HTTP en 127.0.0.1 (port éphémère), pas un mock — pour vérifier le
+    scénario demandé (suspendre -> 402 -> réactiver) sur un aller-retour réseau réel."""
+    server = HTTPServer(("127.0.0.1", 0), _FakeInstanceHandler)
+    server.vendor_key = "test-vendor-key"  # type: ignore[attr-defined]
+    server.state = {"status": "active"}  # type: ignore[attr-defined]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server
+    finally:
+        server.shutdown()
+        thread.join(timeout=2)
 
 
 def test_load_fleet_data_degrades_gracefully_without_render_api_key(monkeypatch):
@@ -141,3 +198,129 @@ def test_index_route_renders_html_without_crashing(monkeypatch):
     assert "Acme Corp" in response.text
     assert "Beta Inc" in response.text
     assert "RENDER_API_KEY absente" in response.text
+
+
+# --- Partie B.2 : suspendre / réactiver via le coupe-circuit d'abonnement existant ---
+
+def test_subscription_status_check_reports_real_status(monkeypatch):
+    response = mock.Mock(ok=True, json=lambda: {"status": "suspended"})
+    monkeypatch.setattr(fleet_admin.requests, "get", mock.Mock(return_value=response))
+
+    status, detail = fleet_admin._subscription_status_check("https://instance.example", "vk-1")
+
+    assert status == "suspended"
+    assert detail == ""
+
+
+def test_subscription_status_check_reports_unknown_when_instance_unreachable(monkeypatch):
+    """Instance down/injoignable : 'unknown', jamais une exception qui remonte et casse la
+    page — exigence explicite de la Partie B.2."""
+    monkeypatch.setattr(
+        fleet_admin.requests, "get",
+        mock.Mock(side_effect=fleet_admin.requests.exceptions.ConnectionError("refused")),
+    )
+
+    status, detail = fleet_admin._subscription_status_check("https://instance.example", "vk-1")
+
+    assert status == "unknown"
+    assert "refused" in detail
+
+
+def test_subscription_status_update_never_raises_and_reports_real_outcome(monkeypatch):
+    monkeypatch.setattr(
+        fleet_admin.requests, "put",
+        mock.Mock(side_effect=fleet_admin.requests.exceptions.Timeout("timed out")),
+    )
+
+    ok, message = fleet_admin._subscription_status_update("https://instance.example", "vk-1", status="suspended")
+
+    assert ok is False
+    assert "timed out" in message
+
+
+def test_load_fleet_data_skips_subscription_check_for_non_active_instances(monkeypatch):
+    """Une instance encore en 'provisioning' n'a pas de backend joignable — inutile (et
+    trompeur) de tenter un GET dessus."""
+    get_mock = mock.Mock()
+    monkeypatch.setattr(fleet_admin.requests, "get", get_mock)
+    _insert(slug="acme", statut="provisioning", vendor_key="vk-1", backend_url="https://instance.example")
+
+    data = fleet_admin.load_fleet_data(check_health=False)
+
+    assert data.instances[0].subscription_status == "not_applicable"
+    get_mock.assert_not_called()
+
+
+def test_load_fleet_data_flags_missing_vendor_key(monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(slug="acme", statut="active", backend_url="https://instance.example")  # pas de vendor_key
+
+    data = fleet_admin.load_fleet_data(check_health=False, check_subscription=False)
+
+    assert data.instances[0].can_manage_subscription is False
+    assert data.instances[0].subscription_status == "unknown"
+
+
+def test_suspend_route_rejects_mismatched_slug_confirmation_without_calling_the_instance(monkeypatch):
+    put_mock = mock.Mock()
+    monkeypatch.setattr(fleet_admin.requests, "put", put_mock)
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(slug="acme", statut="active", backend_url="https://instance.example", vendor_key="vk-1")
+
+    client = TestClient(fleet_admin.app)
+    response = client.post("/instances/acme/suspend", data={"confirm_slug": "not-acme"})
+
+    assert response.status_code == 200
+    assert "Confirmation invalide" in response.text
+    put_mock.assert_not_called()
+
+
+def test_suspend_route_disabled_when_vendor_key_missing(monkeypatch):
+    put_mock = mock.Mock()
+    monkeypatch.setattr(fleet_admin.requests, "put", put_mock)
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(slug="acme", statut="active", backend_url="https://instance.example")  # pas de vendor_key
+
+    client = TestClient(fleet_admin.app)
+    index_response = client.get("/")
+    assert "vendor_key absente — action impossible" in index_response.text
+
+    action_response = client.post("/instances/acme/suspend", data={"confirm_slug": "acme"})
+    assert "vendor_key ou URL backend absente" in action_response.text
+    put_mock.assert_not_called()
+
+
+def test_vendor_key_never_appears_in_rendered_html(monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    monkeypatch.setattr(fleet_admin.requests, "get", mock.Mock(side_effect=fleet_admin.requests.exceptions.ConnectionError()))
+    _insert(slug="acme", statut="active", backend_url="https://instance.example", vendor_key="super-secret-vendor-key")
+
+    client = TestClient(fleet_admin.app)
+    response = client.get("/")
+
+    assert "super-secret-vendor-key" not in response.text
+
+
+def test_suspend_then_reactivate_end_to_end_over_real_http(monkeypatch, fake_instance_server):
+    """Le scénario exact demandé : suspendre une instance -> son subscription-status passe
+    à 'suspended' (ce qui déclenche le 402 sur /v1/* côté backend réel, hors scope ici, déjà
+    couvert par les tests backend existants) -> réactiver -> retour à 'active'. Aller-retour
+    HTTP réel sur 127.0.0.1, pas mocké."""
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    base_url = f"http://127.0.0.1:{fake_instance_server.server_address[1]}"
+    _insert(slug="acme", statut="active", backend_url=base_url, vendor_key="test-vendor-key")
+
+    client = TestClient(fleet_admin.app)
+
+    before = client.get("/")
+    assert "sub-active" in before.text
+
+    suspend_resp = client.post("/instances/acme/suspend", data={"confirm_slug": "acme"})
+    assert "action réussie" in suspend_resp.text
+    assert fake_instance_server.state["status"] == "suspended"
+    assert "sub-suspended" in suspend_resp.text  # re-GET après action, pas supposé
+
+    reactivate_resp = client.post("/instances/acme/reactivate", data={"confirm_slug": "acme"})
+    assert "action réussie" in reactivate_resp.text
+    assert fake_instance_server.state["status"] == "active"
+    assert "sub-active" in reactivate_resp.text

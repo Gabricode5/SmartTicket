@@ -20,10 +20,21 @@
     .health-ok { color: #0a3622; }
     .health-unreachable { color: #b02a37; font-weight: 600; }
     .health-non_verifie { color: #888; }
+    .sub-active { color: #0a3622; font-weight: 600; }
+    .sub-suspended { color: #b02a37; font-weight: 600; }
+    .sub-unknown { color: #997404; }
+    .sub-not_applicable { color: #888; }
     .missing { color: #b02a37; font-weight: 600; }
+    .success { background: #d1e7dd; color: #0a3622; border: 1px solid #a3cfbb; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
     a { color: #0d6efd; text-decoration: none; }
     a:hover { text-decoration: underline; }
     .links a { display: block; }
+    details { margin-bottom: 0.3rem; }
+    details summary { cursor: pointer; color: #0d6efd; font-size: 0.85rem; }
+    details form { margin-top: 0.4rem; padding: 0.5rem; background: #f8f9fa; border-radius: 4px; }
+    details form p { margin: 0 0 0.4rem; font-size: 0.8rem; }
+    details input { font-size: 0.85rem; padding: 0.2rem 0.4rem; }
+    details button { font-size: 0.8rem; margin-left: 0.3rem; }
     footer { margin-top: 2rem; font-size: 0.8rem; color: #888; }
 </style>
 </head>
@@ -38,11 +49,18 @@
     </div>
     {% endif %}
 
+    {% if action_result %}
+    <div class="{{ 'success' if action_result.ok else 'danger' }}">
+        {{ action_result.slug }} : {{ "action réussie" if action_result.ok else "échec" }} —
+        {{ action_result.message }}
+    </div>
+    {% endif %}
+
     <table>
         <thead>
             <tr>
                 <th>Client</th><th>Slug</th><th>Statut</th><th>Plan</th><th>Créée le</th>
-                <th>Santé (GET /)</th><th>Render</th><th>Liens</th>
+                <th>Santé (GET /)</th><th>Render</th><th>Abonnement</th><th>Actions</th><th>Liens</th>
             </tr>
         </thead>
         <tbody>
@@ -55,6 +73,39 @@
                 <td>{{ i.date_creation }}</td>
                 <td class="health-{{ i.health_status }}">{{ i.health_detail or i.health_status }}</td>
                 <td>{% if i.render_resource_missing %}<span class="missing">ressource(s) introuvable(s)</span>{% elif render_available %}ok{% else %}—{% endif %}</td>
+                <td class="sub-{{ i.subscription_status }}">
+                    {{ i.subscription_status if i.statut == "active" else "—" }}
+                    {% if i.subscription_detail %}<br><small>{{ i.subscription_detail }}</small>{% endif %}
+                </td>
+                <td>
+                    {% if i.statut != "active" %}
+                        —
+                    {% elif not i.can_manage_subscription %}
+                        <em class="missing">vendor_key absente — action impossible depuis la page</em>
+                    {% else %}
+                        {% if i.subscription_status != "suspended" %}
+                        <details>
+                            <summary>Suspendre</summary>
+                            <form method="post" action="/instances/{{ i.slug }}/suspend">
+                                <p>Coupe l'accès à TOUS les utilisateurs finaux de ce client
+                                (402 sur /v1/*). Tape <code>{{ i.slug }}</code> pour confirmer :</p>
+                                <input type="text" name="confirm_slug" placeholder="{{ i.slug }}" required autocomplete="off">
+                                <button type="submit">Confirmer la suspension</button>
+                            </form>
+                        </details>
+                        {% endif %}
+                        {% if i.subscription_status != "active" %}
+                        <details>
+                            <summary>Réactiver</summary>
+                            <form method="post" action="/instances/{{ i.slug }}/reactivate">
+                                <p>Tape <code>{{ i.slug }}</code> pour confirmer :</p>
+                                <input type="text" name="confirm_slug" placeholder="{{ i.slug }}" required autocomplete="off">
+                                <button type="submit">Confirmer la réactivation</button>
+                            </form>
+                        </details>
+                        {% endif %}
+                    {% endif %}
+                </td>
                 <td class="links">
                     {% if i.frontend_url %}<a href="{{ i.frontend_url }}" target="_blank">Frontend</a>{% endif %}
                     {% if i.backend_url %}<a href="{{ i.backend_url }}" target="_blank">Backend</a>{% endif %}
@@ -64,7 +115,7 @@
                 </td>
             </tr>
         {% else %}
-            <tr><td colspan="8">Aucune instance dans instances.db.</td></tr>
+            <tr><td colspan="10">Aucune instance dans instances.db.</td></tr>
         {% endfor %}
         </tbody>
     </table>

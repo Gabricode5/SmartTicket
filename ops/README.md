@@ -155,18 +155,31 @@ cd ops && python fleet_admin.py
 ```
 
 ⚠️ **Ne tourne QUE sur ce poste, ne jamais l'exposer au-delà de 127.0.0.1** (pas de
-`--host 0.0.0.0`, pas de reverse proxy public) : dès la Partie B.2/B.3, cette page peut
-suspendre, réactiver ou créer des ressources Render **payantes**. Elle n'est jamais déployée
-(comme le reste de `ops/`) et ne réimplémente rien : elle lit `instances.db`, appelle l'API
-Render en lecture (mêmes fonctions que `audit_render_resources.py`) et
-`provision()`/`delete_client()` directement.
+`--host 0.0.0.0`, pas de reverse proxy public) : cette page peut suspendre, réactiver ou
+(bientôt) créer des ressources Render **payantes**, et agit directement sur le compte
+d'abonnement de vraies instances clientes. Elle n'est jamais déployée (comme le reste de
+`ops/`) et ne réimplémente rien : elle lit `instances.db`, appelle l'API Render en lecture
+(mêmes fonctions que `audit_render_resources.py`) et `provision()`/`delete_client()`
+directement — le coupe-circuit d'abonnement (`GET`/`PUT /v1/instance/subscription-status`,
+`backend/routers/instance.py`) n'est pas réimplémenté non plus, juste appelé.
 
-État actuel (Partie B.1 — lecture) : liste des instances croisée avec l'API Render (statut,
-ressources manquantes, ressources orphelines), santé (ping direct du `GET /` de chaque
-instance — un service Render peut être "live" alors que l'appli plante au runtime), liens
-dashboard. Dégrade proprement sans `RENDER_API_KEY` (reste utilisable en local-only).
-Suspendre/réactiver et créer une instance depuis la page arrivent dans les parties
-suivantes.
+État actuel :
+
+- **Partie B.1 (lecture)** : liste des instances croisée avec l'API Render (statut,
+  ressources manquantes, ressources orphelines), santé (ping direct du `GET /` de chaque
+  instance — un service Render peut être "live" alors que l'appli plante au runtime), liens
+  dashboard. Dégrade proprement sans `RENDER_API_KEY` (reste utilisable en local-only).
+- **Partie B.2 (suspendre/réactiver)** : statut d'abonnement réel par instance (distinct du
+  statut Render — une instance peut être "live" côté Render mais "suspended" côté abonnement,
+  402 pour ses utilisateurs finaux), boutons suspendre/réactiver avec confirmation
+  **obligatoire par saisie du slug** (impact direct sur les utilisateurs du client). Le
+  résultat affiché après une action est toujours un **re-GET réel**, jamais un succès supposé.
+  `vendor_key` (le secret du coupe-circuit) n'est stocké que côté serveur Python et n'apparaît
+  JAMAIS dans le HTML rendu ni dans une URL — vérifié par test
+  (`test_vendor_key_never_appears_in_rendered_html`). Une instance dont le `vendor_key` est
+  absent en base (ex: provisionnée avant son ajout au schéma) affiche un message explicite et
+  désactive l'action plutôt que de planter.
+- Créer une instance depuis la page arrive dans la partie suivante.
 
 ## Consulter la flotte (CLI + SQL, pas d'interface)
 
