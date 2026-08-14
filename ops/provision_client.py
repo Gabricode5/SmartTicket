@@ -30,8 +30,13 @@ premier build (Next.js bake les rewrites de next.config.ts au build, jamais au r
 build_urls() prédit maintenant les URLs *.onrender.com par avance au lieu de les découvrir
 après coup — cf. frontend/scripts/verify-production-build.mjs (lancé en CI juste après
 `next build`), qui fait maintenant échouer explicitement tout build où le rewrite /api/*
-retomberait sur ce fallback localhost. L'attachement d'un domaine personnalisé (--domain),
-lui, reste non testé en conditions réelles (en particulier l'attente du certificat TLS).
+retomberait sur ce fallback localhost. Bug analogue trouvé le 2026-07-17, côté BACKEND cette
+fois : backend/email_utils.py construit les liens de vérification d'email/reset password à
+partir de FRONTEND_URL (défaut "http://localhost:3005"), jamais injectée par provision()
+jusque-là — email bien reçu (Brevo fonctionnait), mais lien cassé en ERR_CONNECTION_REFUSED.
+FRONTEND_URL fait maintenant partie de backend_env, avec la même valeur que CORS_ORIGINS.
+L'attachement d'un domaine personnalisé (--domain), lui, reste non testé en conditions
+réelles (en particulier l'attente du certificat TLS).
 Toujours lancer avec
 --dry-run d'abord, puis sur une instance de test jetable avant tout client réel (Phase 4 du
 plan).
@@ -276,6 +281,15 @@ def provision(
             "ALGORITHM": "HS256",
             "ACCESS_TOKEN_EXPIRE_MINUTES": "60",
             "CORS_ORIGINS": frontend_url,
+            # Sans ça, backend/email_utils.py retombait sur son défaut
+            # ("http://localhost:3005") pour CONSTRUIRE LES LIENS de tous les emails
+            # transactionnels (vérification d'email, reset password, invitation en masse) —
+            # bug réel du 2026-07-17 : email reçu (Brevo fonctionnait), mais le lien pointait
+            # sur localhost -> ERR_CONNECTION_REFUSED côté client. Le pendant côté backend du
+            # bug NEXT_PUBLIC_API_URL déjà corrigé côté frontend (cf. build_urls()). Le lien
+            # de setup (ops/notify.py) n'était PAS affecté : setup_url est construit ici même
+            # à partir de frontend_url, jamais via cette variable backend.
+            "FRONTEND_URL": frontend_url,
             "VENDOR_KEY": vendor_key,
             "ADMIN_EMAIL": admin_email,
             "ADMIN_USERNAME": "admin",

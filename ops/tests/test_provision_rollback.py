@@ -413,3 +413,58 @@ class TestSlugReuseGeneratesFreshRenderNames:
         # Le slug métier, lui, reste inchangé et propre en base — seul le nom Render varie.
         row = db.get_instance("acme13")
         assert row["slug"] == "acme13"
+
+
+class TestBackendEmailLinksUseTheRealFrontendUrl:
+    """Bug réel du 2026-07-17 : email de vérification bien REÇU (Brevo fonctionnait), mais le
+    lien pointait sur localhost -> ERR_CONNECTION_REFUSED. Cause : backend/email_utils.py
+    construit les liens de TOUS les emails transactionnels (vérification d'email, reset
+    password, invitation en masse) à partir de FRONTEND_URL, qui défaut à
+    "http://localhost:3005" — jamais injectée par provision() jusqu'ici. Pendant côté backend
+    du bug NEXT_PUBLIC_API_URL déjà corrigé côté frontend (cf. TestFrontendReceivesTheRealBackendUrl
+    ci-dessus). Le lien de setup (ops/notify.py) n'est PAS concerné : setup_url est construit
+    directement dans provision() à partir de frontend_url, jamais via cette variable backend."""
+
+    def test_provision_injects_non_empty_non_localhost_frontend_url_into_backend_env(self, render_mock, notify_mock):
+        _mock_common_steps(render_mock, postgres_id="pg-14")
+        render_mock.create_web_service.side_effect = [
+            {"id": "backend-14", "serviceDetails": {"url": "https://smartticket-acme14-backend.onrender.com"}},
+            {"id": "frontend-14", "serviceDetails": {"url": "https://smartticket-acme14-frontend.onrender.com"}},
+        ]
+        notify_mock.send_welcome_email.return_value = True
+
+        result = provision_client.provision(
+            client_name="Acme14", slug="acme14", postgres_plan="starter", admin_email="a@acme14.com",
+        )
+
+        assert result.status == "active"
+        backend_call_kwargs = render_mock.create_web_service.call_args_list[0].kwargs
+
+        # C'est LE champ qui était absent avant le correctif — backend/email_utils.py
+        # retombait sur son défaut localhost pour CHAQUE lien d'email transactionnel.
+        frontend_url_env = backend_call_kwargs["env_vars"]["FRONTEND_URL"]
+        assert frontend_url_env, "FRONTEND_URL ne doit jamais être vide côté backend"
+        assert "localhost" not in frontend_url_env
+
+        # Même valeur que CORS_ORIGINS (déjà correcte) et que l'URL utilisée pour setup_url —
+        # une seule source de vérité pour "l'URL publique du frontend", pas trois qui
+        # pourraient un jour diverger.
+        assert frontend_url_env == backend_call_kwargs["env_vars"]["CORS_ORIGINS"]
+        assert result.setup_url.startswith(frontend_url_env)
+
+    def test_provision_injects_custom_domain_frontend_url_when_domain_given(self, render_mock, notify_mock):
+        _mock_common_steps(render_mock, postgres_id="pg-15")
+        render_mock.create_web_service.side_effect = [
+            {"id": "backend-15", "serviceDetails": {"url": "https://acme15-api.smartticket.fr"}},
+            {"id": "frontend-15", "serviceDetails": {"url": "https://acme15.smartticket.fr"}},
+        ]
+        notify_mock.send_welcome_email.return_value = True
+
+        result = provision_client.provision(
+            client_name="Acme15", slug="acme15", postgres_plan="starter", admin_email="a@acme15.com",
+            domain="smartticket.fr",
+        )
+
+        assert result.status == "active"
+        backend_call_kwargs = render_mock.create_web_service.call_args_list[0].kwargs
+        assert backend_call_kwargs["env_vars"]["FRONTEND_URL"] == "https://acme15.smartticket.fr"
