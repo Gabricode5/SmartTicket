@@ -5,6 +5,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { LanguageToggle } from "@/components/LanguageToggle"
 import { useLocale } from "@/lib/i18n/LocaleContext"
+import { BRAND_NAME } from "@/lib/brand"
 import {
     MessageSquare, Zap, BookOpen, BarChart2, ArrowRight,
     ShieldCheck, Users, Activity, CheckCircle2, Building2,
@@ -44,8 +45,8 @@ export default function LandingPage() {
             <header className="sticky top-0 z-50 border-b border-slate-100 bg-white/80 backdrop-blur-sm">
                 <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
                     <div className="flex items-center gap-2 font-bold text-xl">
-                        <Image src="/logo_smartticket.png" alt="SmartTicket" width={32} height={32} className="h-8 w-8" priority />
-                        <span className="text-slate-900">SmartTicket</span>
+                        <Image src="/logo_smartticket.png" alt={BRAND_NAME} width={32} height={32} className="h-8 w-8" priority />
+                        <span className="text-slate-900">{BRAND_NAME}</span>
                     </div>
                     <nav className="hidden md:flex items-center gap-8 text-sm text-slate-600">
                         <a href="#features" className="hover:text-indigo-600 transition-colors">{t.landing.nav.features}</a>
@@ -249,8 +250,8 @@ export default function LandingPage() {
             <footer className="border-t border-slate-100 py-8 px-6 bg-white">
                 <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-2 text-slate-600">
-                        <Image src="/logo_smartticket.png" alt="SmartTicket" width={24} height={24} className="h-6 w-6" />
-                        <span className="font-semibold">SmartTicket</span>
+                        <Image src="/logo_smartticket.png" alt={BRAND_NAME} width={24} height={24} className="h-6 w-6" />
+                        <span className="font-semibold">{BRAND_NAME}</span>
                         <span className="text-slate-400 text-sm ml-2">{t.landing.footer.tagline}</span>
                     </div>
                     <nav className="flex items-center gap-4 text-xs text-slate-400">

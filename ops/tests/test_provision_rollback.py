@@ -468,3 +468,32 @@ class TestBackendEmailLinksUseTheRealFrontendUrl:
         assert result.status == "active"
         backend_call_kwargs = render_mock.create_web_service.call_args_list[0].kwargs
         assert backend_call_kwargs["env_vars"]["FRONTEND_URL"] == "https://acme15.smartticket.fr"
+
+
+class TestFrontendReceivesTheBrandName:
+    """White-label du nom de marque (2026-08-15) : le frontend affichait "SmartTicket" en
+    dur (header, sidebar, pages auth) quel que soit le client — cf. frontend/lib/brand.ts.
+    provision() doit injecter NEXT_PUBLIC_BRAND_NAME = client_name AVANT le premier build du
+    frontend (même piège de timing que NEXT_PUBLIC_API_URL/FRONTEND_URL : bakée au build,
+    jamais réévaluée au runtime)."""
+
+    def test_provision_injects_brand_name_equal_to_client_name(self, render_mock, notify_mock):
+        _mock_common_steps(render_mock, postgres_id="pg-16")
+        render_mock.create_web_service.side_effect = [
+            {"id": "backend-16", "serviceDetails": {"url": "https://smartticket-acme16-backend.onrender.com"}},
+            {"id": "frontend-16", "serviceDetails": {"url": "https://smartticket-acme16-frontend.onrender.com"}},
+        ]
+        notify_mock.send_welcome_email.return_value = True
+
+        result = provision_client.provision(
+            client_name="Martin Technologies", slug="acme16", postgres_plan="starter", admin_email="a@acme16.com",
+        )
+
+        assert result.status == "active"
+        frontend_call_kwargs = render_mock.create_web_service.call_args_list[1].kwargs
+
+        # C'est CE champ qui était absent avant le correctif — le frontend retombait sur le
+        # défaut "SmartTicket" de lib/brand.ts, quel que soit le client.
+        brand_name = frontend_call_kwargs["env_vars"]["NEXT_PUBLIC_BRAND_NAME"]
+        assert brand_name, "NEXT_PUBLIC_BRAND_NAME ne doit jamais être vide au moment du build frontend"
+        assert brand_name == "Martin Technologies"

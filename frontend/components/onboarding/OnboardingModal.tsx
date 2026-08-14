@@ -9,12 +9,13 @@ import {
     Sparkles, MessageSquare, Headphones, Users, BarChart2, BookOpen, UserCog,
     ChevronLeft, ChevronRight, type LucideIcon,
 } from "lucide-react"
+import { BRAND_NAME } from "@/lib/brand"
 
 type Step = { icon: LucideIcon; title: string; description: string }
 
 const STEPS_BY_ROLE: Record<string, Step[]> = {
     user: [
-        { icon: Sparkles, title: "Bienvenue sur SmartTicket", description: "Notre assistant IA répond à vos questions 24h/24, à partir de la base de connaissances du service." },
+        { icon: Sparkles, title: `Bienvenue sur ${BRAND_NAME}`, description: "Notre assistant IA répond à vos questions 24h/24, à partir de la base de connaissances du service." },
         { icon: MessageSquare, title: "Démarrez une conversation", description: "Cliquez sur « Nouveau chat » dans la barre latérale pour poser votre question à l'assistant." },
         { icon: Headphones, title: "Besoin d'un humain ?", description: "Si l'IA ne peut pas résoudre votre problème, transférez la conversation à un agent SAV en un clic." },
         { icon: BarChart2, title: "Suivez vos échanges", description: "Le tableau de bord liste toutes vos conversations, leur statut, et permet de les rechercher." },

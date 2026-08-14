@@ -345,6 +345,12 @@ def provision(
 
         frontend_env = {
             "NEXT_PUBLIC_API_URL": backend_url,
+            # White-label du nom de marque (Phase 0 bis, 2026-08-15) — même piège que
+            # NEXT_PUBLIC_API_URL : NEXT_PUBLIC_* est bakée au BUILD Next.js, jamais
+            # réévaluée au runtime, donc posée ici AVANT la création du service (premier
+            # build). Valeur = client_name (déjà capturé plus haut), pas slug : c'est le nom
+            # affiché aux utilisateurs finaux du client, pas l'identifiant technique.
+            "NEXT_PUBLIC_BRAND_NAME": client_name,
         }
 
         logger.info("Création du service frontend '%s'...", frontend_name)

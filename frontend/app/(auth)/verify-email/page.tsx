@@ -6,6 +6,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { ArrowLeft, CheckCircle2, XCircle, Loader2 } from "lucide-react"
 import { useLocale } from "@/lib/i18n/LocaleContext"
+import { BRAND_NAME } from "@/lib/brand"
 
 type Status = "loading" | "success" | "error"
 
@@ -72,8 +73,8 @@ function VerifyEmailContent() {
                     {t.login.backToHome}
                 </Link>
                 <div className="flex items-center gap-2 font-bold text-slate-800">
-                    <Image src="/logo_smartticket.png" alt="SmartTicket" width={28} height={28} className="h-7 w-7" />
-                    <span>SmartTicket</span>
+                    <Image src="/logo_smartticket.png" alt={BRAND_NAME} width={28} height={28} className="h-7 w-7" />
+                    <span>{BRAND_NAME}</span>
                 </div>
             </header>
 

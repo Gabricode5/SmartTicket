@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Roboto } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 import { LocaleProvider } from "@/lib/i18n/LocaleContext";
+import { BRAND_NAME } from "@/lib/brand";
 import "./globals.css";
 
 const roboto = Roboto({ subsets: ['latin'], variable: '--font-sans' });
@@ -17,7 +18,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SmartTicket",
+  title: BRAND_NAME,
   description: "Gestionnaire de tickets intelligent",
 };
 
