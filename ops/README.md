@@ -133,6 +133,20 @@ symétrique du rollback de `provision()` ci-dessous : elle reste dans `instances
 restent traçables. `--keep-row` n'a d'effet que sur le cas de succès complet (statut
 `'supprimee'` au lieu du retrait pur et simple) ; en cas d'échec la ligne reste de toute façon.
 
+### `audit_render_resources.py` — auditer les ressources Render (lecture seule)
+
+```bash
+python audit_render_resources.py                              # préfixe par défaut : smartticket-test-
+python audit_render_resources.py --prefix smartticket-acme-
+```
+
+N'appelle que `GET /services` et `GET /postgres` — **aucune mutation possible**. Liste
+toutes les ressources dont le nom commence par le préfixe donné (nom, id, type, statut, date
+de création, URL dashboard) et signale celles qui n'ont **aucune ligne correspondante** dans
+`instances.db` : utile après un changement de poste (le registre local est gitignoré, cf.
+Prérequis) ou pour retrouver d'éventuelles ressources orphelines laissées par un
+`delete_client.py` antérieur au correctif du 2026-07-16.
+
 ## Consulter la flotte (CLI + SQL, pas d'interface)
 
 ```bash

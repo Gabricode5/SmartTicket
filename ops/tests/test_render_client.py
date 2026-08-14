@@ -203,6 +203,55 @@ def test_get_latest_deploy_treats_404_as_not_ready_yet_rather_than_raising(reque
     assert render_client.get_latest_deploy("svc-1") is None
 
 
+# --- Audit LECTURE SEULE (ops/audit_render_resources.py), ajouté le 2026-07-17 : retrouver
+# les ressources Render orphelines dont la trace a pu être perdue par le bug de
+# delete_client.py corrigé précédemment (ligne retirée d'instances.db malgré un échec de
+# suppression). list_services()/list_postgres_instances() ne font aucune mutation.
+
+def test_list_services_unwraps_envelope_and_paginates_until_a_short_page(requests_mock, monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", "test-key")
+    requests_mock.request.side_effect = [
+        _response(json_body=[
+            {"cursor": "c1", "service": {"id": "svc-1", "name": "smartticket-test-un-backend"}},
+            {"cursor": "c2", "service": {"id": "svc-2", "name": "smartticket-test-un-frontend"}},
+        ]),
+        _response(json_body=[  # page courte (< page_size) : dernière page
+            {"cursor": "c3", "service": {"id": "svc-3", "name": "smartticket-test-deux-backend"}},
+        ]),
+    ]
+
+    result = render_client.list_services(page_size=2)
+
+    assert [s["id"] for s in result] == ["svc-1", "svc-2", "svc-3"]
+    # Le cursor de la DERNIÈRE entrée de la page précédente doit être repassé à l'appel
+    # suivant — sans ça, la pagination boucle sur la même première page indéfiniment.
+    second_call_path = requests_mock.request.call_args_list[1].args[1]
+    assert "cursor=c2" in second_call_path
+
+
+def test_list_services_filters_by_name_prefix_client_side(requests_mock, monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", "test-key")
+    _mock_response(requests_mock, json_body=[
+        {"cursor": "c1", "service": {"id": "svc-1", "name": "smartticket-test-un-backend"}},
+        {"cursor": "c2", "service": {"id": "svc-2", "name": "smartticket-acme-backend"}},
+    ])
+
+    result = render_client.list_services(name_prefix="smartticket-test-")
+
+    assert [s["id"] for s in result] == ["svc-1"]
+
+
+def test_list_postgres_instances_unwraps_envelope(requests_mock, monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", "test-key")
+    _mock_response(requests_mock, json_body=[
+        {"cursor": "c1", "postgres": {"id": "pg-1", "name": "smartticket-test-un-postgres", "status": "available"}},
+    ])
+
+    result = render_client.list_postgres_instances(name_prefix="smartticket-test-")
+
+    assert result == [{"id": "pg-1", "name": "smartticket-test-un-postgres", "status": "available"}]
+
+
 def test_wait_for_deploy_live_survives_a_transient_404_then_succeeds(requests_mock, monkeypatch):
     """Le scénario bout en bout demandé : la ressource n'est pas encore prête (404), puis
     elle l'est (deploy 'live') — wait_for_deploy_live() doit attendre plutôt qu'échouer."""

@@ -201,6 +201,52 @@ def get_service(service_id: str) -> dict:
     return _request("GET", f"/services/{service_id}")
 
 
+def list_services(*, name_prefix: str | None = None, page_size: int = 100) -> list[dict]:
+    """GET /services, paginé par cursor jusqu'à épuisement — LECTURE SEULE, aucune mutation.
+    Réponse `serviceList` = liste de {"service": {...}, "cursor": "..."} (même enveloppe que
+    GET .../deploys, cf. get_latest_deploy) : déballée ici. `name` n'accepte qu'une liste de
+    noms EXACTS côté API (pas de préfixe, vérifié sur le schéma OpenAPI), donc le filtrage par
+    préfixe se fait côté client, après récupération de toutes les pages."""
+    services: list[dict] = []
+    cursor: str | None = None
+    while True:
+        path = f"/services?limit={page_size}"
+        if cursor:
+            path += f"&cursor={cursor}"
+        page = _request("GET", path)
+        if not page:
+            break
+        services.extend(item["service"] for item in page)
+        if len(page) < page_size:
+            break
+        cursor = page[-1]["cursor"]
+    if name_prefix:
+        services = [s for s in services if s["name"].startswith(name_prefix)]
+    return services
+
+
+def list_postgres_instances(*, name_prefix: str | None = None, page_size: int = 100) -> list[dict]:
+    """GET /postgres, paginé par cursor jusqu'à épuisement — LECTURE SEULE, aucune mutation.
+    Réponse = liste de {"postgres": {...}, "cursor": "..."} (schéma `postgresWithCursor`),
+    déballée ici. Même limitation de filtrage par préfixe que list_services()."""
+    instances: list[dict] = []
+    cursor: str | None = None
+    while True:
+        path = f"/postgres?limit={page_size}"
+        if cursor:
+            path += f"&cursor={cursor}"
+        page = _request("GET", path)
+        if not page:
+            break
+        instances.extend(item["postgres"] for item in page)
+        if len(page) < page_size:
+            break
+        cursor = page[-1]["cursor"]
+    if name_prefix:
+        instances = [p for p in instances if p["name"].startswith(name_prefix)]
+    return instances
+
+
 def get_latest_deploy(service_id: str) -> dict | None:
     # GET .../deploys renvoie [{"cursor": ..., "deploy": {...}}], pas les deploys
     # directement (schéma de réponse `deployList` -> items `deployWithCursor`) — sans ce
