@@ -11,12 +11,27 @@ Usage :
     cd ops && python fleet_admin.py
     -> http://127.0.0.1:8765
 
-CETTE PAGE PEUT CRÉER/SUSPENDRE/SUPPRIMER DES RESSOURCES RENDER PAYANTES DÈS LA PARTIE B.2/B.3
-— ne jamais l'exposer au-delà de 127.0.0.1 (pas de --host 0.0.0.0, pas de reverse proxy public).
+CETTE PAGE PEUT CRÉER/SUSPENDRE/SUPPRIMER DES RESSOURCES RENDER PAYANTES — ne jamais
+l'exposer au-delà de 127.0.0.1 (pas de --host 0.0.0.0, pas de reverse proxy public).
+
+Création d'instance (Partie B.3) : provision() prend ~5 minutes en conditions réelles
+(confirmé) — lancée dans un THREAD daemon séparé, jamais dans la requête HTTP elle-même
+(qui répond immédiatement). L'état du job vit UNIQUEMENT en mémoire (_provision_jobs, un
+simple dict protégé par un lock) : c'est délibérément le plus simple possible pour un
+serveur local mono-utilisateur — pas de file de jobs persistante, pas de worker séparé. Deux
+conséquences assumées, pas des bugs : (1) si le serveur est arrêté (Ctrl+C) pendant un
+provisioning en cours, le suivi du job est perdu — mais provision() a déjà écrit la ligne
+'provisioning' dans instances.db dès le début (avant le moindre appel Render) et la met à
+jour au fil de l'eau, donc l'instance reste visible et son état réel retrouvable via la page
+elle-même ou audit_render_resources.py, sans reprise automatique ; (2) l'historique des jobs
+terminés (succès/échec) disparaît aussi au redémarrage du serveur — seul instances.db est la
+source de vérité durable.
 """
 import dataclasses
 import logging
+import re
 import sys
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -28,6 +43,7 @@ from fastapi.templating import Jinja2Templates
 
 import db
 import delete_client
+import provision_client
 import render_client as render
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -65,6 +81,71 @@ class FleetData:
     instances: list[InstanceView]
     orphans: list[dict]  # ressources Render (préfixe smartticket-) sans ligne locale
     render_available: bool  # False si RENDER_API_KEY absente/API injoignable — dégrade proprement
+
+
+@dataclasses.dataclass
+class ProvisionJob:
+    slug: str
+    client_name: str
+    status: str  # "running" | "succeeded" | "failed"
+    started_at: datetime
+    finished_at: datetime | None = None
+    setup_url: str = ""  # OK à afficher (token à usage unique, expirant) — jamais vendor_key
+    welcome_email_sent: bool = False
+    error: str | None = None
+
+
+_SLUG_PATTERN = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+_provision_jobs: dict[str, ProvisionJob] = {}
+_provision_jobs_lock = threading.Lock()
+
+
+def _run_provision_job(*, client_name: str, slug: str, admin_email: str, postgres_plan: str) -> None:
+    """Tourne dans un thread daemon séparé — cf. docstring du module pour le choix
+    d'architecture. provision() ne devrait normalement jamais lever (elle catche déjà tout en
+    interne et retourne un ProvisionResult), mais le filet de sécurité `except Exception`
+    évite qu'une exception vraiment inattendue ne tue le thread en silence en laissant le job
+    bloqué à 'running' pour toujours."""
+    try:
+        result = provision_client.provision(
+            client_name=client_name, slug=slug, admin_email=admin_email, postgres_plan=postgres_plan,
+        )
+    except Exception as exc:
+        logger.error("provision() a levé une exception non gérée pour '%s' : %s", slug, exc, exc_info=True)
+        with _provision_jobs_lock:
+            job = _provision_jobs.get(slug)
+            if job:
+                job.status = "failed"
+                job.error = str(exc)
+                job.finished_at = datetime.now(timezone.utc)
+        return
+
+    with _provision_jobs_lock:
+        job = _provision_jobs.get(slug)
+        if not job:
+            return
+        job.finished_at = datetime.now(timezone.utc)
+        if result.status == "active":
+            job.status = "succeeded"
+            job.setup_url = result.setup_url
+            job.welcome_email_sent = result.welcome_email_sent
+        else:
+            job.status = "failed"
+            job.error = result.error
+
+
+def _provision_jobs_view() -> list[dict]:
+    with _provision_jobs_lock:
+        jobs = sorted(_provision_jobs.values(), key=lambda j: j.started_at, reverse=True)
+    now = datetime.now(timezone.utc)
+    return [
+        {
+            "slug": j.slug, "client_name": j.client_name, "status": j.status,
+            "elapsed_minutes": round(((j.finished_at or now) - j.started_at).total_seconds() / 60, 1),
+            "setup_url": j.setup_url, "welcome_email_sent": j.welcome_email_sent, "error": j.error,
+        }
+        for j in jobs
+    ]
 
 
 def _health_check(url: str, *, timeout: float = 5.0) -> tuple[str, str]:
@@ -220,14 +301,26 @@ def load_fleet_data(*, check_health: bool = True, check_subscription: bool = Tru
     return FleetData(instances=instances, orphans=orphans, render_available=render_available)
 
 
-@app.get("/", response_class=HTMLResponse)
-def index(request: Request) -> HTMLResponse:
+def _render_fleet_page(
+    request: Request, *, action_result: dict | None = None, creation_result: dict | None = None,
+) -> HTMLResponse:
+    """Rendu commun à TOUTES les routes de cette page (lecture, suspend/reactivate, delete,
+    create) — un seul endroit qui assemble instances + orphelines + jobs de provisioning en
+    cours, pour que ces informations restent visibles quelle que soit la dernière action."""
     db.init_db()
     data = load_fleet_data()
+    jobs = _provision_jobs_view()
     return templates.TemplateResponse(request, "index.html", {
         "instances": data.instances, "orphans": data.orphans, "render_available": data.render_available,
-        "action_result": None,
+        "action_result": action_result, "creation_result": creation_result,
+        "provision_jobs": jobs, "any_job_running": any(j["status"] == "running" for j in jobs),
+        "postgres_plans": render.SUPPORTED_POSTGRES_PLANS, "default_postgres_plan": render.DEFAULT_POSTGRES_PLAN,
     })
+
+
+@app.get("/", response_class=HTMLResponse)
+def index(request: Request) -> HTMLResponse:
+    return _render_fleet_page(request)
 
 
 def _handle_subscription_action(request: Request, slug: str, *, target_status: str, confirm_slug: str) -> HTMLResponse:
@@ -248,11 +341,7 @@ def _handle_subscription_action(request: Request, slug: str, *, target_status: s
         ok, message = _subscription_status_update(row["backend_url"], row["vendor_key"], status=target_status)
         action_result = {"slug": slug, "ok": ok, "message": message}
 
-    data = load_fleet_data()
-    return templates.TemplateResponse(request, "index.html", {
-        "instances": data.instances, "orphans": data.orphans, "render_available": data.render_available,
-        "action_result": action_result,
-    })
+    return _render_fleet_page(request, action_result=action_result)
 
 
 @app.post("/instances/{slug}/suspend", response_class=HTMLResponse)
@@ -288,11 +377,7 @@ def _handle_delete_action(request: Request, slug: str, *, confirm_slug: str, con
             # succès qui n'a pas eu lieu.
             action_result = {"slug": slug, "ok": False, "message": result.error}
 
-    data = load_fleet_data()
-    return templates.TemplateResponse(request, "index.html", {
-        "instances": data.instances, "orphans": data.orphans, "render_available": data.render_available,
-        "action_result": action_result,
-    })
+    return _render_fleet_page(request, action_result=action_result)
 
 
 @app.post("/instances/{slug}/delete", response_class=HTMLResponse)
@@ -301,6 +386,46 @@ def delete_instance_route(
     confirm_slug: str = Form(...), confirm_destruction: str | None = Form(None),
 ) -> HTMLResponse:
     return _handle_delete_action(request, slug, confirm_slug=confirm_slug, confirm_destruction=confirm_destruction)
+
+
+@app.post("/instances/create", response_class=HTMLResponse)
+def create_instance_route(
+    request: Request,
+    client_name: str = Form(...), slug: str = Form(...),
+    admin_email: str = Form(...), postgres_plan: str = Form(render.DEFAULT_POSTGRES_PLAN),
+) -> HTMLResponse:
+    """Lance provision() en tâche de fond (cf. docstring du module) et répond IMMÉDIATEMENT —
+    jamais d'attente synchrone des ~5 minutes que prend un provisioning réel. MÊME fonction
+    que la CLI (provision_client.provision()), rien réimplémenté ici."""
+    client_name = client_name.strip()
+    slug = slug.strip().lower()
+    admin_email = admin_email.strip()
+
+    if not client_name or not admin_email:
+        creation_result = {"ok": False, "message": "Le nom du client et l'email admin sont requis."}
+    elif not _SLUG_PATTERN.match(slug):
+        creation_result = {"ok": False, "message": f"Slug '{slug}' invalide — minuscules, chiffres et tirets uniquement, sans tiret en début/fin (ex: acme-corp)."}
+    elif db.slug_exists(slug):
+        # provision() referait exactement cette vérification (et refuserait de toute façon) —
+        # elle est dupliquée ici UNIQUEMENT pour un retour immédiat côté formulaire, avant de
+        # lancer un thread pour rien. La vérification qui compte reste celle de provision().
+        creation_result = {"ok": False, "message": f"Le slug '{slug}' existe déjà dans le registre — choisis-en un autre."}
+    else:
+        with _provision_jobs_lock:
+            _provision_jobs[slug] = ProvisionJob(
+                slug=slug, client_name=client_name, status="running", started_at=datetime.now(timezone.utc),
+            )
+        threading.Thread(
+            target=_run_provision_job,
+            kwargs=dict(client_name=client_name, slug=slug, admin_email=admin_email, postgres_plan=postgres_plan),
+            daemon=True,
+        ).start()
+        creation_result = {
+            "ok": True,
+            "message": f"Création de '{slug}' lancée en tâche de fond (~5 min). L'email de bienvenue partira au client à la fin — suis la progression ci-dessous.",
+        }
+
+    return _render_fleet_page(request, creation_result=creation_result)
 
 
 def main() -> int:

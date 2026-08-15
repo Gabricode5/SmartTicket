@@ -2,6 +2,9 @@
 <html lang="fr">
 <head>
 <meta charset="utf-8">
+{% if any_job_running %}
+<meta http-equiv="refresh" content="10">
+{% endif %}
 <title>SmartTicket — Gestion de flotte (local)</title>
 <style>
     :root { color-scheme: light dark; }
@@ -37,6 +40,17 @@
     details button { font-size: 0.8rem; margin-left: 0.3rem; }
     details.danger-action summary { color: #b02a37; font-weight: 600; }
     .billing-reminder { color: #997404; font-size: 0.78rem; }
+    .create-panel { border: 1px solid #ddd; border-radius: 6px; padding: 1rem; margin: 1rem 0; }
+    .create-panel h2 { font-size: 1rem; margin-top: 0; }
+    .create-panel label { display: block; font-size: 0.85rem; margin-top: 0.6rem; }
+    .create-panel input, .create-panel select { width: 100%; max-width: 320px; padding: 0.3rem 0.5rem; font-size: 0.9rem; margin-top: 0.15rem; }
+    .create-panel button { margin-top: 0.8rem; padding: 0.4rem 0.9rem; }
+    .create-panel .hint { color: #888; font-size: 0.78rem; }
+    .job-panel { margin: 1rem 0; }
+    .job-card { border: 1px solid #ddd; border-radius: 6px; padding: 0.6rem 0.8rem; margin-bottom: 0.5rem; font-size: 0.88rem; }
+    .job-running { border-left: 4px solid #0d6efd; }
+    .job-succeeded { border-left: 4px solid #0a3622; }
+    .job-failed { border-left: 4px solid #b02a37; }
     footer { margin-top: 2rem; font-size: 0.8rem; color: #888; }
 </style>
 </head>
@@ -55,6 +69,59 @@
     <div class="{{ 'success' if action_result.ok else 'danger' }}">
         {{ action_result.slug }} : {{ "action réussie" if action_result.ok else "échec" }} —
         {{ action_result.message }}
+    </div>
+    {% endif %}
+
+    {% if creation_result %}
+    <div class="{{ 'success' if creation_result.ok else 'danger' }}">{{ creation_result.message }}</div>
+    {% endif %}
+
+    <details class="create-panel">
+        <summary><strong>Créer une nouvelle instance</strong></summary>
+        <form method="post" action="/instances/create" id="create-form">
+            <label>Nom de l'entreprise
+                <input type="text" name="client_name" id="create-client-name" placeholder="Martin Technologies" required autocomplete="off">
+            </label>
+            <label>Slug (identifiant technique — dérivé automatiquement, modifiable)
+                <input type="text" name="slug" id="create-slug" placeholder="martin-technologies" required autocomplete="off" pattern="[a-z0-9]+(-[a-z0-9]+)*">
+            </label>
+            <p class="hint">Un suffixe unique est ajouté automatiquement aux ressources Render
+            (cf. render_suffix) — ce slug reste l'identifiant métier propre, stocké tel quel.</p>
+            <label>Email admin
+                <input type="email" name="admin_email" placeholder="admin@client.com" required autocomplete="off">
+            </label>
+            <label>Plan Postgres
+                <select name="postgres_plan">
+                    {% for plan in postgres_plans %}
+                    <option value="{{ plan }}" {{ "selected" if plan == default_postgres_plan else "" }}>{{ plan }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <p class="hint">Le provisioning prend environ 5 minutes (base Postgres + backend +
+            frontend Render) et se lance en tâche de fond — cette page reste utilisable
+            pendant ce temps. L'email de bienvenue part au client à la toute fin, une fois
+            l'instance active.</p>
+            <button type="submit">Lancer la création</button>
+        </form>
+    </details>
+
+    {% if provision_jobs %}
+    <div class="job-panel">
+        <h2 style="font-size:1rem">Provisioning en cours / récent</h2>
+        {% for job in provision_jobs %}
+        <div class="job-card job-{{ job.status }}">
+            <strong>{{ job.client_name }}</strong> ({{ job.slug }}) —
+            {% if job.status == "running" %}
+                en cours depuis {{ job.elapsed_minutes }} min... (page actualisée automatiquement)
+            {% elif job.status == "succeeded" %}
+                <span class="sub-active">active</span>, créée en {{ job.elapsed_minutes }} min.
+                {% if job.welcome_email_sent %}Email de bienvenue envoyé.{% else %}Email de bienvenue NON envoyé (voir logs serveur) — transmets le lien de setup manuellement.{% endif %}
+                {% if job.setup_url %}<br>Lien de setup (à usage unique) : <a href="{{ job.setup_url }}">{{ job.setup_url }}</a>{% endif %}
+            {% else %}
+                <span class="missing">échec</span> après {{ job.elapsed_minutes }} min — {{ job.error }}
+            {% endif %}
+        </div>
+        {% endfor %}
     </div>
     {% endif %}
 
@@ -167,5 +234,29 @@
         Cette page tourne uniquement sur ce poste (127.0.0.1) et peut créer/suspendre/
         supprimer des ressources Render payantes — ne jamais l'exposer publiquement.
     </footer>
+
+    <script>
+        // Dérive le slug depuis le nom du client — confort d'UI uniquement, le slug reste
+        // un champ texte normal que l'utilisateur peut corriger avant de soumettre (cf.
+        // consigne Partie B.3). Ne se déclenche que si le slug n'a pas déjà été modifié à la
+        // main, pour ne jamais écraser une correction volontaire.
+        (function () {
+            var nameInput = document.getElementById("create-client-name");
+            var slugInput = document.getElementById("create-slug");
+            if (!nameInput || !slugInput) return;
+            var slugEditedManually = false;
+            slugInput.addEventListener("input", function () { slugEditedManually = true; });
+            nameInput.addEventListener("input", function () {
+                if (slugEditedManually) return;
+                var accentPattern = new RegExp("[" + String.fromCharCode(0x0300) + "-" + String.fromCharCode(0x036f) + "]", "g");
+                var slug = nameInput.value
+                    .normalize("NFD").replace(accentPattern, "")
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/^-+|-+$/g, "");
+                slugInput.value = slug;
+            });
+        })();
+    </script>
 </body>
 </html>

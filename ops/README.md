@@ -187,7 +187,35 @@ directement — le coupe-circuit d'abonnement (`GET`/`PUT /v1/instance/subscript
   une case à cocher explicite ("je comprends que les données seront détruites"). Une instance
   suspendue depuis longtemps affiche un rappel de facturation (cf. ci-dessous). Disponible
   pour toute instance dont le statut local n'est pas déjà `'supprimee'`.
-- Créer une instance depuis la page arrive dans la partie suivante.
+- **Partie B.3 (créer une instance)** : formulaire (nom, email admin, plan Postgres) qui
+  appelle `provision_client.provision()` — la MÊME fonction que la CLI, rien réimplémenté.
+  `provision()` prend ~5 minutes en conditions réelles (confirmé) : lancée dans un **thread
+  daemon séparé**, la requête HTTP répond immédiatement, jamais d'attente synchrone. Le slug
+  est dérivé automatiquement du nom côté navigateur (minuscules, accents retirés, tirets —
+  JS vanilla, aucune dépendance) mais reste un champ texte modifiable ; validé aussi
+  côté serveur (format ET unicité) avant de lancer quoi que ce soit.
+
+  **Suivi de la progression** : tant qu'un provisioning tourne, la page se recharge seule
+  toutes les 10s (`<meta http-equiv="refresh">`, pas de JS de polling dédié) et affiche un
+  état "en cours depuis X min". Le résultat final est toujours honnête — succès (lien de
+  setup affiché, confirmation d'envoi de l'email de bienvenue) ou échec (message d'erreur
+  réel ; le rollback est déjà géré par `provision()` elle-même, cf. rollback plus bas) —
+  jamais un succès annoncé à tort.
+
+  **Le suivi vit UNIQUEMENT en mémoire** (dict Python protégé par un verrou, pas de file de
+  jobs persistante — le plus simple possible pour un outil local mono-utilisateur). Deux
+  conséquences assumées, documentées, pas des bugs : si le serveur est arrêté (Ctrl+C)
+  pendant un provisioning en cours, (1) le suivi visuel du job est perdu, mais `provision()`
+  a déjà écrit la ligne `'provisioning'` dans `instances.db` dès le début et la met à jour au
+  fil de l'eau — l'instance reste donc visible dans le tableau principal et son état réel
+  retrouvable via cette même page ou `audit_render_resources.py`, exactement comme pour la
+  coupure réseau déjà rencontrée en conditions réelles (aucune reprise automatique, à
+  nettoyer manuellement le cas échéant) ; (2) l'historique des jobs terminés disparaît aussi
+  au redémarrage — `instances.db` reste la seule source de vérité durable.
+
+  Le lien de setup (token à usage unique, expirant) s'affiche en clair sur la page une fois
+  le provisioning terminé — acceptable pour un outil local mono-utilisateur, mais à garder en
+  tête. `vendor_key`, lui, n'apparaît JAMAIS (même règle que pour suspendre/réactiver).
 
 ### ⚠️ Suspendre n'arrête PAS la facturation Render
 

@@ -37,6 +37,19 @@ SUPPORTED_POSTGRES_VERSIONS = ("11", "12", "13", "14", "15", "16", "17", "18")
 # maximale sur Postgres 13+.
 DEFAULT_POSTGRES_VERSION = "18"
 
+# Sous-ensemble curaté du schéma `plan` de POST /postgres (vérifié sur le schéma OpenAPI réel
+# le 2026-08-15, pas deviné — l'enum complet compte 29 valeurs, jusqu'à accelerated_1024gb,
+# disproportionné pour la sélection dans le formulaire de création — Partie B.3). Utilisée
+# UNIQUEMENT pour peupler ce formulaire (fleet_admin.py) : create_postgres() ci-dessous
+# n'impose PAS cette liste — d'autres plans réels valides (ex: "starter", déjà utilisé dans
+# ops/README.md et les tests) restent acceptables via la CLI. "free" reste refusé dans tous
+# les cas (aucun backup automatique).
+SUPPORTED_POSTGRES_PLANS = (
+    "basic_256mb", "basic_1gb", "basic_4gb",
+    "pro_4gb", "pro_8gb", "pro_16gb", "pro_32gb",
+)
+DEFAULT_POSTGRES_PLAN = "basic_256mb"
+
 
 class RenderAPIError(RuntimeError):
     def __init__(self, message: str, *, status_code: int | None = None):

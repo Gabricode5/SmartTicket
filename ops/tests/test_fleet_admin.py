@@ -26,6 +26,7 @@ from fastapi.testclient import TestClient
 import db
 import delete_client
 import fleet_admin
+import provision_client
 import render_client
 
 
@@ -33,6 +34,37 @@ import render_client
 def isolated_db(tmp_path, monkeypatch):
     monkeypatch.setattr(db, "DB_PATH", tmp_path / "test_instances.db")
     db.init_db()
+
+
+@pytest.fixture(autouse=True)
+def clear_provision_jobs():
+    """_provision_jobs est un dict au niveau du module (délibérément — cf. docstring de
+    fleet_admin.py) : sans ce nettoyage, un job laissé par un test polluerait les suivants."""
+    fleet_admin._provision_jobs.clear()
+    yield
+    fleet_admin._provision_jobs.clear()
+
+
+@pytest.fixture
+def synchronous_background_thread(monkeypatch):
+    """Remplace threading.Thread par une exécution SYNCHRONE de la cible — pour tester
+    _run_provision_job() de façon déterministe, sans race condition/sleep, sans jamais
+    lancer un vrai thread. La route elle-même ne sait pas que ce n'est pas un vrai thread."""
+    class ImmediateThread:
+        def __init__(self, target=None, kwargs=None, **_ignored):
+            self._target = target
+            self._kwargs = kwargs or {}
+
+        def start(self):
+            self._target(**self._kwargs)
+
+    monkeypatch.setattr(fleet_admin.threading, "Thread", ImmediateThread)
+
+
+@pytest.fixture
+def provision_mock():
+    with mock.patch.object(fleet_admin, "provision_client") as provision_mock:
+        yield provision_mock
 
 
 @pytest.fixture
@@ -499,3 +531,157 @@ def test_all_action_routes_are_actually_registered_as_post():
     }
     for action in ("suspend", "reactivate", "delete"):
         assert (f"/instances/{{slug}}/{action}", "POST") in registered, f"route POST /instances/{{slug}}/{action} manquante"
+    assert ("/instances/create", "POST") in registered, "route POST /instances/create manquante"
+
+
+# --- Partie B.3 : création d'instance via provision() en tâche de fond ---
+
+def test_slug_pattern_accepts_valid_and_rejects_invalid_slugs():
+    assert fleet_admin._SLUG_PATTERN.match("acme-corp")
+    assert fleet_admin._SLUG_PATTERN.match("acme123")
+    assert not fleet_admin._SLUG_PATTERN.match("Acme-Corp")  # majuscules
+    assert not fleet_admin._SLUG_PATTERN.match("-acme")  # tiret en tête
+    assert not fleet_admin._SLUG_PATTERN.match("acme-")  # tiret en fin
+    assert not fleet_admin._SLUG_PATTERN.match("acme_corp")  # underscore
+    assert not fleet_admin._SLUG_PATTERN.match("")
+
+
+def test_create_route_rejects_invalid_slug_format_without_starting_a_job(provision_mock, synchronous_background_thread):
+    client = TestClient(fleet_admin.app)
+
+    response = client.post("/instances/create", data={
+        "client_name": "Acme", "slug": "Not A Slug!", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
+    })
+
+    assert "invalide" in response.text
+    provision_mock.provision.assert_not_called()
+    assert fleet_admin._provision_jobs == {}
+
+
+def test_create_route_rejects_missing_required_fields(provision_mock, synchronous_background_thread):
+    client = TestClient(fleet_admin.app)
+
+    response = client.post("/instances/create", data={
+        "client_name": "   ", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
+    })
+
+    assert "requis" in response.text
+    provision_mock.provision.assert_not_called()
+
+
+def test_create_route_rejects_slug_already_in_registry(provision_mock, synchronous_background_thread):
+    """provision() referait cette vérification et refuserait de toute façon — celle-ci n'est
+    qu'un retour immédiat côté formulaire, pour ne pas lancer un thread pour rien."""
+    _insert(slug="acme", statut="active")
+    client = TestClient(fleet_admin.app)
+
+    response = client.post("/instances/create", data={
+        "client_name": "Acme Bis", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
+    })
+
+    assert "existe déjà" in response.text
+    provision_mock.provision.assert_not_called()
+
+
+def test_create_route_calls_provision_with_the_right_arguments(provision_mock, synchronous_background_thread):
+    """MÊME fonction que la CLI (provision_client.provision()), rien réimplémenté ici."""
+    provision_mock.provision.return_value = provision_client.ProvisionResult(
+        slug="acme", status="active", setup_url="https://smartticket-acme.onrender.com/setup?token=abc123",
+        welcome_email_sent=True,
+    )
+    client = TestClient(fleet_admin.app)
+
+    response = client.post("/instances/create", data={
+        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_1gb",
+    })
+
+    provision_mock.provision.assert_called_once_with(
+        client_name="Acme Corp", slug="acme", admin_email="a@acme.com", postgres_plan="basic_1gb",
+    )
+    assert "lancée en tâche de fond" in response.text
+    # Grâce à synchronous_background_thread, le job est déjà terminé à ce stade.
+    # (Chaîne précise, pas juste "job-succeeded" — cette sous-chaîne apparaît aussi dans le
+    # <style> via le sélecteur CSS .job-succeeded, présent que le job existe ou non.)
+    assert 'class="job-card job-succeeded"' in response.text
+    assert "https://smartticket-acme.onrender.com/setup?token=abc123" in response.text
+    assert "Email de bienvenue envoyé" in response.text
+
+
+def test_create_job_reports_provision_failure_honestly_never_as_success(provision_mock, synchronous_background_thread):
+    """Ne JAMAIS afficher un succès quand provision() rapporte un échec (rollback déjà géré
+    par provision() elle-même, cf. provision_client.py) — même exigence que pour les autres
+    actions de cette page."""
+    provision_mock.provision.return_value = provision_client.ProvisionResult(
+        slug="acme", status="failed", error="Erreur Render simulée : quota dépassé",
+    )
+    client = TestClient(fleet_admin.app)
+
+    response = client.post("/instances/create", data={
+        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
+    })
+
+    assert 'class="job-card job-failed"' in response.text
+    assert 'class="job-card job-succeeded"' not in response.text
+    assert "Erreur Render simulée : quota dépassé" in response.text
+
+
+def test_create_job_survives_an_unexpected_exception_from_provision(provision_mock, synchronous_background_thread):
+    """Filet de sécurité : même si provision() levait une exception inattendue (elle ne
+    devrait normalement jamais le faire), le job doit finir en 'failed' plutôt que de rester
+    bloqué à 'running' pour toujours ou de faire planter le thread en silence."""
+    provision_mock.provision.side_effect = RuntimeError("boom inattendu")
+    client = TestClient(fleet_admin.app)
+
+    response = client.post("/instances/create", data={
+        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
+    })
+
+    assert 'class="job-card job-failed"' in response.text
+    assert "boom inattendu" in response.text
+
+
+def test_create_job_never_exposes_vendor_key(provision_mock, synchronous_background_thread):
+    provision_mock.provision.return_value = provision_client.ProvisionResult(
+        slug="acme", status="active", vendor_key="super-secret-vendor-key",
+        setup_url="https://smartticket-acme.onrender.com/setup?token=abc123", welcome_email_sent=True,
+    )
+    client = TestClient(fleet_admin.app)
+
+    response = client.post("/instances/create", data={
+        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
+    })
+
+    assert "super-secret-vendor-key" not in response.text
+
+
+def test_index_shows_postgres_plan_dropdown_with_default_selected(monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    client = TestClient(fleet_admin.app)
+
+    html = client.get("/").text
+
+    assert 'value="basic_256mb" selected' in html
+    for plan in fleet_admin.render.SUPPORTED_POSTGRES_PLANS:
+        assert f'value="{plan}"' in html
+
+
+def test_no_meta_refresh_when_no_job_running(monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    client = TestClient(fleet_admin.app)
+
+    assert 'http-equiv="refresh"' not in client.get("/").text
+
+
+def test_meta_refresh_present_while_a_job_is_running(monkeypatch):
+    """Rafraîchissement automatique honnête : tant qu'un provisioning tourne, la page se
+    recharge seule pour suivre la progression, sans qu'il faille du JS de polling dédié."""
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    fleet_admin._provision_jobs["acme"] = fleet_admin.ProvisionJob(
+        slug="acme", client_name="Acme Corp", status="running", started_at=datetime.now(timezone.utc),
+    )
+
+    client = TestClient(fleet_admin.app)
+    html = client.get("/").text
+
+    assert 'http-equiv="refresh"' in html
+    assert "en cours depuis" in html
