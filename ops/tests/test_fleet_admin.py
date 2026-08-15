@@ -482,3 +482,20 @@ def test_delete_action_offered_for_active_and_suspended_but_not_for_supprimee(mo
     html = client.get("/").text
 
     assert html.count("Supprimer définitivement") == 2  # actif + échoué, pas le déjà-supprimé
+
+
+def test_all_action_routes_are_actually_registered_as_post():
+    """Garde-fou dédié et sans ambiguïté possible : énumère les routes RÉELLEMENT
+    enregistrées sur l'app FastAPI (fleet_admin.app.routes), indépendamment de tout appel
+    HTTP. Les tests *_route_* ci-dessus passent déjà par TestClient (qui dispatche via le
+    vrai routeur ASGI, pas un raccourci vers delete_instance()/_subscription_status_update())
+    et auraient donc déjà échoué en 404 si une route manquait — celui-ci rend l'enregistrement
+    lui-même l'objet direct de l'assertion, pour qu'une régression future (route retirée par
+    erreur, mal orthographiée, mauvaise méthode HTTP) soit signalée sans détour."""
+    registered = {
+        (route.path, method)
+        for route in fleet_admin.app.routes
+        for method in getattr(route, "methods", set())
+    }
+    for action in ("suspend", "reactivate", "delete"):
+        assert (f"/instances/{{slug}}/{action}", "POST") in registered, f"route POST /instances/{{slug}}/{action} manquante"
