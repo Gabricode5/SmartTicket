@@ -16,6 +16,7 @@ Lancer : cd ops && pip install -r requirements-dev.txt && pytest
 """
 import json
 import threading
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from unittest import mock
 
@@ -23,6 +24,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import db
+import delete_client
 import fleet_admin
 import render_client
 
@@ -41,6 +43,15 @@ def render_mock():
         render_mock.list_services.return_value = []
         render_mock.list_postgres_instances.return_value = []
         yield render_mock
+
+
+@pytest.fixture
+def delete_client_mock():
+    """Mocke le MODULE delete_client tel qu'importé par fleet_admin — vérifie que la route
+    de suppression appelle delete_client.delete_instance() (la même fonction que la CLI,
+    déjà testée en détail dans test_delete_client.py) sans en réimplémenter la logique ici."""
+    with mock.patch.object(fleet_admin, "delete_client") as delete_client_mock:
+        yield delete_client_mock
 
 
 def _insert(*, slug, client_name="Client", statut="active", **extra):
@@ -203,13 +214,14 @@ def test_index_route_renders_html_without_crashing(monkeypatch):
 # --- Partie B.2 : suspendre / réactiver via le coupe-circuit d'abonnement existant ---
 
 def test_subscription_status_check_reports_real_status(monkeypatch):
-    response = mock.Mock(ok=True, json=lambda: {"status": "suspended"})
+    response = mock.Mock(ok=True, json=lambda: {"status": "suspended", "updated_at": "2026-08-01T00:00:00+00:00"})
     monkeypatch.setattr(fleet_admin.requests, "get", mock.Mock(return_value=response))
 
-    status, detail = fleet_admin._subscription_status_check("https://instance.example", "vk-1")
+    status, detail, updated_at = fleet_admin._subscription_status_check("https://instance.example", "vk-1")
 
     assert status == "suspended"
     assert detail == ""
+    assert updated_at == "2026-08-01T00:00:00+00:00"
 
 
 def test_subscription_status_check_reports_unknown_when_instance_unreachable(monkeypatch):
@@ -220,10 +232,11 @@ def test_subscription_status_check_reports_unknown_when_instance_unreachable(mon
         mock.Mock(side_effect=fleet_admin.requests.exceptions.ConnectionError("refused")),
     )
 
-    status, detail = fleet_admin._subscription_status_check("https://instance.example", "vk-1")
+    status, detail, updated_at = fleet_admin._subscription_status_check("https://instance.example", "vk-1")
 
     assert status == "unknown"
     assert "refused" in detail
+    assert updated_at is None
 
 
 def test_subscription_status_update_never_raises_and_reports_real_outcome(monkeypatch):
@@ -283,7 +296,7 @@ def test_suspend_route_disabled_when_vendor_key_missing(monkeypatch):
 
     client = TestClient(fleet_admin.app)
     index_response = client.get("/")
-    assert "vendor_key absente — action impossible" in index_response.text
+    assert "vendor_key absente — suspension impossible" in index_response.text
 
     action_response = client.post("/instances/acme/suspend", data={"confirm_slug": "acme"})
     assert "vendor_key ou URL backend absente" in action_response.text
@@ -324,3 +337,148 @@ def test_suspend_then_reactivate_end_to_end_over_real_http(monkeypatch, fake_ins
     assert "action réussie" in reactivate_resp.text
     assert fake_instance_server.state["status"] == "active"
     assert "sub-active" in reactivate_resp.text
+
+
+# --- Partie B.2bis.2 : rappel de facturation ("suspendue depuis X jours") ---
+
+def test_days_since_computes_from_iso_timestamp():
+    ten_days_ago = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat()
+    assert fleet_admin._days_since(ten_days_ago) == 10
+
+
+def test_days_since_handles_z_suffix_and_missing_or_invalid_input():
+    assert fleet_admin._days_since("2026-08-01T00:00:00Z") is not None  # ne plante pas sur le 'Z'
+    assert fleet_admin._days_since(None) is None
+    assert fleet_admin._days_since("n'importe quoi") is None
+
+
+def test_load_fleet_data_computes_since_days_only_for_suspended_instances(monkeypatch):
+    """updated_at vient de models.InstanceSubscription (déjà auto-maintenue côté backend,
+    cf. backend/models.py) — pas d'une nouvelle colonne locale."""
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    five_days_ago = (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
+    _insert(slug="suspended-one", statut="active", backend_url="https://instance.example", vendor_key="vk-1")
+    response = mock.Mock(ok=True, json=lambda: {"status": "suspended", "updated_at": five_days_ago})
+    monkeypatch.setattr(fleet_admin.requests, "get", mock.Mock(return_value=response))
+
+    data = fleet_admin.load_fleet_data(check_health=False)
+
+    assert data.instances[0].subscription_since_days == 5
+
+
+def test_load_fleet_data_since_days_is_none_when_active(monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(slug="acme", statut="active", backend_url="https://instance.example", vendor_key="vk-1")
+    response = mock.Mock(ok=True, json=lambda: {"status": "active", "updated_at": datetime.now(timezone.utc).isoformat()})
+    monkeypatch.setattr(fleet_admin.requests, "get", mock.Mock(return_value=response))
+
+    data = fleet_admin.load_fleet_data(check_health=False)
+
+    assert data.instances[0].subscription_since_days is None
+
+
+def test_billing_reminder_shown_for_a_long_suspended_instance(monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    seventeen_days_ago = (datetime.now(timezone.utc) - timedelta(days=17)).isoformat()
+    _insert(slug="acme", statut="active", client_name="Acme Corp", backend_url="https://instance.example", vendor_key="vk-1")
+    response = mock.Mock(ok=True, json=lambda: {"status": "suspended", "updated_at": seventeen_days_ago})
+    monkeypatch.setattr(fleet_admin.requests, "get", mock.Mock(return_value=response))
+
+    client = TestClient(fleet_admin.app)
+    response_html = client.get("/").text
+
+    assert "suspendue depuis 17 jour" in response_html
+    assert "facturation Render TOUJOURS ACTIVE" in response_html
+
+
+# --- Partie B.2bis.1 : suppression définitive, double confirmation ---
+
+def test_delete_route_rejects_mismatched_slug_without_calling_delete_instance(delete_client_mock, render_mock):
+    _insert(slug="acme", statut="active")
+    client = TestClient(fleet_admin.app)
+
+    response = client.post("/instances/acme/delete", data={"confirm_slug": "not-acme", "confirm_destruction": "yes"})
+
+    assert "Confirmation invalide" in response.text
+    delete_client_mock.delete_instance.assert_not_called()
+
+
+def test_delete_route_rejects_missing_checkbox_confirmation(delete_client_mock, render_mock):
+    """Garde-fou EN PLUS de la saisie du slug — plus strict que suspendre/réactiver, cf.
+    consigne explicite de la Partie B.2bis (action irréversible)."""
+    _insert(slug="acme", statut="active")
+    client = TestClient(fleet_admin.app)
+
+    response = client.post("/instances/acme/delete", data={"confirm_slug": "acme"})  # pas de confirm_destruction
+
+    assert "Case de confirmation non cochée" in response.text
+    delete_client_mock.delete_instance.assert_not_called()
+
+
+def test_delete_route_calls_delete_instance_with_the_right_slug(delete_client_mock, render_mock):
+    """Vérifie que fleet_admin appelle delete_client.delete_instance() — MÊME fonction que
+    la CLI (déjà testée en détail dans test_delete_client.py), rien réimplémenté ici."""
+    _insert(slug="acme", statut="active", client_name="Acme Corp")
+    delete_client_mock.delete_instance.return_value = delete_client.DeleteResult(slug="acme", status="deleted")
+
+    client = TestClient(fleet_admin.app)
+    response = client.post("/instances/acme/delete", data={"confirm_slug": "acme", "confirm_destruction": "yes"})
+
+    delete_client_mock.delete_instance.assert_called_once_with("acme")
+    assert "action réussie" in response.text
+
+
+def test_delete_route_removes_instance_from_list_on_real_success(render_mock, monkeypatch):
+    """Bout en bout avec le VRAI delete_client.delete_instance() (seul render_client est
+    mocké, pas delete_client) : l'instance doit réellement disparaître du registre ET de la
+    liste re-affichée, pas juste être annoncée comme supprimée."""
+    with mock.patch.object(delete_client, "render") as delete_render_mock:
+        delete_render_mock.RenderAPIError = render_client.RenderAPIError
+        delete_render_mock.ensure_configured.return_value = None
+        delete_render_mock.delete_resources.return_value = []  # suppression Render réussie
+
+        _insert(
+            slug="acme", statut="active", client_name="Acme Corp",
+            render_backend_service_id="srv-b", render_frontend_service_id="srv-f", render_database_id="pg-1",
+        )
+
+        client = TestClient(fleet_admin.app)
+        response = client.post("/instances/acme/delete", data={"confirm_slug": "acme", "confirm_destruction": "yes"})
+
+        assert "action réussie" in response.text
+        assert "Acme Corp" not in response.text
+        assert db.get_instance("acme") is None
+        delete_render_mock.delete_resources.assert_called_once_with([
+            ("service backend", "service", "srv-b"),
+            ("service frontend", "service", "srv-f"),
+            ("base Postgres", "postgres", "pg-1"),
+        ])
+
+
+def test_delete_route_reports_partial_failure_honestly(delete_client_mock, render_mock):
+    """Ne JAMAIS afficher un succès quand delete_instance() rapporte un échec partiel
+    (ligne conservée en 'deletion_failed', cf. delete_client.py) — même exigence que pour
+    suspendre/réactiver."""
+    _insert(slug="acme", statut="active", client_name="Acme Corp")
+    delete_client_mock.delete_instance.return_value = delete_client.DeleteResult(
+        slug="acme", status="failed", error="1 ressource(s) Render n'ont pas pu être supprimées : base Postgres (id=pg-1).",
+    )
+
+    client = TestClient(fleet_admin.app)
+    response = client.post("/instances/acme/delete", data={"confirm_slug": "acme", "confirm_destruction": "yes"})
+
+    assert "action réussie" not in response.text
+    assert "pg-1" in response.text
+    assert "Acme Corp" in response.text  # toujours dans la liste, pas de faux succès
+
+
+def test_delete_action_offered_for_active_and_suspended_but_not_for_supprimee(monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(slug="acme-active", statut="active", client_name="Actif")
+    _insert(slug="acme-failed", statut="failed", client_name="Echoue")
+    _insert(slug="acme-gone", statut="supprimee", client_name="Deja Supprime")
+
+    client = TestClient(fleet_admin.app)
+    html = client.get("/").text
+
+    assert html.count("Supprimer définitivement") == 2  # actif + échoué, pas le déjà-supprimé

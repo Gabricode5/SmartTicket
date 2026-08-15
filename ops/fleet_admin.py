@@ -17,6 +17,7 @@ CETTE PAGE PEUT CRÉER/SUSPENDRE/SUPPRIMER DES RESSOURCES RENDER PAYANTES DÈS L
 import dataclasses
 import logging
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
@@ -26,6 +27,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 import db
+import delete_client
 import render_client as render
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -54,6 +56,7 @@ class InstanceView:
     health_detail: str
     subscription_status: str  # "active" | "suspended" | "unknown" | "not_applicable"
     subscription_detail: str
+    subscription_since_days: int | None  # nb de jours dans le statut actuel (suspended surtout) — None si inconnu
     can_manage_subscription: bool  # False si vendor_key ou backend_url absent — désactive les boutons
 
 
@@ -79,21 +82,43 @@ def _health_check(url: str, *, timeout: float = 5.0) -> tuple[str, str]:
         return "unreachable", str(exc)
 
 
-def _subscription_status_check(backend_url: str, vendor_key: str, *, timeout: float = 5.0) -> tuple[str, str]:
+def _subscription_status_check(backend_url: str, vendor_key: str, *, timeout: float = 5.0) -> tuple[str, str, str | None]:
     """GET /v1/instance/subscription-status de L'INSTANCE elle-même (pas l'API Render) —
     coupe-circuit d'abonnement déjà en place côté backend (backend/routers/instance.py),
     protégé par X-Vendor-Key. Distinct du statut Render : une instance peut être 'live' côté
-    Render mais 'suspended' au niveau abonnement (402 sur /v1/* pour ses utilisateurs)."""
+    Render mais 'suspended' au niveau abonnement (402 sur /v1/* pour ses utilisateurs).
+
+    Retourne aussi `updated_at` (chaîne ISO brute, ou None) : models.InstanceSubscription a
+    déjà une colonne `updated_at` auto-maintenue (onupdate=func.now()), déjà exposée par ce
+    endpoint — pas besoin d'un nouveau champ local pour savoir depuis quand une instance est
+    suspendue, la donnée existe déjà côté source et est plus fiable qu'un suivi local (qui ne
+    couvrirait que les actions passées par CETTE page)."""
     try:
         response = requests.get(
             f"{backend_url}/v1/instance/subscription-status",
             headers={"X-Vendor-Key": vendor_key}, timeout=timeout,
         )
         if not response.ok:
-            return "unknown", f"HTTP {response.status_code}"
-        return response.json().get("status", "unknown"), ""
+            return "unknown", f"HTTP {response.status_code}", None
+        payload = response.json()
+        return payload.get("status", "unknown"), "", payload.get("updated_at")
     except requests.exceptions.RequestException as exc:
-        return "unknown", str(exc)
+        return "unknown", str(exc), None
+
+
+def _days_since(iso_timestamp: str | None) -> int | None:
+    """Convertit un timestamp ISO (tel que renvoyé par updated_at) en nombre de jours
+    écoulés. Ne lève jamais — un format inattendu donne None plutôt qu'un crash de page."""
+    if not iso_timestamp:
+        return None
+    try:
+        then = datetime.fromisoformat(iso_timestamp.replace("Z", "+00:00"))
+        if then.tzinfo is None:
+            then = then.replace(tzinfo=timezone.utc)
+        delta = datetime.now(timezone.utc) - then
+        return max(0, delta.days)
+    except ValueError:
+        return None
 
 
 def _subscription_status_update(backend_url: str, vendor_key: str, *, status: str, timeout: float = 10.0) -> tuple[bool, str]:
@@ -157,10 +182,11 @@ def load_fleet_data(*, check_health: bool = True, check_subscription: bool = Tru
         # vers l'instance, jamais placé sur InstanceView (qui alimente le HTML rendu) — cf.
         # garde-fou "ne pas exposer le vendor_key" (README/consigne Partie B.2).
         can_manage_subscription = bool(row["vendor_key"]) and bool(row["backend_url"])
+        subscription_updated_at = None
         if row["statut"] != "active":
             subscription_status, subscription_detail = "not_applicable", ""
         elif check_subscription and can_manage_subscription:
-            subscription_status, subscription_detail = _subscription_status_check(row["backend_url"], row["vendor_key"])
+            subscription_status, subscription_detail, subscription_updated_at = _subscription_status_check(row["backend_url"], row["vendor_key"])
         elif not can_manage_subscription:
             subscription_status, subscription_detail = "unknown", "vendor_key ou URL backend absente en registre"
         else:
@@ -176,6 +202,7 @@ def load_fleet_data(*, check_health: bool = True, check_subscription: bool = Tru
             render_resource_missing=resource_missing,
             health_status=health_status, health_detail=health_detail,
             subscription_status=subscription_status, subscription_detail=subscription_detail,
+            subscription_since_days=_days_since(subscription_updated_at) if subscription_status == "suspended" else None,
             can_manage_subscription=can_manage_subscription,
         ))
 
@@ -236,6 +263,44 @@ def suspend_instance(request: Request, slug: str, confirm_slug: str = Form(...))
 @app.post("/instances/{slug}/reactivate", response_class=HTMLResponse)
 def reactivate_instance(request: Request, slug: str, confirm_slug: str = Form(...)) -> HTMLResponse:
     return _handle_subscription_action(request, slug, target_status="active", confirm_slug=confirm_slug)
+
+
+def _handle_delete_action(request: Request, slug: str, *, confirm_slug: str, confirm_destruction: str | None) -> HTMLResponse:
+    """Action la plus dangereuse de la page : IRRÉVERSIBLE (base + toutes les données du
+    client détruites). Deux confirmations distinctes requises — saisie exacte du slug (même
+    motif que suspendre/réactiver) PLUS une case cochée explicitement ("je comprends que les
+    données seront détruites") — plus strict que la suspension, volontairement. Appelle
+    delete_client.delete_instance() : MÊME fonction que la CLI, rien réimplémenté ici."""
+    row = db.get_instance(slug)
+    if not row:
+        action_result = {"slug": slug, "ok": False, "message": f"Instance '{slug}' introuvable dans le registre."}
+    elif confirm_slug.strip() != slug:
+        action_result = {"slug": slug, "ok": False, "message": "Confirmation invalide : le slug tapé ne correspond pas — suppression annulée."}
+    elif confirm_destruction != "yes":
+        action_result = {"slug": slug, "ok": False, "message": "Case de confirmation non cochée — suppression annulée."}
+    else:
+        result = delete_client.delete_instance(slug)
+        if result.status == "deleted":
+            action_result = {"slug": slug, "ok": True, "message": "Instance supprimée : base Postgres, service backend et service frontend retirés, ligne retirée du registre."}
+        else:
+            # "failed" (échec partiel, ligne conservée en 'deletion_failed' — cf.
+            # delete_instance()) ou "not_found" : dans les deux cas, ne JAMAIS afficher un
+            # succès qui n'a pas eu lieu.
+            action_result = {"slug": slug, "ok": False, "message": result.error}
+
+    data = load_fleet_data()
+    return templates.TemplateResponse(request, "index.html", {
+        "instances": data.instances, "orphans": data.orphans, "render_available": data.render_available,
+        "action_result": action_result,
+    })
+
+
+@app.post("/instances/{slug}/delete", response_class=HTMLResponse)
+def delete_instance_route(
+    request: Request, slug: str,
+    confirm_slug: str = Form(...), confirm_destruction: str | None = Form(None),
+) -> HTMLResponse:
+    return _handle_delete_action(request, slug, confirm_slug=confirm_slug, confirm_destruction=confirm_destruction)
 
 
 def main() -> int:

@@ -179,7 +179,37 @@ directement — le coupe-circuit d'abonnement (`GET`/`PUT /v1/instance/subscript
   (`test_vendor_key_never_appears_in_rendered_html`). Une instance dont le `vendor_key` est
   absent en base (ex: provisionnée avant son ajout au schéma) affiche un message explicite et
   désactive l'action plutôt que de planter.
+- **Partie B.2bis (supprimer + cycle de vie)** : bouton "Supprimer définitivement" par
+  instance, qui appelle `delete_client.delete_instance()` — la MÊME fonction que la CLI (le
+  script `delete_client.py` a été refactoré pour l'exposer, exactement comme `provision()`
+  dans `provision_client.py` : logique pure d'un côté, CLI mince de l'autre). Irréversible,
+  donc garde-fous **plus stricts** que la suspension : confirmation par saisie du slug **PLUS**
+  une case à cocher explicite ("je comprends que les données seront détruites"). Une instance
+  suspendue depuis longtemps affiche un rappel de facturation (cf. ci-dessous). Disponible
+  pour toute instance dont le statut local n'est pas déjà `'supprimee'`.
 - Créer une instance depuis la page arrive dans la partie suivante.
+
+### ⚠️ Suspendre n'arrête PAS la facturation Render
+
+**Point à retenir absolument** : `PUT /v1/instance/subscription-status` à `"suspended"`
+coupe l'accès des utilisateurs finaux du client (402 sur `/v1/*`), mais **le conteneur
+Render reste vivant** — le service continue d'être facturé normalement. Seul le
+**déprovisionnement** (`delete_client.py` / bouton Supprimer) arrête réellement les coûts.
+
+La page affiche un rappel ("suspendue depuis X jours — facturation Render toujours active")
+calculé à partir du champ `updated_at` déjà renvoyé par
+`GET /v1/instance/subscription-status` (colonne `updated_at` de
+`models.InstanceSubscription`, auto-maintenue côté backend, `onupdate=func.now()`) — pas
+besoin d'une colonne locale supplémentaire pour ça.
+
+**Cycle recommandé** (décision manuelle à chaque étape, **pas d'automatisation** pour
+l'instant — à l'échelle actuelle, 0 à quelques clients, supprimer un client automatiquement
+serait trop risqué) :
+
+1. Impayé constaté → **suspendre** depuis la page (coupe l'accès immédiatement).
+2. Délai de grâce (ex. 15-30 jours, à la main du vendeur selon le contexte du client).
+3. Si l'impayé persiste après ce délai → **supprimer** (déprovisionnement complet, arrête la
+   facturation).
 
 ## Consulter la flotte (CLI + SQL, pas d'interface)
 

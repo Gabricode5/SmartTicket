@@ -35,6 +35,8 @@
     details form p { margin: 0 0 0.4rem; font-size: 0.8rem; }
     details input { font-size: 0.85rem; padding: 0.2rem 0.4rem; }
     details button { font-size: 0.8rem; margin-left: 0.3rem; }
+    details.danger-action summary { color: #b02a37; font-weight: 600; }
+    .billing-reminder { color: #997404; font-size: 0.78rem; }
     footer { margin-top: 2rem; font-size: 0.8rem; color: #888; }
 </style>
 </head>
@@ -76,34 +78,62 @@
                 <td class="sub-{{ i.subscription_status }}">
                     {{ i.subscription_status if i.statut == "active" else "—" }}
                     {% if i.subscription_detail %}<br><small>{{ i.subscription_detail }}</small>{% endif %}
+                    {% if i.subscription_status == "suspended" and i.subscription_since_days is not none %}
+                    <br><span class="billing-reminder">
+                        suspendue depuis {{ i.subscription_since_days }} jour{{ "s" if i.subscription_since_days != 1 else "" }}
+                        — facturation Render TOUJOURS ACTIVE (le conteneur reste vivant) ;
+                        envisager la suppression si l'impayé persiste
+                    </span>
+                    {% endif %}
                 </td>
                 <td>
-                    {% if i.statut != "active" %}
-                        —
-                    {% elif not i.can_manage_subscription %}
-                        <em class="missing">vendor_key absente — action impossible depuis la page</em>
-                    {% else %}
-                        {% if i.subscription_status != "suspended" %}
-                        <details>
-                            <summary>Suspendre</summary>
-                            <form method="post" action="/instances/{{ i.slug }}/suspend">
-                                <p>Coupe l'accès à TOUS les utilisateurs finaux de ce client
-                                (402 sur /v1/*). Tape <code>{{ i.slug }}</code> pour confirmer :</p>
-                                <input type="text" name="confirm_slug" placeholder="{{ i.slug }}" required autocomplete="off">
-                                <button type="submit">Confirmer la suspension</button>
-                            </form>
-                        </details>
+                    {% if i.statut == "active" %}
+                        {% if not i.can_manage_subscription %}
+                            <em class="missing">vendor_key absente — suspension impossible depuis la page</em>
+                        {% else %}
+                            {% if i.subscription_status != "suspended" %}
+                            <details>
+                                <summary>Suspendre</summary>
+                                <form method="post" action="/instances/{{ i.slug }}/suspend">
+                                    <p>Coupe l'accès à TOUS les utilisateurs finaux de ce client
+                                    (402 sur /v1/*) — mais N'ARRÊTE PAS la facturation Render
+                                    (le conteneur reste vivant, ~facturation habituelle par mois).
+                                    Tape <code>{{ i.slug }}</code> pour confirmer :</p>
+                                    <input type="text" name="confirm_slug" placeholder="{{ i.slug }}" required autocomplete="off">
+                                    <button type="submit">Confirmer la suspension</button>
+                                </form>
+                            </details>
+                            {% endif %}
+                            {% if i.subscription_status != "active" %}
+                            <details>
+                                <summary>Réactiver</summary>
+                                <form method="post" action="/instances/{{ i.slug }}/reactivate">
+                                    <p>Tape <code>{{ i.slug }}</code> pour confirmer :</p>
+                                    <input type="text" name="confirm_slug" placeholder="{{ i.slug }}" required autocomplete="off">
+                                    <button type="submit">Confirmer la réactivation</button>
+                                </form>
+                            </details>
+                            {% endif %}
                         {% endif %}
-                        {% if i.subscription_status != "active" %}
-                        <details>
-                            <summary>Réactiver</summary>
-                            <form method="post" action="/instances/{{ i.slug }}/reactivate">
-                                <p>Tape <code>{{ i.slug }}</code> pour confirmer :</p>
-                                <input type="text" name="confirm_slug" placeholder="{{ i.slug }}" required autocomplete="off">
-                                <button type="submit">Confirmer la réactivation</button>
-                            </form>
-                        </details>
-                        {% endif %}
+                    {% endif %}
+                    {% if i.statut != "supprimee" %}
+                    <details class="danger-action">
+                        <summary>Supprimer définitivement</summary>
+                        <form method="post" action="/instances/{{ i.slug }}/delete">
+                            <p><strong>IRRÉVERSIBLE.</strong> Détruit la base Postgres, le
+                            service backend et le service frontend de <strong>{{ i.client_name }}</strong>
+                            ({{ i.slug }}), ainsi que TOUTES les données de ses utilisateurs
+                            (tickets, comptes, base de connaissances). Seul le déprovisionnement
+                            arrête réellement la facturation Render — contrairement à la suspension.</p>
+                            <p>1. Tape <code>{{ i.slug }}</code> pour confirmer :</p>
+                            <input type="text" name="confirm_slug" placeholder="{{ i.slug }}" required autocomplete="off">
+                            <p style="margin-top:0.5rem">
+                                <label><input type="checkbox" name="confirm_destruction" value="yes" required>
+                                Je comprends que les données seront détruites définitivement.</label>
+                            </p>
+                            <button type="submit">Confirmer la suppression définitive</button>
+                        </form>
+                    </details>
                     {% endif %}
                 </td>
                 <td class="links">
