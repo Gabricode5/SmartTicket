@@ -38,7 +38,7 @@ from pathlib import Path
 import requests
 import uvicorn
 from fastapi import FastAPI, Form, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 import db
@@ -132,6 +132,37 @@ def _run_provision_job(*, client_name: str, slug: str, admin_email: str, postgre
         else:
             job.status = "failed"
             job.error = result.error
+
+
+_flash_lock = threading.Lock()
+_flash_action_result: dict | None = None
+_flash_creation_result: dict | None = None
+
+
+def _set_flash(*, action_result: dict | None = None, creation_result: dict | None = None) -> None:
+    """Stocke le résultat d'une action POST pour l'afficher UNE FOIS sur la page racine
+    après une redirection — pattern POST-Redirect-GET. Bug réel du 2026-08-15 : les routes
+    POST rendaient le HTML directement sur leur propre URL (ex: POST /instances/create) ;
+    tout rafraîchissement (F5, ou le <meta refresh> de cette même page) rejouait alors la
+    requête en GET sur cette URL -> 405 Method Not Allowed, alors que l'action elle-même
+    avait bien réussi. Le flash vit en mémoire (jamais dans l'URL en query string : pas de
+    secret ni de contenu arbitraire exposé, et surtout pas rejoué sur un F5 ultérieur de "/"
+    comme le serait un flash encodé dans l'URL)."""
+    global _flash_action_result, _flash_creation_result
+    with _flash_lock:
+        _flash_action_result = action_result
+        _flash_creation_result = creation_result
+
+
+def _pop_flash() -> tuple[dict | None, dict | None]:
+    """Lit ET efface le flash — affiché une seule fois. Un F5 sur "/" juste après montrera
+    donc une page propre sans le bandeau de résultat, jamais un 405."""
+    global _flash_action_result, _flash_creation_result
+    with _flash_lock:
+        action_result, creation_result = _flash_action_result, _flash_creation_result
+        _flash_action_result = None
+        _flash_creation_result = None
+    return action_result, creation_result
 
 
 def _provision_jobs_view() -> list[dict]:
@@ -301,15 +332,14 @@ def load_fleet_data(*, check_health: bool = True, check_subscription: bool = Tru
     return FleetData(instances=instances, orphans=orphans, render_available=render_available)
 
 
-def _render_fleet_page(
-    request: Request, *, action_result: dict | None = None, creation_result: dict | None = None,
-) -> HTMLResponse:
-    """Rendu commun à TOUTES les routes de cette page (lecture, suspend/reactivate, delete,
-    create) — un seul endroit qui assemble instances + orphelines + jobs de provisioning en
-    cours, pour que ces informations restent visibles quelle que soit la dernière action."""
+def _render_fleet_page(request: Request) -> HTMLResponse:
+    """Rendu de la page racine UNIQUEMENT — jamais appelée directement par une route POST
+    (cf. _set_flash/_pop_flash : pattern POST-Redirect-GET, toute action POST redirige ici
+    plutôt que de rendre le HTML sur sa propre URL)."""
     db.init_db()
     data = load_fleet_data()
     jobs = _provision_jobs_view()
+    action_result, creation_result = _pop_flash()
     return templates.TemplateResponse(request, "index.html", {
         "instances": data.instances, "orphans": data.orphans, "render_available": data.render_available,
         "action_result": action_result, "creation_result": creation_result,
@@ -323,10 +353,10 @@ def index(request: Request) -> HTMLResponse:
     return _render_fleet_page(request)
 
 
-def _handle_subscription_action(request: Request, slug: str, *, target_status: str, confirm_slug: str) -> HTMLResponse:
+def _handle_subscription_action(slug: str, *, target_status: str, confirm_slug: str) -> None:
     """Commun à /suspend et /reactivate : même validation de confirmation, même appel HTTP
-    (_subscription_status_update, jamais dupliqué), même ré-affichage HONNÊTE du résultat —
-    on ne suppose JAMAIS le succès, on ré-interroge la source après coup (load_fleet_data()
+    (_subscription_status_update, jamais dupliqué), même résultat HONNÊTE déposé en flash —
+    on ne suppose JAMAIS le succès, le prochain GET / ré-interroge la source (load_fleet_data()
     refait un GET frais pour CETTE instance comme pour toutes les autres)."""
     row = db.get_instance(slug)
     if not row:
@@ -341,20 +371,22 @@ def _handle_subscription_action(request: Request, slug: str, *, target_status: s
         ok, message = _subscription_status_update(row["backend_url"], row["vendor_key"], status=target_status)
         action_result = {"slug": slug, "ok": ok, "message": message}
 
-    return _render_fleet_page(request, action_result=action_result)
+    _set_flash(action_result=action_result)
 
 
-@app.post("/instances/{slug}/suspend", response_class=HTMLResponse)
-def suspend_instance(request: Request, slug: str, confirm_slug: str = Form(...)) -> HTMLResponse:
-    return _handle_subscription_action(request, slug, target_status="suspended", confirm_slug=confirm_slug)
+@app.post("/instances/{slug}/suspend")
+def suspend_instance(slug: str, confirm_slug: str = Form(...)) -> RedirectResponse:
+    _handle_subscription_action(slug, target_status="suspended", confirm_slug=confirm_slug)
+    return RedirectResponse("/", status_code=303)
 
 
-@app.post("/instances/{slug}/reactivate", response_class=HTMLResponse)
-def reactivate_instance(request: Request, slug: str, confirm_slug: str = Form(...)) -> HTMLResponse:
-    return _handle_subscription_action(request, slug, target_status="active", confirm_slug=confirm_slug)
+@app.post("/instances/{slug}/reactivate")
+def reactivate_instance(slug: str, confirm_slug: str = Form(...)) -> RedirectResponse:
+    _handle_subscription_action(slug, target_status="active", confirm_slug=confirm_slug)
+    return RedirectResponse("/", status_code=303)
 
 
-def _handle_delete_action(request: Request, slug: str, *, confirm_slug: str, confirm_destruction: str | None) -> HTMLResponse:
+def _handle_delete_action(slug: str, *, confirm_slug: str, confirm_destruction: str | None) -> None:
     """Action la plus dangereuse de la page : IRRÉVERSIBLE (base + toutes les données du
     client détruites). Deux confirmations distinctes requises — saisie exacte du slug (même
     motif que suspendre/réactiver) PLUS une case cochée explicitement ("je comprends que les
@@ -377,26 +409,28 @@ def _handle_delete_action(request: Request, slug: str, *, confirm_slug: str, con
             # succès qui n'a pas eu lieu.
             action_result = {"slug": slug, "ok": False, "message": result.error}
 
-    return _render_fleet_page(request, action_result=action_result)
+    _set_flash(action_result=action_result)
 
 
-@app.post("/instances/{slug}/delete", response_class=HTMLResponse)
+@app.post("/instances/{slug}/delete")
 def delete_instance_route(
-    request: Request, slug: str,
-    confirm_slug: str = Form(...), confirm_destruction: str | None = Form(None),
-) -> HTMLResponse:
-    return _handle_delete_action(request, slug, confirm_slug=confirm_slug, confirm_destruction=confirm_destruction)
+    slug: str, confirm_slug: str = Form(...), confirm_destruction: str | None = Form(None),
+) -> RedirectResponse:
+    _handle_delete_action(slug, confirm_slug=confirm_slug, confirm_destruction=confirm_destruction)
+    return RedirectResponse("/", status_code=303)
 
 
-@app.post("/instances/create", response_class=HTMLResponse)
+@app.post("/instances/create")
 def create_instance_route(
-    request: Request,
     client_name: str = Form(...), slug: str = Form(...),
     admin_email: str = Form(...), postgres_plan: str = Form(render.DEFAULT_POSTGRES_PLAN),
-) -> HTMLResponse:
-    """Lance provision() en tâche de fond (cf. docstring du module) et répond IMMÉDIATEMENT —
-    jamais d'attente synchrone des ~5 minutes que prend un provisioning réel. MÊME fonction
-    que la CLI (provision_client.provision()), rien réimplémenté ici."""
+) -> RedirectResponse:
+    """Lance provision() en tâche de fond (cf. docstring du module) et répond IMMÉDIATEMENT
+    par une redirection — jamais d'attente synchrone des ~5 minutes que prend un
+    provisioning réel, et jamais de rendu HTML directement sur cette URL de POST (sans ça,
+    un F5 ou le <meta refresh> de la page suivante rejouerait ce POST en GET -> 405, bug réel
+    du 2026-08-15). MÊME fonction que la CLI (provision_client.provision()), rien
+    réimplémenté ici."""
     client_name = client_name.strip()
     slug = slug.strip().lower()
     admin_email = admin_email.strip()
@@ -425,7 +459,8 @@ def create_instance_route(
             "message": f"Création de '{slug}' lancée en tâche de fond (~5 min). L'email de bienvenue partira au client à la fin — suis la progression ci-dessous.",
         }
 
-    return _render_fleet_page(request, creation_result=creation_result)
+    _set_flash(creation_result=creation_result)
+    return RedirectResponse("/", status_code=303)
 
 
 def main() -> int:

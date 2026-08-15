@@ -7,8 +7,15 @@
 {% endif %}
 <title>SmartTicket — Gestion de flotte (local)</title>
 <style>
-    :root { color-scheme: light dark; }
-    body { font-family: system-ui, -apple-system, sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+    /* Volontairement clair uniquement (pas de "color-scheme: light dark") : cette page mêle
+       de nombreux blocs à fond clair codé en dur (badges, panneau de suppression, formulaires)
+       sans couleur de texte explicite sur chacun — laisser le navigateur basculer en mode
+       sombre y faisait hériter un texte clair par défaut sur ces fonds clairs, illisible
+       (bug réel du 2026-08-15). Un outil interne mono-utilisateur n'a pas besoin des deux
+       thèmes ; figer un seul thème cohérent est plus simple à maintenir correctement que de
+       fixer une couleur de texte explicite sur chaque bloc existant et à venir. */
+    :root { color-scheme: light; }
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; background: #fff; color: #212529; }
     h1 { font-size: 1.4rem; }
     .warning { background: #fff3cd; color: #664d03; border: 1px solid #ffe69c; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
     .danger { background: #f8d7da; color: #58151c; border: 1px solid #f1aeb5; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
@@ -34,7 +41,7 @@
     .links a { display: block; }
     details { margin-bottom: 0.3rem; }
     details summary { cursor: pointer; color: #0d6efd; font-size: 0.85rem; }
-    details form { margin-top: 0.4rem; padding: 0.5rem; background: #f8f9fa; border-radius: 4px; }
+    details form { margin-top: 0.4rem; padding: 0.5rem; background: #f8f9fa; color: #212529; border-radius: 4px; }
     details form p { margin: 0 0 0.4rem; font-size: 0.8rem; }
     details input { font-size: 0.85rem; padding: 0.2rem 0.4rem; }
     details button { font-size: 0.8rem; margin-left: 0.3rem; }

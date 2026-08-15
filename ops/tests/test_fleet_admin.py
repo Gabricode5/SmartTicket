@@ -685,3 +685,92 @@ def test_meta_refresh_present_while_a_job_is_running(monkeypatch):
 
     assert 'http-equiv="refresh"' in html
     assert "en cours depuis" in html
+
+
+# --- Pattern POST-Redirect-GET, bug réel du 2026-08-15 : les routes POST rendaient le HTML
+# directement sur leur propre URL (ex: réponse 200 sur POST /instances/create) — tout
+# rafraîchissement de CETTE page (F5, ou le <meta refresh> qu'elle contenait elle-même
+# lorsqu'un job tournait) rejouait alors la même requête en GET -> 405 Method Not Allowed,
+# alors que l'action avait bien réussi. Ces tests utilisent explicitement
+# follow_redirects=False pour observer la réponse BRUTE du POST (ce que les tests
+# précédents, qui suivent les redirections par défaut, ne peuvent pas distinguer d'un rendu
+# direct) puis simulent un F5 en rejouant la même requête en GET.
+
+def test_suspend_route_returns_a_303_redirect_to_root_not_html_directly(render_mock, monkeypatch):
+    _insert(slug="acme", statut="active", backend_url="https://instance.example", vendor_key="vk-1")
+    monkeypatch.setattr(fleet_admin.requests, "put", mock.Mock(return_value=mock.Mock(ok=True, json=lambda: {"status": "suspended"})))
+    client = TestClient(fleet_admin.app, follow_redirects=False)
+
+    response = client.post("/instances/acme/suspend", data={"confirm_slug": "acme"})
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+    # F5 sur cette page suivante : un GET normal, jamais un 405 (la requête POST-Redirect-GET
+    # n'a jamais laissé le navigateur "sur" l'URL du POST).
+    refresh = client.get(response.headers["location"])
+    assert refresh.status_code == 200
+
+
+def test_delete_route_returns_a_303_redirect_to_root_not_html_directly(delete_client_mock, render_mock):
+    _insert(slug="acme", statut="active")
+    delete_client_mock.delete_instance.return_value = delete_client.DeleteResult(slug="acme", status="deleted")
+    client = TestClient(fleet_admin.app, follow_redirects=False)
+
+    response = client.post("/instances/acme/delete", data={"confirm_slug": "acme", "confirm_destruction": "yes"})
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+    refresh = client.get(response.headers["location"])
+    assert refresh.status_code == 200
+
+
+def test_create_route_returns_a_303_redirect_to_root_not_html_directly(provision_mock, synchronous_background_thread):
+    """Le scénario RAPPORTÉ précisément : POST /instances/create suivi d'un F5 (ou du
+    <meta refresh> automatique déclenché par le job 'en cours') ne doit plus jamais tomber
+    sur un 405 — c'était le cas avant ce correctif, la page restait sur l'URL du POST."""
+    provision_mock.provision.return_value = provision_client.ProvisionResult(slug="acme", status="active")
+    client = TestClient(fleet_admin.app, follow_redirects=False)
+
+    response = client.post("/instances/create", data={
+        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
+    })
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+    # Simule le <meta refresh> automatique (ou un F5 manuel) sur la page suivante.
+    first_refresh = client.get(response.headers["location"])
+    assert first_refresh.status_code == 200
+    second_refresh = client.get(response.headers["location"])
+    assert second_refresh.status_code == 200
+
+
+def test_flash_message_shown_once_then_cleared_on_next_refresh(delete_client_mock, render_mock):
+    """Le flash ne doit apparaître qu'UNE fois — un F5 après coup montre une page propre,
+    jamais le même bandeau de résultat rejoué indéfiniment (contrairement à ce qu'un flash
+    encodé dans l'URL en query string aurait produit)."""
+    _insert(slug="acme", statut="active")
+    delete_client_mock.delete_instance.return_value = delete_client.DeleteResult(slug="acme", status="deleted")
+    client = TestClient(fleet_admin.app)
+
+    after_action = client.post("/instances/acme/delete", data={"confirm_slug": "acme", "confirm_destruction": "yes"})
+    assert "action réussie" in after_action.text
+
+    after_refresh = client.get("/")
+    assert "action réussie" not in after_refresh.text
+
+
+def test_suspend_reactivate_delete_routes_all_return_a_redirect_response(monkeypatch):
+    """Garde-fou explicite : la classe de bug rapportée (rendu direct sur l'URL du POST) ne
+    doit jamais revenir — vérifie que les 4 routes POST renvoient bien une redirection 303,
+    jamais un corps HTML à 200 sur leur propre URL."""
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    client = TestClient(fleet_admin.app, follow_redirects=False)
+
+    for path, data in [
+        ("/instances/unknown-slug/suspend", {"confirm_slug": "unknown-slug"}),
+        ("/instances/unknown-slug/reactivate", {"confirm_slug": "unknown-slug"}),
+        ("/instances/unknown-slug/delete", {"confirm_slug": "unknown-slug", "confirm_destruction": "yes"}),
+    ]:
+        response = client.post(path, data=data)
+        assert response.status_code == 303, f"{path} : attendu 303, reçu {response.status_code}"
+        assert response.headers["location"] == "/"

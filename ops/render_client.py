@@ -321,6 +321,35 @@ def wait_for_deploy_live(service_id: str, *, timeout_seconds: int = 900, poll_in
     return False
 
 
+_DELETE_MAX_ATTEMPTS = 3
+_DELETE_RETRY_DELAY_SECONDS = 3
+
+
+def _delete_one_resource_with_retry(resource_type: str, resource_id: str) -> None:
+    """Retente une suppression qui échoue avec un 5xx Render (erreur serveur, présumée
+    transitoire — timeout interne, redéploiement Render en cours, etc.), jamais un 4xx
+    (404/403 : la ressource n'existe déjà plus ou l'accès est refusé, réessayer ne changera
+    rien). Laisse filer après _DELETE_MAX_ATTEMPTS tentatives — l'appelant (delete_resources)
+    traite alors l'échec comme avant ce correctif (ressource orpheline signalée, jamais
+    avalée silencieusement)."""
+    for attempt in range(1, _DELETE_MAX_ATTEMPTS + 1):
+        try:
+            if resource_type == "postgres":
+                delete_postgres(resource_id)
+            else:
+                delete_service(resource_id)
+            return
+        except RenderAPIError as exc:
+            is_transient_server_error = exc.status_code is not None and 500 <= exc.status_code < 600
+            if not is_transient_server_error or attempt == _DELETE_MAX_ATTEMPTS:
+                raise
+            logger.warning(
+                "Échec transitoire (id=%s, HTTP %s) à la tentative %d/%d — nouvel essai dans %ds...",
+                resource_id, exc.status_code, attempt, _DELETE_MAX_ATTEMPTS, _DELETE_RETRY_DELAY_SECONDS,
+            )
+            time.sleep(_DELETE_RETRY_DELAY_SECONDS)
+
+
 def delete_resources(resources: list[tuple[str, str, str]]) -> list[tuple[str, str, str]]:
     """Supprime une liste de ressources Render — best-effort, une suppression qui échoue
     n'empêche pas de tenter les suivantes (même logique que delete_client.py, factorisée ici
@@ -336,17 +365,19 @@ def delete_resources(resources: list[tuple[str, str, str]]) -> list[tuple[str, s
     comme un échec — bug réel du 2026-08-14 : une instance dont le provisioning avait échoué
     avant la création du backend/frontend (IDs encore NULL en base) faisait tenter un DELETE
     littéralement sur "/services/None" par delete_client.py, rapporté comme un échec de
-    suppression trompeur pour une ressource qui n'a jamais existé."""
+    suppression trompeur pour une ressource qui n'a jamais existé.
+
+    Chaque suppression est retentée jusqu'à _DELETE_MAX_ATTEMPTS fois si Render répond un
+    5xx (cf. _delete_one_resource_with_retry) — un rollback ou une suppression ne doivent pas
+    déclarer une ressource orpheline pour une erreur serveur transitoire côté Render, alors
+    qu'un simple nouvel essai quelques secondes plus tard aurait suffi."""
     failed: list[tuple[str, str, str]] = []
     for label, resource_type, resource_id in resources:
         if not resource_id:
             logger.debug("Ressource '%s' jamais créée (id manquant) — ignorée, rien à supprimer.", label)
             continue
         try:
-            if resource_type == "postgres":
-                delete_postgres(resource_id)
-            else:
-                delete_service(resource_id)
+            _delete_one_resource_with_retry(resource_type, resource_id)
         except RenderAPIError as exc:
             logger.error("Échec de suppression (%s, id=%s) : %s", label, resource_id, exc)
             failed.append((label, resource_type, resource_id))

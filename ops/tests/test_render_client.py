@@ -311,3 +311,60 @@ def test_delete_resources_skips_resources_with_missing_id_without_calling_the_ap
     assert failed == []
     delete_service_mock.assert_not_called()
     delete_postgres_mock.assert_called_once_with("pg-1")
+
+
+# --- Retry sur 5xx transitoire pendant une suppression (rollback ou delete_client.py),
+# demandé le 2026-08-15 : une erreur serveur Render passagère (redéploiement en cours,
+# timeout interne...) ne doit pas suffire à déclarer une ressource orpheline si un simple
+# nouvel essai quelques secondes plus tard aurait réussi.
+
+def test_delete_resources_retries_on_transient_5xx_then_succeeds(monkeypatch):
+    monkeypatch.setattr(render_client.time, "sleep", lambda _s: None)
+    delete_service_mock = mock.Mock(side_effect=[
+        render_client.RenderAPIError("DELETE /services/srv-1 -> 502", status_code=502),
+        render_client.RenderAPIError("DELETE /services/srv-1 -> 502", status_code=502),
+        None,  # 3e tentative : succès
+    ])
+    monkeypatch.setattr(render_client, "delete_service", delete_service_mock)
+
+    failed = render_client.delete_resources([("service backend", "service", "srv-1")])
+
+    assert failed == []
+    assert delete_service_mock.call_count == 3
+
+
+def test_delete_resources_does_not_retry_on_4xx(monkeypatch):
+    """404/403 : la ressource n'existe déjà plus ou l'accès est refusé — réessayer ne
+    changerait rien, inutile de perdre du temps (ni de dépasser _DELETE_MAX_ATTEMPTS pour
+    rien)."""
+    delete_service_mock = mock.Mock(side_effect=render_client.RenderAPIError("DELETE /services/srv-1 -> 404", status_code=404))
+    monkeypatch.setattr(render_client, "delete_service", delete_service_mock)
+
+    failed = render_client.delete_resources([("service backend", "service", "srv-1")])
+
+    assert failed == [("service backend", "service", "srv-1")]
+    assert delete_service_mock.call_count == 1
+
+
+def test_delete_resources_does_not_retry_a_plain_network_failure(monkeypatch):
+    """Une panne réseau (status_code=None, cf. _request()) n'est PAS un 5xx Render — la
+    demande porte spécifiquement sur les erreurs SERVEUR Render transitoires, pas sur les
+    pannes réseau (déjà traitées ailleurs, cf. bug du 2026-08-14 sur delete_resources)."""
+    delete_service_mock = mock.Mock(side_effect=render_client.RenderAPIError("DELETE /services/srv-1 -> échec réseau", status_code=None))
+    monkeypatch.setattr(render_client, "delete_service", delete_service_mock)
+
+    failed = render_client.delete_resources([("service backend", "service", "srv-1")])
+
+    assert failed == [("service backend", "service", "srv-1")]
+    assert delete_service_mock.call_count == 1
+
+
+def test_delete_resources_gives_up_after_max_attempts_on_persistent_5xx(monkeypatch):
+    monkeypatch.setattr(render_client.time, "sleep", lambda _s: None)
+    delete_service_mock = mock.Mock(side_effect=render_client.RenderAPIError("DELETE /services/srv-1 -> 503", status_code=503))
+    monkeypatch.setattr(render_client, "delete_service", delete_service_mock)
+
+    failed = render_client.delete_resources([("service backend", "service", "srv-1")])
+
+    assert failed == [("service backend", "service", "srv-1")]
+    assert delete_service_mock.call_count == render_client._DELETE_MAX_ATTEMPTS
