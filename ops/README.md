@@ -104,6 +104,18 @@ python provision_client.py --name "Acme Corp" --slug acme-corp --admin-email adm
   console par `provision_client.py` — à transmettre manuellement dans ce cas. `notify.py`
   est volontairement indépendant de `backend/email_utils.py` (pas de dépendance `ops/` →
   `backend/`), au prix d'une petite duplication de l'appel HTTP à Brevo.
+- **Séparation site vitrine / instance client** (2026-08-15) : le frontend affichait la
+  landing marketing SmartTicket ("Essayer gratuitement", "Propulsé par Mistral AI"...) à sa
+  racine `/`, y compris sur les instances clientes — inacceptable pour le public d'un client
+  (secteur régulé). `provision()` pose `NEXT_PUBLIC_BRAND_NAME` (nom du client, déjà en
+  place) **et** `NEXT_PUBLIC_DEPLOYMENT_MODE=instance` dans l'environnement du frontend,
+  AVANT son premier build (même piège de timing que `NEXT_PUBLIC_API_URL` : bakée au build,
+  jamais réévaluée au runtime). En mode `instance` (le défaut si la variable est absente —
+  choix délibérément sécurisé, cf. `frontend/lib/deploymentMode.ts`), `frontend/proxy.ts`
+  redirige `/` vers `/chat` (accès invité direct à l'assistant IA) au lieu de servir la
+  landing. Le déploiement de démo (`smartticket-frontend` sur Render, futur `smartticket.fr`)
+  n'est **pas** créé par `provision()` — il faut lui poser manuellement
+  `NEXT_PUBLIC_DEPLOYMENT_MODE=marketing` sur Render pour qu'il continue de servir la landing.
 
 ### `update_all_instances.py` — propager un correctif à toute la flotte
 

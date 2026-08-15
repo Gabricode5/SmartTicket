@@ -26,6 +26,7 @@ import {
 } from "lucide-react"
 import { Streamdown } from "streamdown"
 import { useLocale } from "@/lib/i18n/LocaleContext"
+import { BRAND_NAME } from "@/lib/brand"
 
 type ChatMessage = {
     id: string
@@ -353,6 +354,12 @@ export default function AiAssistantPage() {
                             </div>
                             <h1 className="text-3xl font-black text-foreground tracking-tight">{t.chat.heroTitle}</h1>
                             <p className="text-muted-foreground text-sm max-w-sm mx-auto">{t.chat.heroSubtitle}</p>
+                            {/* Transparence IA (art. 50 du règlement européen sur l'IA) : affichée une
+                            fois, avant le premier message — la personne doit savoir qu'elle échange
+                            avec une IA avant même de commencer à écrire. */}
+                            <p className="text-xs text-muted-foreground/80 max-w-sm mx-auto">
+                                {t.chat.aiDisclosure.replace("{brand}", BRAND_NAME)}
+                            </p>
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full px-4">
                             {SUGGESTIONS.map((s, i) => (

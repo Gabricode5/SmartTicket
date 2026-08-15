@@ -499,3 +499,31 @@ class TestFrontendReceivesTheBrandName:
         brand_name = frontend_call_kwargs["env_vars"]["NEXT_PUBLIC_BRAND_NAME"]
         assert brand_name, "NEXT_PUBLIC_BRAND_NAME ne doit jamais être vide au moment du build frontend"
         assert brand_name == "Martin Technologies"
+
+
+class TestProvisionSetsClientInstanceDeploymentMode:
+    """Séparation site vitrine / instance client (2026-08-15) : l'instance affichait la
+    landing marketing SmartTicket ("Essayer gratuitement", "Propulsé par Mistral AI"...) à sa
+    racine "/" — inacceptable pour le public d'un client (secteur régulé). provision() doit
+    poser NEXT_PUBLIC_DEPLOYMENT_MODE=instance AVANT le premier build du frontend (même piège
+    de timing que NEXT_PUBLIC_BRAND_NAME/NEXT_PUBLIC_API_URL : bakée au build, jamais
+    réévaluée au runtime) — frontend/middleware.ts s'appuie dessus pour rediriger "/" vers
+    l'app cliente plutôt que de servir la landing."""
+
+    def test_provision_injects_instance_deployment_mode(self, render_mock, notify_mock):
+        _mock_common_steps(render_mock, postgres_id="pg-17")
+        render_mock.create_web_service.side_effect = [
+            {"id": "backend-17"}, {"id": "frontend-17"},
+        ]
+        notify_mock.send_welcome_email.return_value = True
+
+        result = provision_client.provision(
+            client_name="Acme17", slug="acme17", postgres_plan="starter", admin_email="a@acme17.com",
+        )
+
+        assert result.status == "active"
+        frontend_call_kwargs = render_mock.create_web_service.call_args_list[1].kwargs
+        # "instance", jamais "marketing" ni absent — un oubli laisserait la landing
+        # SmartTicket accessible au public du client (frontend/lib/deploymentMode.ts défaut
+        # certes déjà à "instance" par sécurité, mais provision() doit la poser explicitement).
+        assert frontend_call_kwargs["env_vars"]["NEXT_PUBLIC_DEPLOYMENT_MODE"] == "instance"

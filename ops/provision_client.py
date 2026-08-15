@@ -339,6 +339,14 @@ def provision(
             # build). Valeur = client_name (déjà capturé plus haut), pas slug : c'est le nom
             # affiché aux utilisateurs finaux du client, pas l'identifiant technique.
             "NEXT_PUBLIC_BRAND_NAME": client_name,
+            # Séparation site vitrine / instance client (2026-08-15) : sans cette variable,
+            # frontend/lib/deploymentMode.ts défaut déjà à "instance" (sécurisé par design —
+            # cf. sa docstring), donc omettre cette ligne ne romprait rien. Posée explicitement
+            # quand même, pour qu'un futur lecteur de ce fichier voie le comportement voulu
+            # sans avoir à aller consulter le défaut du frontend. Sans elle (ou avec "marketing"),
+            # la landing marketing SmartTicket (nom, "Propulsé par Mistral"...) resterait
+            # accessible au public du client — inacceptable pour la cible secteur régulé.
+            "NEXT_PUBLIC_DEPLOYMENT_MODE": "instance",
         }
 
         logger.info("Création du service frontend '%s'...", frontend_name)
