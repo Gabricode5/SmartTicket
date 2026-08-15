@@ -507,7 +507,7 @@ class TestProvisionSetsClientInstanceDeploymentMode:
     racine "/" — inacceptable pour le public d'un client (secteur régulé). provision() doit
     poser NEXT_PUBLIC_DEPLOYMENT_MODE=instance AVANT le premier build du frontend (même piège
     de timing que NEXT_PUBLIC_BRAND_NAME/NEXT_PUBLIC_API_URL : bakée au build, jamais
-    réévaluée au runtime) — frontend/middleware.ts s'appuie dessus pour rediriger "/" vers
+    réévaluée au runtime) — frontend/proxy.ts s'appuie dessus pour rediriger "/" vers
     l'app cliente plutôt que de servir la landing."""
 
     def test_provision_injects_instance_deployment_mode(self, render_mock, notify_mock):
