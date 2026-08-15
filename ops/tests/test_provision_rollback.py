@@ -44,6 +44,13 @@ def _mock_common_steps(render_mock, *, postgres_id: str):
     render_mock.wait_for_postgres_available.return_value = True
     render_mock.get_postgres_connection_info.return_value = {"internalConnectionString": "postgres://x"}
     render_mock.wait_for_deploy_live.return_value = True
+    # get_service() est désormais LA source de vérité pour l'URL réelle d'un service — plus
+    # jamais devinée depuis son nom (bug réel du 2026-08-15, cf. provision_client.py) — donc
+    # plus jamais lue depuis la réponse de create_web_service. URL dérivée de l'id demandé :
+    # déterministe et distincte par service, pour que chaque test s'y retrouve facilement.
+    render_mock.get_service.side_effect = lambda service_id: {
+        "id": service_id, "serviceDetails": {"url": f"https://{service_id}.onrender.com"},
+    }
 
 
 def _mock_frontend_creation_failure(render_mock, *, backend_id: str):
@@ -144,23 +151,29 @@ def test_burned_slug_blocks_retry_without_touching_render_again(render_mock, not
 
 
 class TestFrontendReceivesTheRealBackendUrl:
-    """Bug trouvé le 2026-07-14 lors d'un provisioning réel (sans --domain) : le frontend
-    recevait NEXT_PUBLIC_API_URL vide à son PREMIER build (build_urls() renvoyait ("", "")
-    sans domaine, sur l'hypothèse fausse que l'URL *.onrender.com n'était connue qu'après
-    coup). Comme Next.js bake les rewrites de next.config.ts au build et jamais au runtime,
-    ça figeait le fallback "http://localhost:8000" dans l'image déployée — tous les appels
-    /api/* du frontend renvoyaient 404. Corrigé en prédisant l'URL *.onrender.com par
-    avance (déterministe : https://{nom-du-service}.onrender.com, confirmé par la doc
-    Render) plutôt qu'en la découvrant après coup depuis la réponse de l'API."""
+    """Bug trouvé le 2026-07-14 (frontend recevait NEXT_PUBLIC_API_URL vide à son premier
+    build) corrigé à l'époque en PRÉDISANT l'URL *.onrender.com par avance — cette prédiction
+    s'est révélée FAUSSE en conditions réelles le 2026-08-15 : Render peut assigner une URL
+    différente du nom de service demandé (suffixe supplémentaire imprévisible constaté sur
+    l'instance martin-technologies, ex. "...-9abaae-xml6.onrender.com" au lieu de
+    "...-9abaae-backend.onrender.com"). provision() ne prédit donc plus AUCUNE URL
+    *.onrender.com : elle les relit via render.get_service() (serviceDetails.url) juste
+    après le premier déploiement de chaque service, jamais reconstruites par convention."""
 
-    def test_provision_passes_non_empty_backend_url_to_frontend_without_domain(self, render_mock, notify_mock):
+    def test_provision_reads_backend_url_from_the_api_response_not_from_a_naming_convention(self, render_mock, notify_mock):
+        """LE test demandé pour ce bug : la valeur utilisée doit venir de get_service(),
+        pas d'une construction à partir du nom du service. Prouvé ici en donnant à
+        get_service() une URL qui NE RESSEMBLE PAS au nom du service demandé (suffixe
+        totalement différent, comme observé en conditions réelles) — si provision()
+        reconstruisait encore l'URL par convention, ce test échouerait."""
         _mock_common_steps(render_mock, postgres_id="pg-5")
-        # L'URL "réellement rapportée" par Render écho le nom demandé — le nom porte
-        # désormais un render_suffix aléatoire (cf. TestSlugReuseGeneratesFreshRenderNames
-        # plus bas), donc plus moyen de le figer en dur dans le test sans le rendre fragile.
-        render_mock.create_web_service.side_effect = lambda *, name, **kwargs: {
-            "id": f"{name}-id", "serviceDetails": {"url": f"https://{name}.onrender.com"},
-        }
+        render_mock.create_web_service.side_effect = [
+            {"id": "backend-5"}, {"id": "frontend-5"},
+        ]
+        render_mock.get_service.side_effect = lambda service_id: {
+            "backend-5": {"id": "backend-5", "serviceDetails": {"url": "https://smartticket-acme5-9abaae-xml6.onrender.com"}},
+            "frontend-5": {"id": "frontend-5", "serviceDetails": {"url": "https://smartticket-acme5-9abaae-abc1.onrender.com"}},
+        }[service_id]
         notify_mock.send_welcome_email.return_value = True
 
         result = provision_client.provision(
@@ -171,30 +184,31 @@ class TestFrontendReceivesTheRealBackendUrl:
         backend_call_kwargs = render_mock.create_web_service.call_args_list[0].kwargs
         frontend_call_kwargs = render_mock.create_web_service.call_args_list[1].kwargs
 
-        # C'est LE champ qui était vide avant le correctif — jamais vide, et jamais un
-        # fallback localhost/placeholder.
+        # C'est LE champ qui était vide avant le tout premier correctif — jamais vide, et
+        # jamais un fallback localhost/placeholder.
         api_url = frontend_call_kwargs["env_vars"]["NEXT_PUBLIC_API_URL"]
         assert api_url, "NEXT_PUBLIC_API_URL ne doit jamais être vide au moment du build frontend"
         assert "localhost" not in api_url
-        assert "placeholder" not in api_url
-        assert api_url.startswith("https://smartticket-acme5-") and api_url.endswith("-backend.onrender.com")
+        # La valeur EXACTE renvoyée par get_service(), pas une reconstruction par convention
+        # à partir du nom "smartticket-acme5-...-backend" (qui donnerait une URL différente).
+        assert api_url == "https://smartticket-acme5-9abaae-xml6.onrender.com"
+        assert result.backend_url == "https://smartticket-acme5-9abaae-xml6.onrender.com"
 
-        # CORS_ORIGINS côté backend doit, symétriquement, pointer vers le frontend dès le
-        # premier déploiement (même bug potentiel, sens inverse).
-        cors_origins = backend_call_kwargs["env_vars"]["CORS_ORIGINS"]
-        assert cors_origins.startswith("https://smartticket-acme5-") and cors_origins.endswith("-frontend.onrender.com")
-
-        # provision() ne doit plus jamais avoir besoin de republier les env vars du backend
-        # après coup (l'ancien mécanisme de correction post-hoc a été retiré : l'URL est
-        # correcte dès la création, plus besoin de la deviner puis la corriger).
-        render_mock.set_env_vars.assert_not_called()
+        # CORS_ORIGINS ne peut être correcte qu'APRÈS coup (le frontend n'existe pas encore
+        # quand le backend est créé) — republiée via set_env_vars() puis redéployée, cf.
+        # classe suivante pour la vérification dédiée de ce mécanisme.
+        render_mock.set_env_vars.assert_called_once()
+        updated_env = render_mock.set_env_vars.call_args.args[1]
+        assert updated_env["CORS_ORIGINS"] == "https://smartticket-acme5-9abaae-abc1.onrender.com"
+        assert updated_env["FRONTEND_URL"] == "https://smartticket-acme5-9abaae-abc1.onrender.com"
+        render_mock.trigger_deploy.assert_called_once_with("backend-5")
 
     def test_provision_passes_custom_domain_url_to_frontend_when_domain_given(self, render_mock, notify_mock):
+        """Avec --domain, aucune ambiguïté possible : le domaine est choisi PAR NOUS
+        (build_domain_urls()), jamais par Render — get_service() n'est même pas consulté
+        pour l'URL, et aucun redéploiement correctif n'est nécessaire."""
         _mock_common_steps(render_mock, postgres_id="pg-6")
-        render_mock.create_web_service.side_effect = [
-            {"id": "backend-6", "serviceDetails": {"url": "https://acme6-api.smartticket.fr"}},
-            {"id": "frontend-6", "serviceDetails": {"url": "https://acme6.smartticket.fr"}},
-        ]
+        render_mock.create_web_service.side_effect = [{"id": "backend-6"}, {"id": "frontend-6"}]
         notify_mock.send_welcome_email.return_value = True
 
         result = provision_client.provision(
@@ -203,31 +217,14 @@ class TestFrontendReceivesTheRealBackendUrl:
         )
 
         assert result.status == "active"
+        backend_call_kwargs = render_mock.create_web_service.call_args_list[0].kwargs
         frontend_call_kwargs = render_mock.create_web_service.call_args_list[1].kwargs
         assert frontend_call_kwargs["env_vars"]["NEXT_PUBLIC_API_URL"] == "https://acme6-api.smartticket.fr"
+        assert backend_call_kwargs["env_vars"]["CORS_ORIGINS"] == "https://acme6.smartticket.fr"
         render_mock.add_custom_domain.assert_called_once_with("frontend-6", "acme6.smartticket.fr")
-
-    def test_mismatch_between_predicted_and_reported_url_is_logged_but_does_not_fail(self, render_mock, notify_mock, caplog):
-        """Filet de sécurité pour une collision de nom *.onrender.com (rare : le nom n'est
-        garanti unique que dans notre workspace, pas globalement sur Render) : si l'API
-        Render renvoie une URL différente de celle prédite, provision() continue quand même
-        avec la valeur prédite (celle qu'on a demandée) et logue un avertissement explicite
-        plutôt que d'échouer silencieusement ou de planter."""
-        _mock_common_steps(render_mock, postgres_id="pg-7")
-        render_mock.create_web_service.side_effect = [
-            {"id": "backend-7", "serviceDetails": {"url": "https://smartticket-acme7-backend-2.onrender.com"}},
-            {"id": "frontend-7", "serviceDetails": {"url": "https://smartticket-acme7-frontend.onrender.com"}},
-        ]
-        notify_mock.send_welcome_email.return_value = True
-
-        import logging
-        with caplog.at_level(logging.WARNING, logger="provision_client"):
-            result = provision_client.provision(
-                client_name="Acme7", slug="acme7", postgres_plan="starter", admin_email="a@acme7.com",
-            )
-
-        assert result.status == "active"
-        assert any("collision de nom" in record.message for record in caplog.records)
+        # Déterministe dès la création : jamais besoin de republier/redéployer le backend.
+        render_mock.set_env_vars.assert_not_called()
+        render_mock.trigger_deploy.assert_not_called()
 
 
 class TestPostgresAvailabilityIsAwaitedBeforeConnectionInfo:
@@ -376,6 +373,11 @@ class TestSlugReuseGeneratesFreshRenderNames:
         render_mock.wait_for_deploy_live.return_value = True
         render_mock.create_web_service.side_effect = lambda *, name, **kwargs: {
             "id": f"{name}-id", "serviceDetails": {"url": f"https://{name}.onrender.com"},
+        }
+        # get_service() est la source de vérité pour l'URL réelle (jamais devinée, cf.
+        # provision_client.py) — dérivée ici de l'id du service demandé.
+        render_mock.get_service.side_effect = lambda service_id: {
+            "id": service_id, "serviceDetails": {"url": f"https://{service_id}.onrender.com"},
         }
         notify_mock.send_welcome_email.return_value = True
 

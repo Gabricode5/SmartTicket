@@ -84,7 +84,12 @@ python provision_client.py --name "Acme Corp" --slug acme-corp --admin-email adm
 - `--domain` (optionnel) attache un sous-domaine personnalisé (`{slug}.{domain}`) — suppose
   un domaine déjà possédé avec un enregistrement DNS wildcard pointant vers Render (Phase 0
   du plan, pas automatisé ici). Sans `--domain`, l'instance reste sur ses URLs
-  `*.onrender.com`.
+  `*.onrender.com` — **jamais devinées** (bug réel du 2026-08-15 : Render peut assigner une
+  URL différente du nom de service demandé, suffixe supplémentaire imprévisible), toujours
+  relues depuis l'API après coup. Conséquence : le backend est redéployé une seconde fois une
+  fois l'URL réelle du frontend connue (CORS_ORIGINS/FRONTEND_URL ne peuvent être correctes
+  qu'à ce moment-là) — un provisioning sans `--domain` prend donc un peu plus longtemps
+  qu'avant ce correctif.
 - Idempotent par rejet : refuse de continuer si le `--slug` existe déjà dans `instances.db`
   plutôt que de dupliquer les ressources.
 - La logique métier vit dans `provision(...)`, une fonction pure (sans `input()`/`print()`
