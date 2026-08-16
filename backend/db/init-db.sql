@@ -154,6 +154,34 @@ CREATE INDEX ON notifications (id_utilisateur, read_at);
 CREATE INDEX ON notifications (tenant_id);
 
 -- =========================================
+-- TABLE TICKETS
+-- =========================================
+-- Un ticket par cycle de transfert IA->humain (pas un par conversation : une session peut
+-- être transférée, résolue puis re-transférée plus tard, chaque transfert numérote un
+-- nouveau ticket -- session_id n'est PAS unique). Pas de duplication du contenu de la
+-- conversation ni de session.transfer_reason : atteignables via session_id + created_at.
+CREATE SEQUENCE IF NOT EXISTS ticket_number_seq START 1000;
+
+CREATE TABLE tickets (
+    id SERIAL PRIMARY KEY,
+    ticket_number INTEGER NOT NULL UNIQUE DEFAULT nextval('ticket_number_seq'), -- Numéro lisible, séquentiel
+    session_id INTEGER NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE, -- Conversation liée (historique complet)
+    status VARCHAR(20) NOT NULL DEFAULT 'new' CHECK (status IN ('new','in_progress','resolved','closed')),
+    waiting_on VARCHAR(20) NOT NULL DEFAULT 'us' CHECK (waiting_on IN ('us','customer')), -- Dimension indépendante de status
+    assigned_agent_id INTEGER REFERENCES utilisateur(id) ON DELETE SET NULL, -- NULL = non assigné, dans la file
+    priority VARCHAR(10) NOT NULL DEFAULT 'normal' CHECK (priority IN ('normal','urgent')),
+    tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001', -- Préparation multi-tenant
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Dernière activité
+    deleted_at TIMESTAMP WITH TIME ZONE                       -- Soft-delete RGPD (NULL = ticket actif)
+);
+CREATE INDEX ON tickets (session_id);
+CREATE INDEX ON tickets (status);
+CREATE INDEX ON tickets (waiting_on);
+CREATE INDEX ON tickets (assigned_agent_id);
+CREATE INDEX ON tickets (tenant_id);
+
+-- =========================================
 -- TABLE INSTANCE_SUBSCRIPTION
 -- =========================================
 -- Ligne unique (id=1) : coupe-circuit d'abonnement pour le modèle "flotte d'instances"

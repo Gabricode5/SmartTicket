@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Sequence, CheckConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -80,6 +80,39 @@ class Notification(Base):
     read_at = Column(DateTime(timezone=True), nullable=True)
     tenant_id = _tenant_id_column()
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class Ticket(Base):
+    """Un ticket par CYCLE de transfert IA→humain, pas un par conversation (cf. ROADMAP.md,
+    chantier "refonte ticketing SAV", décision validée le 2026-08-17) : une session peut être
+    transférée, résolue puis re-transférée plus tard — chaque transfert crée un nouveau ticket
+    numéroté, session_id n'est PAS unique. Pas de duplication du contenu de la conversation :
+    l'historique complet (y compris les réponses IA avant transfert) reste accessible via
+    session_id + created_at comme borne temporelle (created_at = moment du transfert), et
+    session.transfer_reason reste la source de vérité pour la raison du transfert — jamais
+    copié ici. Étape 1 du chantier (modèle + migration seulement) : aucun endpoint ne crée
+    encore de Ticket, cette classe n'est câblée nulle part avant l'Étape 2."""
+    __tablename__ = "tickets"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticket_number = Column(Integer, Sequence("ticket_number_seq", start=1000), nullable=False, unique=True)
+    session_id = Column(Integer, ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String(20), nullable=False, server_default="new", index=True)  # new | in_progress | resolved | closed
+    # Dimension INDÉPENDANTE de status (un ticket peut être in_progress + waiting_on=customer
+    # en même temps) : de qui on attend la prochaine action.
+    waiting_on = Column(String(20), nullable=False, server_default="us", index=True)  # us | customer
+    assigned_agent_id = Column(Integer, ForeignKey("utilisateur.id", ondelete="SET NULL"), nullable=True, index=True)
+    priority = Column(String(10), nullable=False, server_default="normal")  # normal | urgent
+    tenant_id = _tenant_id_column()
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    deleted_at = Column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("status IN ('new','in_progress','resolved','closed')", name="ck_tickets_status"),
+        CheckConstraint("waiting_on IN ('us','customer')", name="ck_tickets_waiting_on"),
+        CheckConstraint("priority IN ('normal','urgent')", name="ck_tickets_priority"),
+    )
 
 
 class InstanceSubscription(Base):
