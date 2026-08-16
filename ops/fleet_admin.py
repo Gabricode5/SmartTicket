@@ -344,8 +344,19 @@ def _render_fleet_page(request: Request) -> HTMLResponse:
         "instances": data.instances, "orphans": data.orphans, "render_available": data.render_available,
         "action_result": action_result, "creation_result": creation_result,
         "provision_jobs": jobs, "any_job_running": any(j["status"] == "running" for j in jobs),
-        "postgres_plans": render.SUPPORTED_POSTGRES_PLANS, "default_postgres_plan": render.DEFAULT_POSTGRES_PLAN,
+        "postgres_plans": _postgres_plans_with_total_cost(), "default_postgres_plan": render.DEFAULT_POSTGRES_PLAN,
     })
+
+
+def _postgres_plans_with_total_cost() -> list[dict]:
+    """Coût total = Postgres + backend + frontend (les 2 services web, toujours en plan
+    WEB_SERVICE_PLAN — provision() ne l'expose pas comme champ de formulaire ici) — le
+    Postgres seul ne reflète pas ce que paie réellement l'exploitant pour une instance."""
+    web_cost = 2 * render.WEB_SERVICE_PLAN_MONTHLY_USD
+    return [
+        {**plan, "total_monthly_usd": plan["monthly_usd"] + web_cost}
+        for plan in render.FLEET_ADMIN_POSTGRES_PLANS
+    ]
 
 
 @app.get("/", response_class=HTMLResponse)
