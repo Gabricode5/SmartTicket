@@ -10,6 +10,7 @@ import { LanguageToggle } from "@/components/LanguageToggle"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { cn } from "@/lib/utils"
+import { BRAND_NAME } from "@/lib/brand"
 import { useLocale } from "@/lib/i18n/LocaleContext"
 import { groupByDate } from "@/components/dashboard/dateGrouping"
 import {
@@ -203,7 +204,7 @@ export function AppSidebar() {
             <div className="h-16 flex items-center justify-between px-6 border-b border-sidebar-border">
                 <div className="flex items-center gap-2 font-bold text-xl">
                     <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center text-primary-foreground font-bold">S</div>
-                    <span>SmartTicket</span>
+                    <span>{BRAND_NAME}</span>
                 </div>
                 {apiUser && <NotificationBell />}
             </div>

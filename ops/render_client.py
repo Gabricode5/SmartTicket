@@ -37,6 +37,19 @@ SUPPORTED_POSTGRES_VERSIONS = ("11", "12", "13", "14", "15", "16", "17", "18")
 # maximale sur Postgres 13+.
 DEFAULT_POSTGRES_VERSION = "18"
 
+# Sous-ensemble curaté du schéma `plan` de POST /postgres (vérifié sur le schéma OpenAPI réel
+# le 2026-08-15, pas deviné — l'enum complet compte 29 valeurs, jusqu'à accelerated_1024gb,
+# disproportionné pour la sélection dans le formulaire de création — Partie B.3). Utilisée
+# UNIQUEMENT pour peupler ce formulaire (fleet_admin.py) : create_postgres() ci-dessous
+# n'impose PAS cette liste — d'autres plans réels valides (ex: "starter", déjà utilisé dans
+# ops/README.md et les tests) restent acceptables via la CLI. "free" reste refusé dans tous
+# les cas (aucun backup automatique).
+SUPPORTED_POSTGRES_PLANS = (
+    "basic_256mb", "basic_1gb", "basic_4gb",
+    "pro_4gb", "pro_8gb", "pro_16gb", "pro_32gb",
+)
+DEFAULT_POSTGRES_PLAN = "basic_256mb"
+
 
 class RenderAPIError(RuntimeError):
     def __init__(self, message: str, *, status_code: int | None = None):
@@ -73,7 +86,19 @@ def _request(method: str, path: str, **kwargs) -> dict:
     headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json"}
     if "json" in kwargs:
         headers["Content-Type"] = "application/json"
-    response = requests.request(method, f"{RENDER_API_BASE}{path}", headers=headers, timeout=30, **kwargs)
+    try:
+        response = requests.request(method, f"{RENDER_API_BASE}{path}", headers=headers, timeout=30, **kwargs)
+    except requests.exceptions.RequestException as exc:
+        # Panne réseau (DNS, coupure, timeout, connexion réinitialisée...) plutôt qu'une
+        # réponse HTTP d'erreur — bug réel du 2026-08-14 : une coupure réseau transitoire
+        # PENDANT le rollback d'un provisioning a fait remonter une requests.exceptions.
+        # ConnectionError brute, non catchée par delete_resources() (qui n'attrape QUE
+        # RenderAPIError) : le script a planté avec une trace Python brute au lieu de
+        # continuer best-effort comme documenté, laissant instances.db bloquée en statut
+        # 'provisioning' (ni 'failed' ni supprimée). RenderAPIError est maintenant le SEUL
+        # type d'erreur que lève ce module, panne réseau ou réponse HTTP en échec — un seul
+        # except à écrire dans tout le code appelant.
+        raise RenderAPIError(f"{method} {path} -> échec réseau : {exc}") from exc
     if not response.ok:
         raise RenderAPIError(f"{method} {path} -> {response.status_code}: {response.text}", status_code=response.status_code)
     return response.json() if response.content else {}
@@ -201,6 +226,52 @@ def get_service(service_id: str) -> dict:
     return _request("GET", f"/services/{service_id}")
 
 
+def list_services(*, name_prefix: str | None = None, page_size: int = 100) -> list[dict]:
+    """GET /services, paginé par cursor jusqu'à épuisement — LECTURE SEULE, aucune mutation.
+    Réponse `serviceList` = liste de {"service": {...}, "cursor": "..."} (même enveloppe que
+    GET .../deploys, cf. get_latest_deploy) : déballée ici. `name` n'accepte qu'une liste de
+    noms EXACTS côté API (pas de préfixe, vérifié sur le schéma OpenAPI), donc le filtrage par
+    préfixe se fait côté client, après récupération de toutes les pages."""
+    services: list[dict] = []
+    cursor: str | None = None
+    while True:
+        path = f"/services?limit={page_size}"
+        if cursor:
+            path += f"&cursor={cursor}"
+        page = _request("GET", path)
+        if not page:
+            break
+        services.extend(item["service"] for item in page)
+        if len(page) < page_size:
+            break
+        cursor = page[-1]["cursor"]
+    if name_prefix:
+        services = [s for s in services if s["name"].startswith(name_prefix)]
+    return services
+
+
+def list_postgres_instances(*, name_prefix: str | None = None, page_size: int = 100) -> list[dict]:
+    """GET /postgres, paginé par cursor jusqu'à épuisement — LECTURE SEULE, aucune mutation.
+    Réponse = liste de {"postgres": {...}, "cursor": "..."} (schéma `postgresWithCursor`),
+    déballée ici. Même limitation de filtrage par préfixe que list_services()."""
+    instances: list[dict] = []
+    cursor: str | None = None
+    while True:
+        path = f"/postgres?limit={page_size}"
+        if cursor:
+            path += f"&cursor={cursor}"
+        page = _request("GET", path)
+        if not page:
+            break
+        instances.extend(item["postgres"] for item in page)
+        if len(page) < page_size:
+            break
+        cursor = page[-1]["cursor"]
+    if name_prefix:
+        instances = [p for p in instances if p["name"].startswith(name_prefix)]
+    return instances
+
+
 def get_latest_deploy(service_id: str) -> dict | None:
     # GET .../deploys renvoie [{"cursor": ..., "deploy": {...}}], pas les deploys
     # directement (schéma de réponse `deployList` -> items `deployWithCursor`) — sans ce
@@ -250,6 +321,35 @@ def wait_for_deploy_live(service_id: str, *, timeout_seconds: int = 900, poll_in
     return False
 
 
+_DELETE_MAX_ATTEMPTS = 3
+_DELETE_RETRY_DELAY_SECONDS = 3
+
+
+def _delete_one_resource_with_retry(resource_type: str, resource_id: str) -> None:
+    """Retente une suppression qui échoue avec un 5xx Render (erreur serveur, présumée
+    transitoire — timeout interne, redéploiement Render en cours, etc.), jamais un 4xx
+    (404/403 : la ressource n'existe déjà plus ou l'accès est refusé, réessayer ne changera
+    rien). Laisse filer après _DELETE_MAX_ATTEMPTS tentatives — l'appelant (delete_resources)
+    traite alors l'échec comme avant ce correctif (ressource orpheline signalée, jamais
+    avalée silencieusement)."""
+    for attempt in range(1, _DELETE_MAX_ATTEMPTS + 1):
+        try:
+            if resource_type == "postgres":
+                delete_postgres(resource_id)
+            else:
+                delete_service(resource_id)
+            return
+        except RenderAPIError as exc:
+            is_transient_server_error = exc.status_code is not None and 500 <= exc.status_code < 600
+            if not is_transient_server_error or attempt == _DELETE_MAX_ATTEMPTS:
+                raise
+            logger.warning(
+                "Échec transitoire (id=%s, HTTP %s) à la tentative %d/%d — nouvel essai dans %ds...",
+                resource_id, exc.status_code, attempt, _DELETE_MAX_ATTEMPTS, _DELETE_RETRY_DELAY_SECONDS,
+            )
+            time.sleep(_DELETE_RETRY_DELAY_SECONDS)
+
+
 def delete_resources(resources: list[tuple[str, str, str]]) -> list[tuple[str, str, str]]:
     """Supprime une liste de ressources Render — best-effort, une suppression qui échoue
     n'empêche pas de tenter les suivantes (même logique que delete_client.py, factorisée ici
@@ -259,14 +359,25 @@ def delete_resources(resources: list[tuple[str, str, str]]) -> list[tuple[str, s
     déjà en ordre inverse de création si c'est un rollback). Ne lève jamais : retourne la
     sous-liste des entrées qui n'ont PAS pu être supprimées (mêmes tuples, même ordre), pour
     que l'appelant les logue, les affiche ou les persiste — un échec de suppression ne doit
-    jamais être avalé silencieusement."""
+    jamais être avalé silencieusement.
+
+    Un `resource_id` manquant (None/vide) est ignoré silencieusement, PAS tenté ni compté
+    comme un échec — bug réel du 2026-08-14 : une instance dont le provisioning avait échoué
+    avant la création du backend/frontend (IDs encore NULL en base) faisait tenter un DELETE
+    littéralement sur "/services/None" par delete_client.py, rapporté comme un échec de
+    suppression trompeur pour une ressource qui n'a jamais existé.
+
+    Chaque suppression est retentée jusqu'à _DELETE_MAX_ATTEMPTS fois si Render répond un
+    5xx (cf. _delete_one_resource_with_retry) — un rollback ou une suppression ne doivent pas
+    déclarer une ressource orpheline pour une erreur serveur transitoire côté Render, alors
+    qu'un simple nouvel essai quelques secondes plus tard aurait suffi."""
     failed: list[tuple[str, str, str]] = []
     for label, resource_type, resource_id in resources:
+        if not resource_id:
+            logger.debug("Ressource '%s' jamais créée (id manquant) — ignorée, rien à supprimer.", label)
+            continue
         try:
-            if resource_type == "postgres":
-                delete_postgres(resource_id)
-            else:
-                delete_service(resource_id)
+            _delete_one_resource_with_retry(resource_type, resource_id)
         except RenderAPIError as exc:
             logger.error("Échec de suppression (%s, id=%s) : %s", label, resource_id, exc)
             failed.append((label, resource_type, resource_id))

@@ -203,6 +203,55 @@ def test_get_latest_deploy_treats_404_as_not_ready_yet_rather_than_raising(reque
     assert render_client.get_latest_deploy("svc-1") is None
 
 
+# --- Audit LECTURE SEULE (ops/audit_render_resources.py), ajouté le 2026-07-17 : retrouver
+# les ressources Render orphelines dont la trace a pu être perdue par le bug de
+# delete_client.py corrigé précédemment (ligne retirée d'instances.db malgré un échec de
+# suppression). list_services()/list_postgres_instances() ne font aucune mutation.
+
+def test_list_services_unwraps_envelope_and_paginates_until_a_short_page(requests_mock, monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", "test-key")
+    requests_mock.request.side_effect = [
+        _response(json_body=[
+            {"cursor": "c1", "service": {"id": "svc-1", "name": "smartticket-test-un-backend"}},
+            {"cursor": "c2", "service": {"id": "svc-2", "name": "smartticket-test-un-frontend"}},
+        ]),
+        _response(json_body=[  # page courte (< page_size) : dernière page
+            {"cursor": "c3", "service": {"id": "svc-3", "name": "smartticket-test-deux-backend"}},
+        ]),
+    ]
+
+    result = render_client.list_services(page_size=2)
+
+    assert [s["id"] for s in result] == ["svc-1", "svc-2", "svc-3"]
+    # Le cursor de la DERNIÈRE entrée de la page précédente doit être repassé à l'appel
+    # suivant — sans ça, la pagination boucle sur la même première page indéfiniment.
+    second_call_path = requests_mock.request.call_args_list[1].args[1]
+    assert "cursor=c2" in second_call_path
+
+
+def test_list_services_filters_by_name_prefix_client_side(requests_mock, monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", "test-key")
+    _mock_response(requests_mock, json_body=[
+        {"cursor": "c1", "service": {"id": "svc-1", "name": "smartticket-test-un-backend"}},
+        {"cursor": "c2", "service": {"id": "svc-2", "name": "smartticket-acme-backend"}},
+    ])
+
+    result = render_client.list_services(name_prefix="smartticket-test-")
+
+    assert [s["id"] for s in result] == ["svc-1"]
+
+
+def test_list_postgres_instances_unwraps_envelope(requests_mock, monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", "test-key")
+    _mock_response(requests_mock, json_body=[
+        {"cursor": "c1", "postgres": {"id": "pg-1", "name": "smartticket-test-un-postgres", "status": "available"}},
+    ])
+
+    result = render_client.list_postgres_instances(name_prefix="smartticket-test-")
+
+    assert result == [{"id": "pg-1", "name": "smartticket-test-un-postgres", "status": "available"}]
+
+
 def test_wait_for_deploy_live_survives_a_transient_404_then_succeeds(requests_mock, monkeypatch):
     """Le scénario bout en bout demandé : la ressource n'est pas encore prête (404), puis
     elle l'est (deploy 'live') — wait_for_deploy_live() doit attendre plutôt qu'échouer."""
@@ -218,3 +267,104 @@ def test_wait_for_deploy_live_survives_a_transient_404_then_succeeds(requests_mo
 
     assert result is True
     assert requests_mock.request.call_count == 3
+
+
+# --- Panne réseau pendant un rollback, trouvée en conditions réelles le 2026-08-14 : une
+# coupure DNS transitoire pendant wait_for_postgres_available() a fait échouer le
+# provisioning (normal), MAIS la tentative de rollback qui a suivi a elle-même essuyé une
+# panne réseau lors du DELETE — et cette requests.exceptions.ConnectionError brute n'était
+# interceptée nulle part (delete_resources() ne catchait QUE RenderAPIError), faisant planter
+# tout le script avec une trace Python brute au lieu de rester best-effort comme documenté.
+
+def test_request_wraps_network_failures_into_render_api_error(monkeypatch):
+    """Contrairement aux autres tests de ce fichier, on ne mocke PAS le module `requests` en
+    bloc (ça remplacerait aussi `requests.exceptions.*` par un Mock, et `except
+    requests.exceptions.RequestException` planterait avec un TypeError au lieu de catcher
+    quoi que ce soit) — seule la fonction `requests.request` est patchée, le reste du module
+    (dont ses vraies classes d'exception) reste intact."""
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", "test-key")
+    monkeypatch.setattr(
+        render_client.requests, "request",
+        mock.Mock(side_effect=render_client.requests.exceptions.ConnectionError("Temporary failure in name resolution")),
+    )
+
+    with pytest.raises(render_client.RenderAPIError, match="échec réseau"):
+        render_client.get_postgres("pg-1")
+
+
+def test_delete_resources_skips_resources_with_missing_id_without_calling_the_api(monkeypatch):
+    """Une instance dont le provisioning a échoué avant la création du backend/frontend a ces
+    IDs à None en base — delete_client.py les passe malgré tout à delete_resources(), qui ne
+    doit ni tenter un DELETE dessus (littéralement "/services/None" avant ce correctif), ni
+    les compter comme des échecs de suppression trompeurs."""
+    delete_service_mock = mock.Mock()
+    delete_postgres_mock = mock.Mock()
+    monkeypatch.setattr(render_client, "delete_service", delete_service_mock)
+    monkeypatch.setattr(render_client, "delete_postgres", delete_postgres_mock)
+
+    failed = render_client.delete_resources([
+        ("service backend", "service", None),
+        ("service frontend", "service", ""),
+        ("base Postgres", "postgres", "pg-1"),
+    ])
+
+    assert failed == []
+    delete_service_mock.assert_not_called()
+    delete_postgres_mock.assert_called_once_with("pg-1")
+
+
+# --- Retry sur 5xx transitoire pendant une suppression (rollback ou delete_client.py),
+# demandé le 2026-08-15 : une erreur serveur Render passagère (redéploiement en cours,
+# timeout interne...) ne doit pas suffire à déclarer une ressource orpheline si un simple
+# nouvel essai quelques secondes plus tard aurait réussi.
+
+def test_delete_resources_retries_on_transient_5xx_then_succeeds(monkeypatch):
+    monkeypatch.setattr(render_client.time, "sleep", lambda _s: None)
+    delete_service_mock = mock.Mock(side_effect=[
+        render_client.RenderAPIError("DELETE /services/srv-1 -> 502", status_code=502),
+        render_client.RenderAPIError("DELETE /services/srv-1 -> 502", status_code=502),
+        None,  # 3e tentative : succès
+    ])
+    monkeypatch.setattr(render_client, "delete_service", delete_service_mock)
+
+    failed = render_client.delete_resources([("service backend", "service", "srv-1")])
+
+    assert failed == []
+    assert delete_service_mock.call_count == 3
+
+
+def test_delete_resources_does_not_retry_on_4xx(monkeypatch):
+    """404/403 : la ressource n'existe déjà plus ou l'accès est refusé — réessayer ne
+    changerait rien, inutile de perdre du temps (ni de dépasser _DELETE_MAX_ATTEMPTS pour
+    rien)."""
+    delete_service_mock = mock.Mock(side_effect=render_client.RenderAPIError("DELETE /services/srv-1 -> 404", status_code=404))
+    monkeypatch.setattr(render_client, "delete_service", delete_service_mock)
+
+    failed = render_client.delete_resources([("service backend", "service", "srv-1")])
+
+    assert failed == [("service backend", "service", "srv-1")]
+    assert delete_service_mock.call_count == 1
+
+
+def test_delete_resources_does_not_retry_a_plain_network_failure(monkeypatch):
+    """Une panne réseau (status_code=None, cf. _request()) n'est PAS un 5xx Render — la
+    demande porte spécifiquement sur les erreurs SERVEUR Render transitoires, pas sur les
+    pannes réseau (déjà traitées ailleurs, cf. bug du 2026-08-14 sur delete_resources)."""
+    delete_service_mock = mock.Mock(side_effect=render_client.RenderAPIError("DELETE /services/srv-1 -> échec réseau", status_code=None))
+    monkeypatch.setattr(render_client, "delete_service", delete_service_mock)
+
+    failed = render_client.delete_resources([("service backend", "service", "srv-1")])
+
+    assert failed == [("service backend", "service", "srv-1")]
+    assert delete_service_mock.call_count == 1
+
+
+def test_delete_resources_gives_up_after_max_attempts_on_persistent_5xx(monkeypatch):
+    monkeypatch.setattr(render_client.time, "sleep", lambda _s: None)
+    delete_service_mock = mock.Mock(side_effect=render_client.RenderAPIError("DELETE /services/srv-1 -> 503", status_code=503))
+    monkeypatch.setattr(render_client, "delete_service", delete_service_mock)
+
+    failed = render_client.delete_resources([("service backend", "service", "srv-1")])
+
+    assert failed == [("service backend", "service", "srv-1")]
+    assert delete_service_mock.call_count == render_client._DELETE_MAX_ATTEMPTS

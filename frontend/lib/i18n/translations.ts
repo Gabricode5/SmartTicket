@@ -388,6 +388,11 @@ const fr = {
         moreOptionsAriaLabel: "Plus d'options",
         heroTitle: "Prêt à booster votre SAV ?",
         heroSubtitle: "Choisissez une action rapide ou posez votre question ci-dessous.",
+        // Obligation de transparence (règlement européen sur l'IA, art. 50) : la personne
+        // qui démarre une conversation doit être informée qu'elle échange avec un système
+        // d'IA, pas un humain — affiché une fois, avant le premier message, cf.
+        // ai-assistant/[id]/page.tsx (écran d'accueil de la conversation).
+        aiDisclosure: "Vous échangez avec l'assistant IA de {brand} — pas un humain. Vous pouvez demander à parler à un agent à tout moment.",
         suggestions: [
             { title: "Suivre ma commande", desc: "Statut et livraison", prompt: "Comment puis-je suivre ma commande ?" },
             { title: "Retour ou remboursement", desc: "Politique de retour", prompt: "Quelle est la politique de retour ou de remboursement ?" },
@@ -1099,6 +1104,7 @@ const en: typeof fr = {
         moreOptionsAriaLabel: "More options",
         heroTitle: "Ready to boost your support?",
         heroSubtitle: "Choose a quick action or ask your question below.",
+        aiDisclosure: "You are chatting with {brand}'s AI assistant — not a human. You can ask to speak with an agent at any time.",
         suggestions: [
             { title: "Track my order", desc: "Status and delivery", prompt: "How can I track my order?" },
             { title: "Return or refund", desc: "Return policy", prompt: "What is the return or refund policy?" },

@@ -1,9 +1,19 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
+import { IS_MARKETING_SITE } from "@/lib/deploymentMode"
 
 export function proxy(request: NextRequest) {
     const authToken = request.cookies.get("auth_token")?.value
     const pathname = request.nextUrl.pathname
+
+    // Séparation site vitrine / instance client (2026-08-15) : en mode instance, la racine
+    // ne doit JAMAIS servir la landing marketing SmartTicket ("Essayer gratuitement",
+    // "Propulsé par Mistral AI"...) à un client final — inacceptable pour la cible secteur
+    // régulé. Redirige vers l'app cliente (chat invité, déjà public ci-dessous) AVANT même
+    // d'atteindre la logique de routes publiques : traité en premier, jamais contournable.
+    if (pathname === "/" && !IS_MARKETING_SITE) {
+        return NextResponse.redirect(new URL("/chat", request.url))
+    }
 
     // Tout fichier statique servi depuis public/ (logo, images, polices...) doit être
     // public, quel que soit son nom — jamais couvert par la liste des routes ci-dessous,

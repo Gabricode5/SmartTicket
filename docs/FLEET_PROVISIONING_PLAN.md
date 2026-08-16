@@ -26,9 +26,18 @@ client.
   un plan payant au-delà du plan gratuit utilisé aujourd'hui pour l'instance de démo
 - [ ] Générer un **token API Render** (Account Settings → API Keys) et vérifier ses
   permissions (création de services, de bases de données, gestion des domaines)
-- [ ] Convention de nommage des ressources par client (ex: services `smartticket-{slug}-backend`
-  / `smartticket-{slug}-frontend`, DB `smartticket-{slug}-postgres`, où `slug` est un
-  identifiant court dérivé du nom du client, ex: `acme-corp`)
+- [x] Convention de nommage des ressources par client — **tranché (2026-07-17)** : services
+  `smartticket-{slug}-{render_suffix}-backend` / `-frontend`, DB
+  `smartticket-{slug}-{render_suffix}-postgres`, où `slug` est l'identifiant métier court
+  (ex: `acme-corp`, colonne `instances.db`) et `render_suffix` un suffixe hex de 6
+  caractères généré à CHAQUE provisioning (jamais réutilisé, cf. `generate_render_suffix()`
+  dans `ops/provision_client.py`). Ajouté suite à un bug réel : un slug tout juste supprimé
+  puis immédiatement réutilisé provoquait un 404 sur `/setup` — l'API Render impose que
+  `name` soit unique dans le workspace (confirmé sur le schéma OpenAPI), mais ne documente
+  ni le délai de libération d'un nom après suppression ni la propagation DNS/edge du
+  sous-domaine associé. `render_suffix` élimine structurellement toute collision possible
+  avec une ressource récemment supprimée sous le même slug, sans dépendre de ce délai
+  invérifiable. Le slug métier, lui, reste inchangé et propre en base.
 - [ ] Décider quels secrets sont **partagés** entre tous les clients vs **uniques par
   instance** :
   - Uniques par instance (obligatoire) : `SECRET_KEY`, `DATABASE_URL`, `ADMIN_SETUP_KEY` (cf. Phase 2)

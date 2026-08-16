@@ -11,9 +11,15 @@ Usage :
     python delete_client.py --slug acme-corp                 # demande confirmation interactive
     python delete_client.py --slug acme-corp --yes            # sans confirmation (scripts)
 
-ATTENTION : non testé contre un vrai compte Render, cf. render_client.py.
+La logique métier vit dans delete_instance() — une fonction pure (pas d'input(), pas de
+print(), uniquement une valeur de retour), même pattern que provision() dans
+provision_client.py, appelable telle quelle par un autre appelant (ex: ops/fleet_admin.py,
+Partie B.2bis) sans dupliquer la logique de suppression. main() n'est qu'un mince wrapper
+CLI : parse les arguments, gère --dry-run et la confirmation interactive, affiche le
+résultat pour un humain.
 """
 import argparse
+import dataclasses
 import logging
 import sys
 
@@ -25,6 +31,61 @@ import db
 import render_client as render
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger(__name__)
+
+
+@dataclasses.dataclass
+class DeleteResult:
+    slug: str
+    status: str  # "deleted" | "failed" | "not_found"
+    error: str | None = None
+
+
+def delete_instance(slug: str, *, keep_row: bool = False) -> DeleteResult:
+    """Supprime les ressources Render d'une instance et met à jour instances.db en
+    conséquence. RENDER_API_KEY est validée avant toute action (render.ensure_configured()) ;
+    ne lève jamais — retourne un DeleteResult typé, y compris sur échec, pour que l'appelant
+    (CLI ou une future UI) affiche le résultat RÉEL sans avoir à parser une exception."""
+    instance = db.get_instance(slug)
+    if not instance:
+        return DeleteResult(slug=slug, status="not_found", error=f"Aucune instance avec le slug '{slug}' dans ops/instances.db.")
+
+    try:
+        render.ensure_configured()
+    except render.RenderAPIError as exc:
+        return DeleteResult(slug=slug, status="failed", error=str(exc))
+
+    resources = [
+        ("service backend", "service", instance["render_backend_service_id"]),
+        ("service frontend", "service", instance["render_frontend_service_id"]),
+        ("base Postgres", "postgres", instance["render_database_id"]),
+    ]
+    # render.delete_resources() : boucle best-effort (continue même si une suppression
+    # échoue), partagée avec le rollback de provision_client.py plutôt que réimplémentée ici.
+    failed = render.delete_resources(resources)
+
+    if failed:
+        # Ne JAMAIS retirer/modifier la ligne tant qu'une ressource Render survit : c'est le
+        # seul registre qui permette de la retrouver pour un nettoyage manuel. Même logique
+        # que _rollback() dans provision_client.py sur un rollback incomplet (statut='failed'
+        # + IDs orphelins dans notes, ligne conservée) — bug réel du 2026-07-16 corrigé ici :
+        # une RENDER_API_KEY manquante faisait échouer les 3 suppressions, mais la ligne
+        # était quand même retirée juste après, rendant les 3 ressources facturées introuvables.
+        details = "; ".join(f"{label} (id={resource_id})" for label, _, resource_id in failed)
+        db.update_instance(slug, statut="deletion_failed", notes=details)
+        return DeleteResult(slug=slug, status="failed", error=(
+            f"{len(failed)} ressource(s) Render n'ont pas pu être supprimées : {details}. "
+            "Vérifier manuellement sur le dashboard Render (ressources potentiellement "
+            "encore facturées) — ligne conservée (statut 'deletion_failed') pour ne pas "
+            "perdre la trace des IDs orphelins."
+        ))
+
+    if keep_row:
+        db.update_instance_status(slug, "supprimee")
+    else:
+        db.delete_instance_row(slug)
+
+    return DeleteResult(slug=slug, status="deleted")
 
 
 def main() -> int:
@@ -49,6 +110,8 @@ def main() -> int:
         print("--- DRY RUN : rien ne sera supprimé ---")
         return 0
 
+    # Vérifiée ici AUSSI (en plus de delete_instance()) pour ne pas faire taper la
+    # confirmation ci-dessous à un humain avant de lui apprendre que la clé manque.
     try:
         render.ensure_configured()
     except render.RenderAPIError as exc:
@@ -61,42 +124,20 @@ def main() -> int:
             print("Confirmation invalide — annulation.")
             return 1
 
-    resources = [
-        ("service backend", "service", instance["render_backend_service_id"]),
-        ("service frontend", "service", instance["render_frontend_service_id"]),
-        ("base Postgres", "postgres", instance["render_database_id"]),
-    ]
     print("Suppression des ressources Render (backend, frontend, Postgres)...")
-    # render.delete_resources() : même boucle best-effort qu'avant (continue même si une
-    # suppression échoue), désormais partagée avec le rollback de provision_client.py plutôt
-    # que réimplémentée ici.
-    failed = render.delete_resources(resources)
+    result = delete_instance(args.slug, keep_row=args.keep_row)
 
-    if failed:
-        # Ne JAMAIS retirer/modifier la ligne tant qu'une ressource Render survit : c'est le
-        # seul registre qui permette de la retrouver pour un nettoyage manuel. Même logique
-        # que _rollback() dans provision_client.py sur un rollback incomplet (statut='failed'
-        # + IDs orphelins dans notes, ligne conservée) — bug réel du 2026-07-16 corrigé ici :
-        # une RENDER_API_KEY manquante faisait échouer les 3 suppressions, mais la ligne
-        # était quand même retirée juste après, rendant les 3 ressources facturées introuvables.
-        details = "; ".join(f"{label} (id={resource_id})" for label, _, resource_id in failed)
-        db.update_instance(args.slug, statut="deletion_failed", notes=details)
-        print(
-            f"\nÉCHEC PARTIEL : {details} — vérifier manuellement sur le dashboard Render "
-            "(ressources potentiellement encore facturées). La ligne reste dans "
-            f"instances.db (statut 'deletion_failed', IDs dans notes) : NE PAS relancer "
-            "aveuglément, nettoyer sur Render puis relancer ce script (il retentera "
-            "uniquement les ressources encore référencées) ou supprimer la ligne à la main "
-            "une fois le nettoyage confirmé.",
-            file=sys.stderr,
-        )
+    if result.status == "not_found":
+        print(f"Erreur : {result.error}", file=sys.stderr)
+        return 1
+
+    if result.status == "failed":
+        print(f"\nÉCHEC PARTIEL : {result.error}", file=sys.stderr)
         return 1
 
     if args.keep_row:
-        db.update_instance_status(args.slug, "supprimee")
         print("Ligne conservée dans instances.db avec statut 'supprimee'.")
     else:
-        db.delete_instance_row(args.slug)
         print("Ligne retirée de instances.db.")
 
     print(f"\nInstance '{args.slug}' décommissionnée.")

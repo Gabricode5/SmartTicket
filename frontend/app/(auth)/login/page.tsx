@@ -7,6 +7,7 @@ import Link from "next/link"
 import { ArrowLeft, Eye, EyeOff } from "lucide-react"
 import { LanguageToggle } from "@/components/LanguageToggle"
 import { useLocale } from "@/lib/i18n/LocaleContext"
+import { BRAND_NAME } from "@/lib/brand"
 
 export default function LoginPage() {
     return <LoginForm />
@@ -95,8 +96,8 @@ function LoginForm() {
                 <div className="flex items-center gap-3">
                     <LanguageToggle />
                     <div className="flex items-center gap-2 font-bold text-slate-800">
-                        <Image src="/logo_smartticket.png" alt="SmartTicket" width={28} height={28} className="h-7 w-7" />
-                        <span>SmartTicket</span>
+                        <Image src="/logo_smartticket.png" alt={BRAND_NAME} width={28} height={28} className="h-7 w-7" />
+                        <span>{BRAND_NAME}</span>
                     </div>
                 </div>
             </header>
@@ -111,7 +112,7 @@ function LoginForm() {
                         {/* Logo + Title */}
                         <div className="text-center mb-8">
                             <div className="inline-flex items-center justify-center w-12 h-12 mb-4">
-                                <Image src="/logo_smartticket.png" alt="SmartTicket" width={48} height={48} className="w-12 h-12" />
+                                <Image src="/logo_smartticket.png" alt={BRAND_NAME} width={48} height={48} className="w-12 h-12" />
                             </div>
                             <h1 className="text-2xl font-bold text-slate-900">{t.login.title}</h1>
                             <p className="text-slate-500 text-sm mt-1">

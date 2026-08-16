@@ -2,9 +2,19 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# Permet d'injecter l'URL API au moment du build
+# Render passe les env vars du service comme --build-arg automatiquement, MAIS seulement
+# pour les clés déclarées ici via ARG (comportement Docker standard : un --build-arg sans
+# ARG correspondant dans le Dockerfile est ignoré). Sans cette déclaration, `next build`
+# voit ces variables comme undefined et bake les valeurs par défaut, jamais celles posées
+# sur le service Render — même piège que NEXT_PUBLIC_API_URL, découvert le 2026-08-15 :
+# NEXT_PUBLIC_BRAND_NAME et NEXT_PUBLIC_DEPLOYMENT_MODE étaient posées par provision_client.py
+# mais jamais bakées, car absentes d'ici.
 ARG NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+ARG NEXT_PUBLIC_BRAND_NAME
+ENV NEXT_PUBLIC_BRAND_NAME=${NEXT_PUBLIC_BRAND_NAME}
+ARG NEXT_PUBLIC_DEPLOYMENT_MODE
+ENV NEXT_PUBLIC_DEPLOYMENT_MODE=${NEXT_PUBLIC_DEPLOYMENT_MODE}
 
 # On copie uniquement les fichiers de dépendances pour le cache
 COPY package.json package-lock.json* ./

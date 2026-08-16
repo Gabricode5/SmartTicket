@@ -1,2 +1,7 @@
 -r requirements.txt
 pytest==9.1.1
+# starlette (dépendance transitive de fastapi, non pinnée dans requirements.txt) exige
+# httpx2 pour starlette.testclient.TestClient depuis sa 1.0 — httpx ne suffit plus.
+# Sans ce paquet, tests/test_fleet_admin.py échoue à la COLLECTE (pas juste à l'exécution),
+# ce qui fait échouer toute la suite pytest sur CI (cf. run CI du 2026-08-16).
+httpx2

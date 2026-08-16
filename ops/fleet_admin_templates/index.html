@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+{% if any_job_running %}
+<meta http-equiv="refresh" content="10">
+{% endif %}
+<title>SmartTicket — Gestion de flotte (local)</title>
+<style>
+    /* Volontairement clair uniquement (pas de "color-scheme: light dark") : cette page mêle
+       de nombreux blocs à fond clair codé en dur (badges, panneau de suppression, formulaires)
+       sans couleur de texte explicite sur chacun — laisser le navigateur basculer en mode
+       sombre y faisait hériter un texte clair par défaut sur ces fonds clairs, illisible
+       (bug réel du 2026-08-15). Un outil interne mono-utilisateur n'a pas besoin des deux
+       thèmes ; figer un seul thème cohérent est plus simple à maintenir correctement que de
+       fixer une couleur de texte explicite sur chaque bloc existant et à venir. */
+    :root { color-scheme: light; }
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 1100px; margin: 2rem auto; padding: 0 1rem; background: #fff; color: #212529; }
+    h1 { font-size: 1.4rem; }
+    .warning { background: #fff3cd; color: #664d03; border: 1px solid #ffe69c; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
+    .danger { background: #f8d7da; color: #58151c; border: 1px solid #f1aeb5; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
+    table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+    th, td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid #ddd; font-size: 0.9rem; vertical-align: top; }
+    th { font-weight: 600; color: #555; }
+    .badge { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px; font-size: 0.78rem; font-weight: 600; }
+    .badge-active { background: #d1e7dd; color: #0a3622; }
+    .badge-provisioning { background: #cfe2ff; color: #052c65; }
+    .badge-failed, .badge-deletion_failed { background: #f8d7da; color: #58151c; }
+    .badge-suspendue, .badge-supprimee { background: #e2e3e5; color: #41464b; }
+    .health-ok { color: #0a3622; }
+    .health-unreachable { color: #b02a37; font-weight: 600; }
+    .health-non_verifie { color: #888; }
+    .sub-active { color: #0a3622; font-weight: 600; }
+    .sub-suspended { color: #b02a37; font-weight: 600; }
+    .sub-unknown { color: #997404; }
+    .sub-not_applicable { color: #888; }
+    .missing { color: #b02a37; font-weight: 600; }
+    .success { background: #d1e7dd; color: #0a3622; border: 1px solid #a3cfbb; border-radius: 6px; padding: 0.75rem 1rem; margin-bottom: 1rem; }
+    a { color: #0d6efd; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .links a { display: block; }
+    details { margin-bottom: 0.3rem; }
+    details summary { cursor: pointer; color: #0d6efd; font-size: 0.85rem; }
+    details form { margin-top: 0.4rem; padding: 0.5rem; background: #f8f9fa; color: #212529; border-radius: 4px; }
+    details form p { margin: 0 0 0.4rem; font-size: 0.8rem; }
+    details input { font-size: 0.85rem; padding: 0.2rem 0.4rem; }
+    details button { font-size: 0.8rem; margin-left: 0.3rem; }
+    details.danger-action summary { color: #b02a37; font-weight: 600; }
+    .billing-reminder { color: #997404; font-size: 0.78rem; }
+    .create-panel { border: 1px solid #ddd; border-radius: 6px; padding: 1rem; margin: 1rem 0; }
+    .create-panel h2 { font-size: 1rem; margin-top: 0; }
+    .create-panel label { display: block; font-size: 0.85rem; margin-top: 0.6rem; }
+    .create-panel input, .create-panel select { width: 100%; max-width: 320px; padding: 0.3rem 0.5rem; font-size: 0.9rem; margin-top: 0.15rem; }
+    .create-panel button { margin-top: 0.8rem; padding: 0.4rem 0.9rem; }
+    .create-panel .hint { color: #888; font-size: 0.78rem; }
+    .job-panel { margin: 1rem 0; }
+    .job-card { border: 1px solid #ddd; border-radius: 6px; padding: 0.6rem 0.8rem; margin-bottom: 0.5rem; font-size: 0.88rem; }
+    .job-running { border-left: 4px solid #0d6efd; }
+    .job-succeeded { border-left: 4px solid #0a3622; }
+    .job-failed { border-left: 4px solid #b02a37; }
+    footer { margin-top: 2rem; font-size: 0.8rem; color: #888; }
+</style>
+</head>
+<body>
+    <h1>Gestion de flotte SmartTicket — local uniquement</h1>
+
+    {% if not render_available %}
+    <div class="warning">
+        RENDER_API_KEY absente ou API Render injoignable : la liste ci-dessous vient
+        uniquement d'instances.db, sans croisement (statuts Render, orphelines, liens
+        dashboard désactivés).
+    </div>
+    {% endif %}
+
+    {% if action_result %}
+    <div class="{{ 'success' if action_result.ok else 'danger' }}">
+        {{ action_result.slug }} : {{ "action réussie" if action_result.ok else "échec" }} —
+        {{ action_result.message }}
+    </div>
+    {% endif %}
+
+    {% if creation_result %}
+    <div class="{{ 'success' if creation_result.ok else 'danger' }}">{{ creation_result.message }}</div>
+    {% endif %}
+
+    <details class="create-panel">
+        <summary><strong>Créer une nouvelle instance</strong></summary>
+        <form method="post" action="/instances/create" id="create-form">
+            <label>Nom de l'entreprise
+                <input type="text" name="client_name" id="create-client-name" placeholder="Martin Technologies" required autocomplete="off">
+            </label>
+            <label>Slug (identifiant technique — dérivé automatiquement, modifiable)
+                <input type="text" name="slug" id="create-slug" placeholder="martin-technologies" required autocomplete="off" pattern="[a-z0-9]+(-[a-z0-9]+)*">
+            </label>
+            <p class="hint">Un suffixe unique est ajouté automatiquement aux ressources Render
+            (cf. render_suffix) — ce slug reste l'identifiant métier propre, stocké tel quel.</p>
+            <label>Email admin
+                <input type="email" name="admin_email" placeholder="admin@client.com" required autocomplete="off">
+            </label>
+            <label>Plan Postgres
+                <select name="postgres_plan">
+                    {% for plan in postgres_plans %}
+                    <option value="{{ plan }}" {{ "selected" if plan == default_postgres_plan else "" }}>{{ plan }}</option>
+                    {% endfor %}
+                </select>
+            </label>
+            <p class="hint">Le provisioning prend environ 5 minutes (base Postgres + backend +
+            frontend Render) et se lance en tâche de fond — cette page reste utilisable
+            pendant ce temps. L'email de bienvenue part au client à la toute fin, une fois
+            l'instance active.</p>
+            <button type="submit">Lancer la création</button>
+        </form>
+    </details>
+
+    {% if provision_jobs %}
+    <div class="job-panel">
+        <h2 style="font-size:1rem">Provisioning en cours / récent</h2>
+        {% for job in provision_jobs %}
+        <div class="job-card job-{{ job.status }}">
+            <strong>{{ job.client_name }}</strong> ({{ job.slug }}) —
+            {% if job.status == "running" %}
+                en cours depuis {{ job.elapsed_minutes }} min... (page actualisée automatiquement)
+            {% elif job.status == "succeeded" %}
+                <span class="sub-active">active</span>, créée en {{ job.elapsed_minutes }} min.
+                {% if job.welcome_email_sent %}Email de bienvenue envoyé.{% else %}Email de bienvenue NON envoyé (voir logs serveur) — transmets le lien de setup manuellement.{% endif %}
+                {% if job.setup_url %}<br>Lien de setup (à usage unique) : <a href="{{ job.setup_url }}">{{ job.setup_url }}</a>{% endif %}
+            {% else %}
+                <span class="missing">échec</span> après {{ job.elapsed_minutes }} min — {{ job.error }}
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <table>
+        <thead>
+            <tr>
+                <th>Client</th><th>Slug</th><th>Statut</th><th>Plan</th><th>Créée le</th>
+                <th>Santé (GET /)</th><th>Render</th><th>Abonnement</th><th>Actions</th><th>Liens</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for i in instances %}
+            <tr>
+                <td>{{ i.client_name }}</td>
+                <td>{{ i.slug }}</td>
+                <td><span class="badge badge-{{ i.statut }}">{{ i.statut }}</span></td>
+                <td>{{ i.plan or "—" }}</td>
+                <td>{{ i.date_creation }}</td>
+                <td class="health-{{ i.health_status }}">{{ i.health_detail or i.health_status }}</td>
+                <td>{% if i.render_resource_missing %}<span class="missing">ressource(s) introuvable(s)</span>{% elif render_available %}ok{% else %}—{% endif %}</td>
+                <td class="sub-{{ i.subscription_status }}">
+                    {{ i.subscription_status if i.statut == "active" else "—" }}
+                    {% if i.subscription_detail %}<br><small>{{ i.subscription_detail }}</small>{% endif %}
+                    {% if i.subscription_status == "suspended" and i.subscription_since_days is not none %}
+                    <br><span class="billing-reminder">
+                        suspendue depuis {{ i.subscription_since_days }} jour{{ "s" if i.subscription_since_days != 1 else "" }}
+                        — facturation Render TOUJOURS ACTIVE (le conteneur reste vivant) ;
+                        envisager la suppression si l'impayé persiste
+                    </span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if i.statut == "active" %}
+                        {% if not i.can_manage_subscription %}
+                            <em class="missing">vendor_key absente — suspension impossible depuis la page</em>
+                        {% else %}
+                            {% if i.subscription_status != "suspended" %}
+                            <details>
+                                <summary>Suspendre</summary>
+                                <form method="post" action="/instances/{{ i.slug }}/suspend">
+                                    <p>Coupe l'accès à TOUS les utilisateurs finaux de ce client
+                                    (402 sur /v1/*) — mais N'ARRÊTE PAS la facturation Render
+                                    (le conteneur reste vivant, ~facturation habituelle par mois).
+                                    Tape <code>{{ i.slug }}</code> pour confirmer :</p>
+                                    <input type="text" name="confirm_slug" placeholder="{{ i.slug }}" required autocomplete="off">
+                                    <button type="submit">Confirmer la suspension</button>
+                                </form>
+                            </details>
+                            {% endif %}
+                            {% if i.subscription_status != "active" %}
+                            <details>
+                                <summary>Réactiver</summary>
+                                <form method="post" action="/instances/{{ i.slug }}/reactivate">
+                                    <p>Tape <code>{{ i.slug }}</code> pour confirmer :</p>
+                                    <input type="text" name="confirm_slug" placeholder="{{ i.slug }}" required autocomplete="off">
+                                    <button type="submit">Confirmer la réactivation</button>
+                                </form>
+                            </details>
+                            {% endif %}
+                        {% endif %}
+                    {% endif %}
+                    {% if i.statut != "supprimee" %}
+                    <details class="danger-action">
+                        <summary>Supprimer définitivement</summary>
+                        <form method="post" action="/instances/{{ i.slug }}/delete">
+                            <p><strong>IRRÉVERSIBLE.</strong> Détruit la base Postgres, le
+                            service backend et le service frontend de <strong>{{ i.client_name }}</strong>
+                            ({{ i.slug }}), ainsi que TOUTES les données de ses utilisateurs
+                            (tickets, comptes, base de connaissances). Seul le déprovisionnement
+                            arrête réellement la facturation Render — contrairement à la suspension.</p>
+                            <p>1. Tape <code>{{ i.slug }}</code> pour confirmer :</p>
+                            <input type="text" name="confirm_slug" placeholder="{{ i.slug }}" required autocomplete="off">
+                            <p style="margin-top:0.5rem">
+                                <label><input type="checkbox" name="confirm_destruction" value="yes" required>
+                                Je comprends que les données seront détruites définitivement.</label>
+                            </p>
+                            <button type="submit">Confirmer la suppression définitive</button>
+                        </form>
+                    </details>
+                    {% endif %}
+                </td>
+                <td class="links">
+                    {% if i.frontend_url %}<a href="{{ i.frontend_url }}" target="_blank">Frontend</a>{% endif %}
+                    {% if i.backend_url %}<a href="{{ i.backend_url }}" target="_blank">Backend</a>{% endif %}
+                    {% if i.render_dashboard_backend %}<a href="{{ i.render_dashboard_backend }}" target="_blank">Dashboard backend</a>{% endif %}
+                    {% if i.render_dashboard_frontend %}<a href="{{ i.render_dashboard_frontend }}" target="_blank">Dashboard frontend</a>{% endif %}
+                    {% if i.render_dashboard_postgres %}<a href="{{ i.render_dashboard_postgres }}" target="_blank">Dashboard Postgres</a>{% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr><td colspan="10">Aucune instance dans instances.db.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+    {% if orphans %}
+    <div class="danger">
+        <strong>{{ orphans|length }} ressource(s) Render sans ligne correspondante dans
+        instances.db</strong> — probablement facturées sans trace locale (cf.
+        audit_render_resources.py pour le détail) :
+        <ul>
+        {% for o in orphans %}
+            <li>{{ o.name }} ({{ o.type }}, id={{ o.id }}) — <a href="{{ o.dashboard }}" target="_blank">dashboard</a></li>
+        {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+
+    <footer>
+        Cette page tourne uniquement sur ce poste (127.0.0.1) et peut créer/suspendre/
+        supprimer des ressources Render payantes — ne jamais l'exposer publiquement.
+    </footer>
+
+    <script>
+        // Dérive le slug depuis le nom du client — confort d'UI uniquement, le slug reste
+        // un champ texte normal que l'utilisateur peut corriger avant de soumettre (cf.
+        // consigne Partie B.3). Ne se déclenche que si le slug n'a pas déjà été modifié à la
+        // main, pour ne jamais écraser une correction volontaire.
+        (function () {
+            var nameInput = document.getElementById("create-client-name");
+            var slugInput = document.getElementById("create-slug");
+            if (!nameInput || !slugInput) return;
+            var slugEditedManually = false;
+            slugInput.addEventListener("input", function () { slugEditedManually = true; });
+            nameInput.addEventListener("input", function () {
+                if (slugEditedManually) return;
+                var accentPattern = new RegExp("[" + String.fromCharCode(0x0300) + "-" + String.fromCharCode(0x036f) + "]", "g");
+                var slug = nameInput.value
+                    .normalize("NFD").replace(accentPattern, "")
+                    .toLowerCase()
+                    .replace(/[^a-z0-9]+/g, "-")
+                    .replace(/^-+|-+$/g, "");
+                slugInput.value = slug;
+            });
+        })();
+    </script>
+</body>
+</html>

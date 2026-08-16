@@ -21,20 +21,40 @@ Prérequis (cf. docs/FLEET_PROVISIONING_PLAN.md, Phase 0) :
     - Si --domain est fourni : le domaine doit déjà exister et pointer vers Render (wildcard
       DNS), cf. Phase 0. Sans --domain, l'instance reste accessible via son URL *.onrender.com.
 
-ATTENTION : plusieurs essais réels contre un vrai compte Render effectués le 2026-07-14 (cf.
-render_client.py pour le détail des écarts trouvés et corrigés avec le schéma OpenAPI réel de
-Render). Confirmés fonctionner en pratique : création de la base Postgres, rollback sur échec
-partiel, POST /v1/setup (amorçage du compte admin par token). Bug trouvé et corrigé sur cette
-même série d'essais : sans --domain, le frontend recevait NEXT_PUBLIC_API_URL vide à son
-premier build (Next.js bake les rewrites de next.config.ts au build, jamais au runtime) —
-build_urls() prédit maintenant les URLs *.onrender.com par avance au lieu de les découvrir
-après coup — cf. frontend/scripts/verify-production-build.mjs (lancé en CI juste après
-`next build`), qui fait maintenant échouer explicitement tout build où le rewrite /api/*
-retomberait sur ce fallback localhost. L'attachement d'un domaine personnalisé (--domain),
-lui, reste non testé en conditions réelles (en particulier l'attente du certificat TLS).
-Toujours lancer avec
---dry-run d'abord, puis sur une instance de test jetable avant tout client réel (Phase 4 du
-plan).
+ATTENTION : plusieurs essais réels contre un vrai compte Render effectués depuis le
+2026-07-14 (cf. render_client.py pour le détail des écarts trouvés et corrigés avec le
+schéma OpenAPI réel de Render). Confirmés fonctionner en pratique : création de la base
+Postgres, rollback sur échec partiel, POST /v1/setup (amorçage du compte admin par token).
+
+BUG DE FOND trouvé le 2026-08-15, en conditions réelles (instance martin-technologies) :
+l'URL *.onrender.com d'un service n'est PAS déterministe à partir du nom qu'on lui donne,
+contrairement à ce que la doc publique Render laissait penser et à ce que ce module a
+longtemps supposé (cf. l'ancienne build_urls(), qui prédisait "https://{nom}.onrender.com").
+Preuve : un service nommé "smartticket-martin-technologies-9abaae-backend" a été assigné à
+l'URL réelle "...-9abaae-xml6.onrender.com" par Render (suffixe supplémentaire imprévisible)
+— la prédiction pointait vers une URL qui ne répondait jamais (404), rendant NEXT_PUBLIC_API_URL,
+CORS_ORIGINS, FRONTEND_URL et le lien de setup tous faux malgré un provisioning "réussi" côté
+Render (backend Online, frontend Live). provision() ne prédit donc plus JAMAIS l'URL d'un
+service *.onrender.com : elle est relue depuis l'API (GET /services/{id}, champ
+serviceDetails.url) juste après le premier déploiement de CHAQUE service. Conséquence sur
+l'ordre : le backend a besoin de CORS_ORIGINS/FRONTEND_URL (= URL réelle du frontend), mais
+le frontend n'existe pas encore quand le backend est créé — le backend est donc redéployé une
+seconde fois, une fois l'URL réelle du frontend connue (render.set_env_vars + trigger_deploy).
+Avec --domain, ce problème ne se pose pas : le domaine personnalisé est choisi PAR NOUS
+(build_domain_urls()), Render ne peut pas le renommer — ce chemin reste inchangé, mais
+demeure non testé en conditions réelles (en particulier l'attente du certificat TLS).
+
+Bug corrigé le 2026-07-14 (frontend) et 2026-07-17 (backend), toujours valables : Next.js
+bake les rewrites de next.config.ts au BUILD, jamais au runtime (NEXT_PUBLIC_API_URL doit
+donc être correcte AVANT le premier build du frontend, jamais corrigée après coup sans
+nouveau build) — cf. frontend/scripts/verify-production-build.mjs, lancé en CI juste après
+`next build`. backend/email_utils.py construit les liens de vérification d'email/reset
+password à partir de FRONTEND_URL (défaut "http://localhost:3005" si absente) — email bien
+reçu (Brevo fonctionnait) mais lien cassé en ERR_CONNECTION_REFUSED tant qu'elle n'est pas
+injectée. FRONTEND_URL fait partie de backend_env, même valeur que CORS_ORIGINS.
+
+Toujours lancer avec --dry-run d'abord, puis sur une instance de test jetable avant tout
+client réel (Phase 4 du plan).
 
 La logique métier vit dans provision() — une fonction pure (pas d'input(), pas de print()
 comme moyen de retour, uniquement du logging + une valeur de retour) appelable telle quelle
@@ -82,33 +102,31 @@ def generate_secret(length: int = 32) -> str:
     return secrets.token_urlsafe(length)
 
 
-def backend_service_name(slug: str) -> str:
-    return f"smartticket-{slug}-backend"
+def generate_render_suffix() -> str:
+    """6 caractères hex (secrets.token_hex(3), ~16M combinaisons) ajoutés au nom de CHAQUE
+    ressource Render créée par un provisioning donné — cf. backend_service_name() ci-dessous
+    pour le pourquoi (réutilisation immédiate d'un slug)."""
+    return secrets.token_hex(3)
 
 
-def frontend_service_name(slug: str) -> str:
-    return f"smartticket-{slug}-frontend"
+def backend_service_name(slug: str, render_suffix: str) -> str:
+    return f"smartticket-{slug}-{render_suffix}-backend"
 
 
-def build_urls(slug: str, domain: str | None) -> tuple[str, str]:
-    """Retourne (backend_url, frontend_url) — TOUJOURS prédites à l'avance, jamais
-    découvertes après coup depuis la réponse de l'API Render. Avec --domain, ce sont les
-    URLs du domaine personnalisé (posé plus tard via add_custom_domain). Sans --domain,
-    l'URL *.onrender.com est déterministe à partir du nom de service que NOUS choisissons
-    (https://{nom}.onrender.com — confirmé par la doc Render, pas besoin d'attendre une
-    réponse d'API pour la connaître).
+def frontend_service_name(slug: str, render_suffix: str) -> str:
+    return f"smartticket-{slug}-{render_suffix}-frontend"
 
-    Bug trouvé le 2026-07-14 lors d'un provisioning réel : cette fonction renvoyait ("", "")
-    sans --domain, sur l'hypothèse (fausse) que l'URL n'était connue qu'après création. Le
-    frontend recevait donc NEXT_PUBLIC_API_URL vide à son PREMIER build — et Next.js bake
-    les rewrites de next.config.ts au build, pas au runtime (confirmé : rewrites() n'est
-    réévalué ni par `next start` ni par un redeploy à chaud, seul un nouveau build compte) —
-    donc le fallback "http://localhost:8000" restait figé dans l'image, et tous les appels
-    /api/* du frontend déployé échouaient en 404 (proxy Next.js vers un localhost qui
-    n'écoute rien dans le conteneur frontend)."""
-    if domain:
-        return f"https://{slug}-api.{domain}", f"https://{slug}.{domain}"
-    return f"https://{backend_service_name(slug)}.onrender.com", f"https://{frontend_service_name(slug)}.onrender.com"
+
+def postgres_name(slug: str, render_suffix: str) -> str:
+    return f"smartticket-{slug}-{render_suffix}-postgres"
+
+
+def build_domain_urls(slug: str, domain: str) -> tuple[str, str]:
+    """Retourne (backend_url, frontend_url) pour un domaine personnalisé — déterministe
+    car NOUS choisissons ce domaine (posé plus tard via add_custom_domain), Render ne peut
+    pas le renommer. Distinct des URLs *.onrender.com : cf. le bug réel du 2026-08-15
+    documenté sur provision(), qui ne prédit plus JAMAIS ces dernières."""
+    return f"https://{slug}-api.{domain}", f"https://{slug}.{domain}"
 
 
 def _shared_secret(env_var: str, required: bool = True) -> str:
@@ -179,9 +197,10 @@ def provision(
     if db.slug_exists(slug):
         return ProvisionResult(slug=slug, status="failed", error=f"Le slug '{slug}' existe déjà dans ops/instances.db.")
 
-    backend_name = backend_service_name(slug)
-    frontend_name = frontend_service_name(slug)
-    db_name = f"smartticket-{slug}-postgres"
+    render_suffix = generate_render_suffix()
+    backend_name = backend_service_name(slug, render_suffix)
+    frontend_name = frontend_service_name(slug, render_suffix)
+    db_name = postgres_name(slug, render_suffix)
 
     secret_key = generate_secret()
     vendor_key = generate_secret()
@@ -205,10 +224,11 @@ def provision(
             "relancer le provisioning."
         )
 
-    # Toujours non vides désormais (cf. build_urls()) — utilisées directement pour
-    # CORS_ORIGINS et NEXT_PUBLIC_API_URL dès la création des services, sans avoir besoin
-    # d'un deuxième déploiement correctif après coup.
-    backend_url, frontend_url = build_urls(slug, domain)
+    # Avec --domain : déterministe, nous choisissons le domaine (cf. build_domain_urls()).
+    # Sans --domain : (None, None), l'URL réelle *.onrender.com de chaque service n'est
+    # connue qu'après sa création — jamais prédite, cf. docstring du module (bug du
+    # 2026-08-15).
+    domain_backend_url, domain_frontend_url = build_domain_urls(slug, domain) if domain else (None, None)
 
     db.insert_instance(client_name=client_name, slug=slug, vendor_key=vendor_key, statut="provisioning")
 
@@ -242,12 +262,24 @@ def provision(
         if not database_url:
             raise RuntimeError("Impossible de récupérer la chaîne de connexion de la base Postgres.")
 
+        # Sans --domain, CORS_ORIGINS/FRONTEND_URL ne peuvent pas encore être correctes : le
+        # frontend n'existe pas encore, donc son URL réelle est inconnue (cf. docstring du
+        # module). Posées vides pour l'instant — corrigées et redéployées plus bas, une fois
+        # l'URL réelle du frontend connue. Avec --domain, la valeur finale est déjà connue.
         backend_env = {
             "DATABASE_URL": database_url,
             "SECRET_KEY": secret_key,
             "ALGORITHM": "HS256",
             "ACCESS_TOKEN_EXPIRE_MINUTES": "60",
-            "CORS_ORIGINS": frontend_url,
+            "CORS_ORIGINS": domain_frontend_url or "",
+            # Sans ça, backend/email_utils.py retombait sur son défaut
+            # ("http://localhost:3005") pour CONSTRUIRE LES LIENS de tous les emails
+            # transactionnels (vérification d'email, reset password, invitation en masse) —
+            # bug réel du 2026-07-17 : email reçu (Brevo fonctionnait), mais le lien pointait
+            # sur localhost -> ERR_CONNECTION_REFUSED côté client. Le lien de setup
+            # (ops/notify.py) n'est PAS affecté : setup_url est construit plus bas à partir de
+            # frontend_url, jamais via cette variable backend.
+            "FRONTEND_URL": domain_frontend_url or "",
             "VENDOR_KEY": vendor_key,
             "ADMIN_EMAIL": admin_email,
             "ADMIN_USERNAME": "admin",
@@ -285,24 +317,36 @@ def provision(
         if not render.wait_for_deploy_live(backend_service_id):
             logger.warning("Le backend n'est pas encore 'live' après le délai d'attente — vérifie manuellement sur Render.")
 
-        # Contrôle de cohérence diagnostique (pas correctif) : l'URL *.onrender.com est
-        # censée être déterministe à partir du nom qu'on a choisi (cf. build_urls()), mais
-        # ce nom n'est garanti unique QUE dans notre workspace — une collision globale sur
-        # Render resterait possible en théorie. Si l'API renvoie une URL différente de celle
-        # prédite, NEXT_PUBLIC_API_URL/CORS_ORIGINS seront quand même posées avec la valeur
-        # prédite (celle qu'on a demandée) ; ce log est le seul filet pour repérer une
-        # divergence avant qu'elle ne se traduise en 404 silencieux côté client.
-        backend_reported_url = backend_service.get("serviceDetails", {}).get("url", "")
-        if backend_reported_url and backend_reported_url != backend_url:
-            logger.warning(
-                "URL backend réelle (%s) différente de l'URL prédite (%s) — probable "
-                "collision de nom *.onrender.com. NEXT_PUBLIC_API_URL/CORS_ORIGINS utilisent "
-                "la valeur prédite : vérifier manuellement si le frontend ne joint pas le backend.",
-                backend_reported_url, backend_url,
-            )
+        # URL RÉELLE, jamais devinée — bug réel du 2026-08-15 (cf. docstring du module) :
+        # l'URL *.onrender.com effectivement assignée par Render peut différer du nom de
+        # service demandé (suffixe supplémentaire imprévisible constaté en conditions
+        # réelles). Relue depuis l'API après le premier déploiement, pas depuis une
+        # convention de nommage.
+        if domain_backend_url:
+            backend_url = domain_backend_url
+        else:
+            backend_service = render.get_service(backend_service_id)
+            backend_url = backend_service.get("serviceDetails", {}).get("url", "")
+            if not backend_url:
+                raise RuntimeError(f"Impossible de récupérer l'URL réelle du service backend {backend_service_id} (serviceDetails.url absent de la réponse API).")
+        db.update_instance(slug, backend_url=backend_url)
 
         frontend_env = {
             "NEXT_PUBLIC_API_URL": backend_url,
+            # White-label du nom de marque (Phase 0 bis, 2026-08-15) — même piège que
+            # NEXT_PUBLIC_API_URL : NEXT_PUBLIC_* est bakée au BUILD Next.js, jamais
+            # réévaluée au runtime, donc posée ici AVANT la création du service (premier
+            # build). Valeur = client_name (déjà capturé plus haut), pas slug : c'est le nom
+            # affiché aux utilisateurs finaux du client, pas l'identifiant technique.
+            "NEXT_PUBLIC_BRAND_NAME": client_name,
+            # Séparation site vitrine / instance client (2026-08-15) : sans cette variable,
+            # frontend/lib/deploymentMode.ts défaut déjà à "instance" (sécurisé par design —
+            # cf. sa docstring), donc omettre cette ligne ne romprait rien. Posée explicitement
+            # quand même, pour qu'un futur lecteur de ce fichier voie le comportement voulu
+            # sans avoir à aller consulter le défaut du frontend. Sans elle (ou avec "marketing"),
+            # la landing marketing SmartTicket (nom, "Propulsé par Mistral"...) resterait
+            # accessible au public du client — inacceptable pour la cible secteur régulé.
+            "NEXT_PUBLIC_DEPLOYMENT_MODE": "instance",
         }
 
         logger.info("Création du service frontend '%s'...", frontend_name)
@@ -319,20 +363,30 @@ def provision(
         if not render.wait_for_deploy_live(frontend_service_id):
             logger.warning("Le frontend n'est pas encore 'live' après le délai d'attente — vérifie manuellement sur Render.")
 
-        # Même contrôle diagnostique que côté backend ci-dessus.
-        frontend_reported_url = frontend_service.get("serviceDetails", {}).get("url", "")
-        if frontend_reported_url and frontend_reported_url != frontend_url:
-            logger.warning(
-                "URL frontend réelle (%s) différente de l'URL prédite (%s) — probable "
-                "collision de nom *.onrender.com. Le lien de setup utilisera quand même la "
-                "valeur prédite : vérifier manuellement s'il ne fonctionne pas.",
-                frontend_reported_url, frontend_url,
-            )
-
         if domain:
-            logger.info("Attachement du domaine personnalisé %s...", frontend_url)
+            logger.info("Attachement du domaine personnalisé %s...", domain_frontend_url)
             render.add_custom_domain(frontend_service_id, f"{slug}.{domain}")
+            frontend_url = domain_frontend_url
+        else:
+            # Même lecture RÉELLE que pour le backend ci-dessus, jamais devinée.
+            frontend_service = render.get_service(frontend_service_id)
+            frontend_url = frontend_service.get("serviceDetails", {}).get("url", "")
+            if not frontend_url:
+                raise RuntimeError(f"Impossible de récupérer l'URL réelle du service frontend {frontend_service_id} (serviceDetails.url absent de la réponse API).")
 
+            # Le backend a été créé avec CORS_ORIGINS/FRONTEND_URL vides (frontend_url était
+            # encore inconnue à ce moment) — maintenant qu'elle l'est, on corrige et on
+            # redéploie. Avec --domain, inutile : ces valeurs étaient déjà correctes dès la
+            # création du backend (build_domain_urls() est déterministe).
+            logger.info("Mise à jour de CORS_ORIGINS/FRONTEND_URL du backend avec l'URL réelle du frontend, et redéploiement...")
+            backend_env["CORS_ORIGINS"] = frontend_url
+            backend_env["FRONTEND_URL"] = frontend_url
+            render.set_env_vars(backend_service_id, backend_env)
+            render.trigger_deploy(backend_service_id)
+            if not render.wait_for_deploy_live(backend_service_id):
+                logger.warning("Le redéploiement du backend (CORS_ORIGINS/FRONTEND_URL corrigées) n'est pas encore 'live' après le délai d'attente — vérifie manuellement sur Render.")
+
+        db.update_instance(slug, frontend_url=frontend_url)
         setup_url = f"{frontend_url}/setup?token={admin_setup_token}"
 
     except Exception as exc:
@@ -346,6 +400,10 @@ def provision(
         slug,
         backend_url=backend_url, frontend_url=frontend_url,
         subdomain=f"{slug}.{domain}" if domain else None,
+        # Complète une colonne déjà existante en base mais jamais renseignée jusqu'ici — pas
+        # un changement de logique métier, juste la valeur qu'on connaît déjà (postgres_plan)
+        # écrite là où elle était censée l'être. Utile pour la page de gestion (Partie B).
+        plan_tarifaire=postgres_plan,
         statut="active",
     )
 
@@ -392,17 +450,21 @@ def main() -> int:
         return 1
 
     if args.dry_run:
-        backend_url, frontend_url = build_urls(args.slug, args.domain)
+        render_suffix = generate_render_suffix()
         print("--- DRY RUN : rien ne sera créé ---")
-        print(f"Postgres      : smartticket-{args.slug}-postgres (plan={args.postgres_plan}, version={args.postgres_version})")
-        print(f"Backend       : {backend_service_name(args.slug)} (plan={args.web_plan}) — repo={args.repo}@{args.branch}, rootDir=backend")
-        print(f"              URL prédite : {backend_url}")
-        print(f"Frontend      : {frontend_service_name(args.slug)} (plan={args.web_plan}) — repo={args.repo}@{args.branch}, rootDir=frontend")
-        print(f"              URL prédite : {frontend_url}")
-        print(f"              NEXT_PUBLIC_API_URL sera posée à : {backend_url}")
+        print(f"Postgres      : {postgres_name(args.slug, render_suffix)} (plan={args.postgres_plan}, version={args.postgres_version})")
+        print(f"Backend       : {backend_service_name(args.slug, render_suffix)} (plan={args.web_plan}) — repo={args.repo}@{args.branch}, rootDir=backend")
+        print(f"Frontend      : {frontend_service_name(args.slug, render_suffix)} (plan={args.web_plan}) — repo={args.repo}@{args.branch}, rootDir=frontend")
+        if args.domain:
+            domain_backend_url, domain_frontend_url = build_domain_urls(args.slug, args.domain)
+            print(f"              URL backend (domaine)  : {domain_backend_url}")
+            print(f"              URL frontend (domaine) : {domain_frontend_url}")
+        else:
+            print("Domaine       : aucun — URLs *.onrender.com réelles connues UNIQUEMENT après création")
+            print("                de chaque service (jamais devinées, cf. bug réel du 2026-08-15 documenté")
+            print("                en tête de ce fichier) : provision() les relit via l'API après coup.")
         print(f"Admin email   : {args.admin_email}")
-        if not args.domain:
-            print("Domaine       : aucun — URLs *.onrender.com ci-dessus (déterministes, cf. build_urls())")
+        print(f"Suffixe Render: {render_suffix} (exemple — régénéré à chaque exécution réelle, cf. generate_render_suffix())")
         print("Secrets générés (non affichés en dry-run — regénérés à chaque exécution réelle)")
         return 0
 
