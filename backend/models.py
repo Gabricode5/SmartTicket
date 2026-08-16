@@ -86,12 +86,18 @@ class Ticket(Base):
     """Un ticket par CYCLE de transfert IA→humain, pas un par conversation (cf. ROADMAP.md,
     chantier "refonte ticketing SAV", décision validée le 2026-08-17) : une session peut être
     transférée, résolue puis re-transférée plus tard — chaque transfert crée un nouveau ticket
-    numéroté, session_id n'est PAS unique. Pas de duplication du contenu de la conversation :
-    l'historique complet (y compris les réponses IA avant transfert) reste accessible via
-    session_id + created_at comme borne temporelle (created_at = moment du transfert), et
-    session.transfer_reason reste la source de vérité pour la raison du transfert — jamais
-    copié ici. Étape 1 du chantier (modèle + migration seulement) : aucun endpoint ne crée
-    encore de Ticket, cette classe n'est câblée nulle part avant l'Étape 2."""
+    numéroté, session_id n'est PAS unique.
+
+    reason et context_cutoff_message_id ajoutés à l'Étape 2 (2026-08-18), après vérification
+    du flux de transfert réel : session.transfer_reason est EFFACÉ par resolve_session()
+    (routers/sessions.py) dès que la session repasse "open" -- le référencer en lecture (comme
+    envisagé à l'Étape 1) aurait perdu la raison historique du ticket dès sa résolution. reason
+    est donc un snapshot immuable, posé une seule fois à la création. context_cutoff_message_id
+    (id du dernier ChatMessage existant juste avant CE transfert, capturé avant l'insertion du
+    message système "vous avez été mis en relation") isole le contexte IA propre à CE cycle --
+    un id de message, monotone et sans ambiguïté, plutôt que created_at (aucune garantie
+    d'ordre entre deux inserts quasi simultanés, et ne suffit de toute façon pas à borner
+    plusieurs cycles de transfert sur la même session)."""
     __tablename__ = "tickets"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -103,6 +109,8 @@ class Ticket(Base):
     waiting_on = Column(String(20), nullable=False, server_default="us", index=True)  # us | customer
     assigned_agent_id = Column(Integer, ForeignKey("utilisateur.id", ondelete="SET NULL"), nullable=True, index=True)
     priority = Column(String(10), nullable=False, server_default="normal")  # normal | urgent
+    reason = Column(String(50), nullable=True)  # snapshot de transfer_reason à la création (technique/complexe/sensible/autre)
+    context_cutoff_message_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True)
     tenant_id = _tenant_id_column()
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

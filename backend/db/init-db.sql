@@ -158,8 +158,12 @@ CREATE INDEX ON notifications (tenant_id);
 -- =========================================
 -- Un ticket par cycle de transfert IA->humain (pas un par conversation : une session peut
 -- être transférée, résolue puis re-transférée plus tard, chaque transfert numérote un
--- nouveau ticket -- session_id n'est PAS unique). Pas de duplication du contenu de la
--- conversation ni de session.transfer_reason : atteignables via session_id + created_at.
+-- nouveau ticket -- session_id n'est PAS unique).
+-- reason et context_cutoff_message_id (Étape 2, 2026-08-18) : session.transfer_reason est
+-- EFFACÉ par resolve_session() dès que la session repasse "open" -- reason est donc un
+-- snapshot immuable posé à la création, pas une simple référence. context_cutoff_message_id
+-- (dernier chat_messages.id avant CE transfert) isole le contexte IA propre à ce cycle --
+-- un id de message, pas un timestamp (pas de garantie d'ordre entre inserts quasi simultanés).
 CREATE SEQUENCE IF NOT EXISTS ticket_number_seq START 1000;
 
 CREATE TABLE tickets (
@@ -170,6 +174,8 @@ CREATE TABLE tickets (
     waiting_on VARCHAR(20) NOT NULL DEFAULT 'us' CHECK (waiting_on IN ('us','customer')), -- Dimension indépendante de status
     assigned_agent_id INTEGER REFERENCES utilisateur(id) ON DELETE SET NULL, -- NULL = non assigné, dans la file
     priority VARCHAR(10) NOT NULL DEFAULT 'normal' CHECK (priority IN ('normal','urgent')),
+    reason VARCHAR(50),                                        -- Snapshot de transfer_reason à la création
+    context_cutoff_message_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL, -- Borne du contexte IA pré-transfert
     tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001', -- Préparation multi-tenant
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Dernière activité
