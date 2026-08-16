@@ -37,18 +37,30 @@ SUPPORTED_POSTGRES_VERSIONS = ("11", "12", "13", "14", "15", "16", "17", "18")
 # maximale sur Postgres 13+.
 DEFAULT_POSTGRES_VERSION = "18"
 
-# Sous-ensemble curaté du schéma `plan` de POST /postgres (vérifié sur le schéma OpenAPI réel
-# le 2026-08-15, pas deviné — l'enum complet compte 29 valeurs, jusqu'à accelerated_1024gb,
-# disproportionné pour la sélection dans le formulaire de création — Partie B.3). Utilisée
-# UNIQUEMENT pour peupler ce formulaire (fleet_admin.py) : create_postgres() ci-dessous
-# n'impose PAS cette liste — d'autres plans réels valides (ex: "starter", déjà utilisé dans
-# ops/README.md et les tests) restent acceptables via la CLI. "free" reste refusé dans tous
-# les cas (aucun backup automatique).
-SUPPORTED_POSTGRES_PLANS = (
-    "basic_256mb", "basic_1gb", "basic_4gb",
-    "pro_4gb", "pro_8gb", "pro_16gb", "pro_32gb",
+# Paliers proposés dans le formulaire de création (fleet_admin.py), pas l'enum Render complet
+# (29 valeurs, jusqu'à accelerated_1024gb) ni même l'ancien sous-ensemble curaté à 7 valeurs
+# (pro_4gb/8gb/16gb/32gb retirés le 2026-08-16 : modèle de vente à prix fixe par palier,
+# inutiles à cette échelle — à rajouter si un jour un client les justifie). Utilisée
+# UNIQUEMENT pour peupler ce formulaire : create_postgres() ci-dessous n'impose PAS cette
+# liste — d'autres plans réels valides restent acceptables via la CLI (--postgres-plan).
+# "free" reste refusé dans tous les cas (aucun backup automatique).
+#
+# monthly_usd vérifiés sur le pricing Render réel le 2026-08-16 (page JS, non figée dans une
+# doc statique — à reconfirmer si Render change ses tarifs) : basic_256mb $6/mois, basic_1gb
+# $19/mois, basic_4gb $90/mois (2 vCPU / 4 GB RAM / 50 GB stockage inclus) — PAS $75/mois
+# comme estimé initialement, deux sources indépendantes convergent sur $90.
+FLEET_ADMIN_POSTGRES_PLANS = (
+    {"value": "basic_1gb", "label": "Standard (client)", "monthly_usd": 19},
+    {"value": "basic_4gb", "label": "Gros volume", "monthly_usd": 90},
+    {"value": "basic_256mb", "label": "Test (jetable)", "monthly_usd": 6},
 )
-DEFAULT_POSTGRES_PLAN = "basic_256mb"
+DEFAULT_POSTGRES_PLAN = "basic_1gb"
+
+# Plan Render des services web (backend + frontend) tel que fixé par provision() — fleet_admin
+# ne l'expose pas comme champ de formulaire, donc constant pour le calcul de coût total.
+# Prix vérifié sur le pricing Render réel le 2026-08-16 : $7/mois (0.5 vCPU / 512 MB RAM).
+WEB_SERVICE_PLAN = "starter"
+WEB_SERVICE_PLAN_MONTHLY_USD = 7
 
 
 class RenderAPIError(RuntimeError):

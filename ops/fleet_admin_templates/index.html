@@ -100,10 +100,13 @@
             <label>Plan Postgres
                 <select name="postgres_plan">
                     {% for plan in postgres_plans %}
-                    <option value="{{ plan }}" {{ "selected" if plan == default_postgres_plan else "" }}>{{ plan }}</option>
+                    <option value="{{ plan.value }}" {{ "selected" if plan.value == default_postgres_plan else "" }}>{{ plan.label }} — {{ plan.value }}, ~{{ plan.monthly_usd }} $/mois</option>
                     {% endfor %}
                 </select>
             </label>
+            <p class="hint">Coût total par instance (Postgres + backend + frontend, ces 2
+            derniers toujours en plan starter) :
+            {% for plan in postgres_plans %}{{ plan.label }} ~{{ plan.total_monthly_usd }} $/mois{{ ", " if not loop.last else "" }}{% endfor %}.</p>
             <p class="hint">Le provisioning prend environ 5 minutes (base Postgres + backend +
             frontend Render) et se lance en tâche de fond — cette page reste utilisable
             pendant ce temps. L'email de bienvenue part au client à la toute fin, une fois

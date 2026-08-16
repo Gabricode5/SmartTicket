@@ -660,9 +660,39 @@ def test_index_shows_postgres_plan_dropdown_with_default_selected(monkeypatch):
 
     html = client.get("/").text
 
-    assert 'value="basic_256mb" selected' in html
-    for plan in fleet_admin.render.SUPPORTED_POSTGRES_PLANS:
-        assert f'value="{plan}"' in html
+    # basic_1gb ("Standard (client)") est le défaut depuis le 2026-08-16 : modèle de vente à
+    # prix fixe par palier, basic_256mb est réservé aux instances de test jetables.
+    assert 'value="basic_1gb" selected' in html
+    for plan in render_client.FLEET_ADMIN_POSTGRES_PLANS:
+        assert f'value="{plan["value"]}"' in html
+
+
+def test_index_only_shows_the_3_curated_postgres_plans_not_the_full_render_enum(monkeypatch):
+    """Modèle de vente à prix fixe par palier (2026-08-16) : le dropdown ne doit jamais
+    proposer les paliers pro_8gb/pro_16gb/pro_32gb — disproportionnés à cette échelle, à
+    rajouter seulement si un client réel les justifie un jour."""
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    client = TestClient(fleet_admin.app)
+
+    html = client.get("/").text
+
+    assert 'value="pro_8gb"' not in html
+    assert 'value="pro_16gb"' not in html
+    assert 'value="pro_32gb"' not in html
+    assert 'value="pro_4gb"' not in html
+
+
+def test_index_shows_total_monthly_cost_per_instance_not_just_postgres(monkeypatch):
+    """Le Postgres seul ne reflète pas ce que paie réellement l'exploitant pour une instance
+    — backend + frontend (2 x plan starter) doivent être comptés aussi."""
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    client = TestClient(fleet_admin.app)
+
+    html = client.get("/").text
+
+    web_cost = 2 * render_client.WEB_SERVICE_PLAN_MONTHLY_USD
+    for plan in render_client.FLEET_ADMIN_POSTGRES_PLANS:
+        assert f'~{plan["monthly_usd"] + web_cost} $/mois' in html
 
 
 def test_no_meta_refresh_when_no_job_running(monkeypatch):
