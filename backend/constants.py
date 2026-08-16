@@ -22,3 +22,8 @@ REASON_COLORS = {
     "sensible": "#ef4444",
     "autre": "#8b5cf6",
 }
+
+# Miroir des CheckConstraint de models.Ticket (ck_tickets_status / ck_tickets_waiting_on) --
+# source de vérité applicative unique, validée ici avant même d'atteindre la DB.
+VALID_TICKET_STATUSES = {"new", "in_progress", "resolved", "closed"}
+VALID_TICKET_WAITING_ON = {"us", "customer"}

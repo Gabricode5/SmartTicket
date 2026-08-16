@@ -276,9 +276,24 @@ def transfer_session(session_id: int, payload: schemas.TransferRequest, current_
         raise HTTPException(status_code=403, detail="Accès refusé")
     if session.status != "open":
         raise HTTPException(status_code=400, detail="Cette session ne peut pas être transférée.")
+
+    # Capturé AVANT tout nouvel insert de ce transfert (message système ci-dessous compris) :
+    # c'est la borne exacte "dernier message qui existait avant CE transfert", condition
+    # nécessaire pour que Ticket.context_cutoff_message_id isole le bon contexte IA même sur
+    # une session transférée plusieurs fois (cf. Étape 2, décision validée le 2026-08-18).
+    last_message_before_transfer = db.query(models.ChatMessage.id).filter(
+        models.ChatMessage.id_session == session_id
+    ).order_by(models.ChatMessage.id.desc()).first()
+    context_cutoff_message_id = last_message_before_transfer[0] if last_message_before_transfer else None
+
     session.status = "transferred"
     session.transfer_reason = payload.reason
     reason_label = REASON_LABELS.get(payload.reason, payload.reason)
+    # 1 ticket par cycle de transfert (pas par conversation, cf. models.Ticket) : status=new,
+    # waiting_on=us et assigned_agent_id=null viennent des défauts DB (nouvellement dans la
+    # file). reason est un snapshot immuable — session.transfer_reason est effacé par
+    # resolve_session() dès que la session repasse "open", donc le lire en aval le perdrait.
+    db.add(models.Ticket(session_id=session_id, reason=payload.reason, context_cutoff_message_id=context_cutoff_message_id))
     db.add(models.ChatMessage(id_session=session_id, type_envoyeur="ai", contenu=f"Vous avez été mis en relation avec un agent humain. Raison : {reason_label}."))
     queue_session_transferred(db, session, reason_label)
     db.commit()

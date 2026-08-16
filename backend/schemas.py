@@ -230,3 +230,46 @@ class AskRequest(BaseModel):
     question: str = Field(..., description="Question envoyée au modèle Mistral AI")
     session_id: int = Field(..., description="ID de la session de chat active")
     mode: str = Field("rag_llm", description="rag_llm = RAG + génération LLM (défaut) ; rag_only = contexte brut sans génération")
+
+
+class TicketResponse(BaseModel):
+    id: int
+    ticket_number: int
+    session_id: int
+    status: str
+    waiting_on: str
+    assigned_agent_id: Optional[int] = None
+    priority: str
+    reason: Optional[str] = None
+    context_cutoff_message_id: Optional[int] = None
+    created_at: datetime
+    updated_at: datetime
+    # Dénormalisés en lecture (jamais stockés sur tickets, cf. décision Étape 1 : pas de
+    # dénormalisation de l'identité client) -- posés manuellement dans le router, pas par
+    # from_attributes, d'où Optional avec défaut malgré des valeurs toujours présentes en
+    # pratique côté endpoint.
+    client_username: Optional[str] = None
+    client_email: Optional[str] = None
+    assigned_agent_username: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class TicketListResponse(BaseModel):
+    items: list[TicketResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class TicketStatusUpdateRequest(BaseModel):
+    status: str  # new | in_progress | resolved | closed
+
+
+class TicketWaitingOnUpdateRequest(BaseModel):
+    waiting_on: str  # us | customer
+
+
+class TicketAssignRequest(BaseModel):
+    agent_id: Optional[int] = Field(None, description="Cible de l'assignation. Omis/null = l'appelant se l'assigne à lui-même.")

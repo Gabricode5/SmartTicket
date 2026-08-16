@@ -41,6 +41,19 @@ def create_message(message: schemas.ChatMessageCreate, current_user: str = Depen
     db.add(new_message)
     if message.type_envoyeur == "sav":
         queue_sav_reply(db, session)
+        # Réutilise l'envoi de message existant plutôt qu'un endpoint "répondre au ticket"
+        # séparé (décision Étape 2, 2026-08-18) : une réponse SAV vaut toujours action de
+        # notre côté -> waiting_on passe à "customer". Le ticket "courant" du cycle en cours
+        # est le plus récent non-closed sur cette session (une session transférée plusieurs
+        # fois a plusieurs tickets, cf. models.Ticket) ; aucun ticket trouvé = session pas
+        # (encore) passée par /transfer, rien à faire.
+        current_ticket = db.query(models.Ticket).filter(
+            models.Ticket.session_id == session.id,
+            models.Ticket.status != "closed",
+            models.Ticket.deleted_at.is_(None),
+        ).order_by(models.Ticket.created_at.desc()).first()
+        if current_ticket:
+            current_ticket.waiting_on = "customer"
     db.commit()
     db.refresh(new_message)
 

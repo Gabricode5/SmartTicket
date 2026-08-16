@@ -14,12 +14,13 @@ from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from sqlalchemy import inspect as _inspect
 from sqlalchemy import text as _text
 
 import models
 from database import engine as _engine
 from dependencies import ADMIN_SETUP_TOKEN_EXPIRE_HOURS, GUEST_ACCOUNT_TTL_DAYS, GUEST_EMAIL_DOMAIN, limiter
-from routers import ai, analytics, auth, instance, knowledge, messages, notifications, sessions, users
+from routers import ai, analytics, auth, instance, knowledge, messages, notifications, sessions, tickets, users
 
 logging.basicConfig(
     level=logging.INFO,
@@ -144,6 +145,14 @@ def run_migrations() -> None:
             for _table in ["utilisateur", "chat_sessions", "chat_messages", "ai_call_logs", "knowledge_base", "notifications"]:
                 conn.execute(_text(f"ALTER TABLE {_table} ADD COLUMN IF NOT EXISTS tenant_id UUID NOT NULL DEFAULT {_default_tenant}"))
                 conn.execute(_text(f"CREATE INDEX IF NOT EXISTS ix_{_table}_tenant_id ON {_table} (tenant_id)"))
+
+            # tickets.reason / context_cutoff_message_id : ajoutés à l'Étape 2 (2026-08-18),
+            # après la création de la table tickets (Étape 1, create_all() plus haut) — donc
+            # ALTER TABLE ici, pas juste init-db.sql, pour les instances déjà provisionnées
+            # entre les deux étapes. Cf. models.Ticket pour le contexte complet.
+            if "tickets" in _inspect(_engine).get_table_names():
+                conn.execute(_text("ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reason VARCHAR(50)"))
+                conn.execute(_text("ALTER TABLE tickets ADD COLUMN IF NOT EXISTS context_cutoff_message_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL"))
 
             conn.commit()
     except Exception as exc:
@@ -327,7 +336,7 @@ async def enforce_subscription_status(request: Request, call_next):
     return await call_next(request)
 
 
-for _router in [auth.router, sessions.router, messages.router, ai.router, knowledge.router, users.router, analytics.router, notifications.router, instance.router]:
+for _router in [auth.router, sessions.router, messages.router, ai.router, knowledge.router, users.router, analytics.router, notifications.router, instance.router, tickets.router]:
     app.include_router(_router, prefix="/v1")
 
 
