@@ -39,6 +39,30 @@ export type MessageItem = {
     createdAt: string
 }
 
+export type Ticket = {
+    id: number
+    ticket_number: number
+    session_id: number
+    status: "new" | "in_progress" | "resolved" | "closed"
+    waiting_on: "us" | "customer"
+    assigned_agent_id?: number | null
+    priority: "normal" | "urgent"
+    reason?: string | null
+    context_cutoff_message_id?: number | null
+    created_at: string
+    updated_at: string
+    client_username?: string | null
+    client_email?: string | null
+    assigned_agent_username?: string | null
+}
+
+export type TicketListResponse = {
+    items: Ticket[]
+    total: number
+    page: number
+    page_size: number
+}
+
 export const REASON_STYLES: Record<string, string> = {
     technique: "bg-sky-100 text-sky-700 border-sky-200",
     complexe:  "bg-amber-100 text-amber-700 border-amber-200",

@@ -29,6 +29,7 @@ import {
     Headphones,
     Sun,
     Moon,
+    Ticket as TicketIcon,
 } from "lucide-react"
 
 interface Conversation {
@@ -228,6 +229,19 @@ export function AppSidebar() {
                                 {t.sidebar.dashboard}
                             </Link>
                         </Button>
+
+                        {canManageKnowledgeBase && (
+                            <Button
+                                variant={isActive("/tickets") ? "secondary" : "ghost"}
+                                asChild
+                                className={cn("w-full justify-start", isActive("/tickets") && "bg-sidebar-accent")}
+                            >
+                                <Link href="/tickets">
+                                    <TicketIcon className="mr-3 h-4 w-4" />
+                                    {t.tickets.title}
+                                </Link>
+                            </Button>
+                        )}
 
                         {canManageKnowledgeBase && (
                             <Button
