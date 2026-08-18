@@ -440,6 +440,9 @@ const fr = {
         replyPlaceholder: "Écrire une réponse au client...",
         replyPlaceholderDisabled: "Sélectionnez une session d'abord...",
         send: "Envoyer",
+        sendError: "L'envoi a échoué. Réessayez.",
+        resolveError: "La remise à l'IA a échoué. Réessayez.",
+        loadError: "Le chargement a échoué. Réessayez.",
     },
     tickets: {
         title: "Tickets",
@@ -1222,6 +1225,9 @@ const en: typeof fr = {
         replyPlaceholder: "Write a reply to the customer...",
         replyPlaceholderDisabled: "Select a session first...",
         send: "Send",
+        sendError: "Sending failed. Try again.",
+        resolveError: "Handing back to AI failed. Try again.",
+        loadError: "Loading failed. Try again.",
     },
     tickets: {
         title: "Tickets",

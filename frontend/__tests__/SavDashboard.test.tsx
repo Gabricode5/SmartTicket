@@ -118,4 +118,50 @@ describe("SavDashboard", () => {
     });
     expect(await screen.findByText("Aucun transfert")).toBeInTheDocument();
   });
+
+  it("shows a visible error and keeps the draft when sending a reply fails", async () => {
+    mockFetch((url, init) => {
+      if (url === "/api/sessions/transferred") return jsonResponse(transferredSessions);
+      if (url.startsWith("/api/messages?session_id=5")) return jsonResponse(messages);
+      if (url === "/api/messages" && init?.method === "POST") return jsonResponse({}, 500);
+      return jsonResponse({}, 404);
+    });
+
+    render(<SavDashboard />, { wrapper: LocaleProvider });
+    fireEvent.click(await screen.findByText("dave"));
+    await screen.findByText("Bonjour, j'ai un souci.");
+
+    const input = screen.getByPlaceholderText("Écrire une réponse au client...");
+    fireEvent.change(input, { target: { value: "Voici la solution." } });
+    fireEvent.click(screen.getByRole("button", { name: /envoyer/i }));
+
+    expect(await screen.findByText("L'envoi a échoué. Réessayez.")).toBeInTheDocument();
+    // Le texte n'est PAS perdu et le message n'apparaît PAS dans la conversation : l'agent
+    // ne doit jamais croire qu'une réponse est partie alors que rien n'a été envoyé.
+    expect(input).toHaveValue("Voici la solution.");
+    // getByText ne matche pas la value d'un <input> -- si ça matchait quand même, ce serait
+    // le message ajouté à tort à la conversation.
+    expect(screen.queryByText("Voici la solution.")).not.toBeInTheDocument();
+  });
+
+  it("shows a visible error when resolving the session fails", async () => {
+    mockFetch((url) => {
+      if (url === "/api/sessions/transferred") return jsonResponse(transferredSessions);
+      if (url.startsWith("/api/messages?session_id=5")) return jsonResponse(messages);
+      if (url === "/api/sessions/5/resolve") return jsonResponse({}, 500);
+      return jsonResponse({}, 404);
+    });
+
+    render(<SavDashboard />, { wrapper: LocaleProvider });
+    fireEvent.click(await screen.findByText("dave"));
+    await screen.findByText("Bonjour, j'ai un souci.");
+
+    fireEvent.click(screen.getByRole("button", { name: /remettre à l'ia/i }));
+
+    expect(await screen.findByText("La remise à l'IA a échoué. Réessayez.")).toBeInTheDocument();
+    // La session reste sélectionnée ET dans la file (visible deux fois : liste + en-tête) :
+    // l'échec n'est pas traité comme une réussite.
+    expect(screen.getAllByText("dave")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: /remettre à l'ia/i })).toBeInTheDocument();
+  });
 });
