@@ -37,23 +37,45 @@ def create_message(message: schemas.ChatMessageCreate, current_user: str = Depen
         raise HTTPException(status_code=400, detail="Cette conversation est clôturée.")
     if message.type_envoyeur not in ["user", "ai", "sav"]:
         raise HTTPException(status_code=400, detail="Type d'envoyeur invalide")
-    new_message = models.ChatMessage(id_session=message.id_session, type_envoyeur=message.type_envoyeur, contenu=message.contenu)
-    db.add(new_message)
+
+    # Réutilise l'envoi de message existant plutôt qu'un endpoint "répondre au ticket" séparé
+    # (décision Étape 2, 2026-08-18). Le ticket "courant" du cycle en cours est le plus récent
+    # non-closed sur cette session (une session transférée plusieurs fois a plusieurs tickets,
+    # cf. models.Ticket) ; aucun ticket trouvé = session pas (encore) passée par /transfer.
+    current_ticket = None
     if message.type_envoyeur == "sav":
-        queue_sav_reply(db, session)
-        # Réutilise l'envoi de message existant plutôt qu'un endpoint "répondre au ticket"
-        # séparé (décision Étape 2, 2026-08-18) : une réponse SAV vaut toujours action de
-        # notre côté -> waiting_on passe à "customer". Le ticket "courant" du cycle en cours
-        # est le plus récent non-closed sur cette session (une session transférée plusieurs
-        # fois a plusieurs tickets, cf. models.Ticket) ; aucun ticket trouvé = session pas
-        # (encore) passée par /transfer, rien à faire.
         current_ticket = db.query(models.Ticket).filter(
             models.Ticket.session_id == session.id,
             models.Ticket.status != "closed",
             models.Ticket.deleted_at.is_(None),
         ).order_by(models.Ticket.created_at.desc()).first()
+        # Cloisonnement strict (même règle que _get_visible_ticket_or_404 dans
+        # routers/tickets.py) : un agent sav (pas superviseur/admin) ne peut pas répondre sur
+        # le ticket d'un collègue -- sans ce garde-fou ici, POST /messages contournait
+        # entièrement le cloisonnement appliqué à GET/PATCH /tickets/{id} (bug trouvé le
+        # 2026-08-17 en vérifiant cette hypothèse plutôt qu'en la supposant vraie). 404, pas
+        # 403 : ne révèle même pas l'existence du ticket à un agent qui n'y a pas accès.
+        if (
+            current_ticket and user.role.nom_role == "sav"
+            and current_ticket.assigned_agent_id is not None
+            and current_ticket.assigned_agent_id != user.id
+        ):
+            raise HTTPException(status_code=404, detail="Session non trouvée")
+
+    new_message = models.ChatMessage(id_session=message.id_session, type_envoyeur=message.type_envoyeur, contenu=message.contenu)
+    db.add(new_message)
+    if message.type_envoyeur == "sav":
+        queue_sav_reply(db, session)
         if current_ticket:
             current_ticket.waiting_on = "customer"
+            # Répondre à un ticket libre = se l'auto-assigner (2026-08-17) : sans ça, deux
+            # agents pouvaient répondre au même ticket libre sans qu'aucun ne soit marqué
+            # responsable, cassant le modèle d'assignation. Restreint au rôle sav strict
+            # (décision validée) : un superviseur/admin peut dépanner un ticket libre sans se
+            # l'attribuer, il garde sa vue globale et le ticket reste dans la file pour un
+            # agent sav.
+            if current_ticket.assigned_agent_id is None and user.role.nom_role == "sav":
+                current_ticket.assigned_agent_id = user.id
     db.commit()
     db.refresh(new_message)
 

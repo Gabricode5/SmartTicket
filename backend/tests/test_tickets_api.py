@@ -330,6 +330,84 @@ class TestReplyFlipsWaitingOn:
         ticket = client.get(f"/v1/tickets/{ticket_id}", headers=_auth(admin_token)).json()
         assert ticket["waiting_on"] == "us"
 
+    def test_sav_reply_to_a_free_ticket_self_assigns_it(self, client, mark_verified):
+        """Bug trouvé le 2026-08-17 : répondre à un ticket libre ne l'assignait pas -- deux
+        agents pouvaient répondre au même ticket libre sans qu'aucun ne soit responsable.
+        Une seule requête doit à la fois assigner ET flipper waiting_on."""
+        admin_token = _make_admin_token(client)
+        owner_token = _register_and_get_token(client, mark_verified, "tix_owner_r@example.com", "tix_owner_r")
+        owner_id = client.get("/v1/me", headers=_auth(owner_token)).json()["id"]
+        session_id = _create_transferred_session(client, owner_token, owner_id)
+        ticket_id = client.get("/v1/tickets", params={"unassigned": True}, headers=_auth(admin_token)).json()["items"][-1]["id"]
+
+        agent_token, agent_id = _make_agent(client, mark_verified, admin_token, "tix_agent_j2@example.com", "tix_agent_j2")
+        reply = client.post("/v1/messages", json={
+            "id_session": session_id, "type_envoyeur": "sav", "contenu": "Je regarde ça.",
+        }, headers=_auth(agent_token))
+        assert reply.status_code == 201, reply.json()
+
+        ticket = client.get(f"/v1/tickets/{ticket_id}", headers=_auth(agent_token)).json()
+        assert ticket["assigned_agent_id"] == agent_id
+        assert ticket["waiting_on"] == "customer"
+
+    def test_sav_reply_to_own_already_assigned_ticket_does_not_change_assignment(self, client, mark_verified):
+        admin_token = _make_admin_token(client)
+        owner_token = _register_and_get_token(client, mark_verified, "tix_owner_s@example.com", "tix_owner_s")
+        owner_id = client.get("/v1/me", headers=_auth(owner_token)).json()["id"]
+        session_id = _create_transferred_session(client, owner_token, owner_id)
+        ticket_id = client.get("/v1/tickets", params={"unassigned": True}, headers=_auth(admin_token)).json()["items"][-1]["id"]
+
+        agent_token, agent_id = _make_agent(client, mark_verified, admin_token, "tix_agent_k2@example.com", "tix_agent_k2")
+        client.post(f"/v1/tickets/{ticket_id}/assign", json={}, headers=_auth(agent_token))
+
+        reply = client.post("/v1/messages", json={
+            "id_session": session_id, "type_envoyeur": "sav", "contenu": "Toujours dessus.",
+        }, headers=_auth(agent_token))
+        assert reply.status_code == 201, reply.json()
+
+        ticket = client.get(f"/v1/tickets/{ticket_id}", headers=_auth(agent_token)).json()
+        assert ticket["assigned_agent_id"] == agent_id
+
+    def test_sav_cannot_reply_to_another_agents_ticket(self, client, mark_verified):
+        """POST /messages appliquait is_admin_or_sav() (accès à toute session transférée) sans
+        vérifier l'assignation du ticket -- contournait le cloisonnement de GET/PATCH
+        /tickets/{id}. Un agent sav ne doit pas pouvoir répondre sur le ticket d'un collègue,
+        même via cet endpoint générique."""
+        admin_token = _make_admin_token(client)
+        owner_token = _register_and_get_token(client, mark_verified, "tix_owner_t@example.com", "tix_owner_t")
+        owner_id = client.get("/v1/me", headers=_auth(owner_token)).json()["id"]
+        session_id = _create_transferred_session(client, owner_token, owner_id)
+        ticket_id = client.get("/v1/tickets", params={"unassigned": True}, headers=_auth(admin_token)).json()["items"][-1]["id"]
+
+        agent1_token, _ = _make_agent(client, mark_verified, admin_token, "tix_agent_l2@example.com", "tix_agent_l2")
+        client.post(f"/v1/tickets/{ticket_id}/assign", json={}, headers=_auth(agent1_token))
+
+        agent2_token, _ = _make_agent(client, mark_verified, admin_token, "tix_agent_m2@example.com", "tix_agent_m2")
+        reply = client.post("/v1/messages", json={
+            "id_session": session_id, "type_envoyeur": "sav", "contenu": "Je prends.",
+        }, headers=_auth(agent2_token))
+        assert reply.status_code == 404
+
+    def test_supervisor_reply_to_a_free_ticket_does_not_self_assign(self, client, mark_verified):
+        """Décision validée le 2026-08-17 : un superviseur/admin peut dépanner un ticket libre
+        sans se l'attribuer -- il garde sa vue globale, le ticket reste dans la file pour un
+        agent sav. Seul le rôle sav strict s'auto-assigne."""
+        admin_token = _make_admin_token(client)
+        owner_token = _register_and_get_token(client, mark_verified, "tix_owner_u@example.com", "tix_owner_u")
+        owner_id = client.get("/v1/me", headers=_auth(owner_token)).json()["id"]
+        session_id = _create_transferred_session(client, owner_token, owner_id)
+        ticket_id = client.get("/v1/tickets", params={"unassigned": True}, headers=_auth(admin_token)).json()["items"][-1]["id"]
+
+        supervisor_token, _ = _make_supervisor(client, mark_verified, admin_token, "tix_super_d@example.com", "tix_super_d")
+        reply = client.post("/v1/messages", json={
+            "id_session": session_id, "type_envoyeur": "sav", "contenu": "Je regarde en attendant qu'un agent se libère.",
+        }, headers=_auth(supervisor_token))
+        assert reply.status_code == 201, reply.json()
+
+        ticket = client.get(f"/v1/tickets/{ticket_id}", headers=_auth(admin_token)).json()
+        assert ticket["assigned_agent_id"] is None
+        assert ticket["waiting_on"] == "customer"
+
 
 class TestTicketAccessControl:
     def test_regular_user_cannot_access_tickets(self, client, mark_verified):
