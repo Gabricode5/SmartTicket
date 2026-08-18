@@ -1,4 +1,5 @@
-"""Tests des endpoints /v1/analytics/stats et /v1/analytics/ai-metrics."""
+"""Tests des endpoints /v1/analytics/stats, /v1/analytics/ai-metrics et
+/v1/analytics/knowledge-gaps."""
 import os
 import secrets
 from datetime import datetime, timedelta
@@ -32,6 +33,27 @@ def _make_admin_client(client):
     assert resp.status_code == 200, f"Login admin échoué : {resp.json()}"
     token = resp.json()["access_token"]
     client.headers.update({"Authorization": f"Bearer {token}"})
+    return client
+
+
+def _make_sav_client(client, mark_verified, role: str = "sav"):
+    """Crée un compte user, le promeut sav/superviseur via un admin temporaire, et
+    authentifie `client` en tant que ce compte -- pour vérifier que knowledge-gaps est bien
+    plus strict que is_admin_or_sav (qui laisse passer sav/superviseur ailleurs)."""
+    client.post("/v1/register", json={
+        "username": f"gaps_{role}", "email": f"gaps_{role}@example.com",
+        "password": _TEST_PASSWORD, "prenom": "P", "nom": "N",
+    })
+    mark_verified(f"gaps_{role}@example.com")
+    login = client.post("/v1/login", json={"email": f"gaps_{role}@example.com", "password": _TEST_PASSWORD})
+    token = login.json()["access_token"]
+    user_id = client.get("/v1/me", headers={"Authorization": f"Bearer {token}"}).json()["id"]
+
+    admin_client = _make_admin_client(client)  # mute client.headers vers l'admin temporaire
+    promote = admin_client.put(f"/v1/users/{user_id}/role", json={"role": role})
+    assert promote.status_code == 200, promote.json()
+
+    client.headers.update({"Authorization": f"Bearer {token}"})  # bascule sur le compte promu
     return client
 
 
@@ -203,3 +225,118 @@ class TestExportPdf:
         response = admin_client.get("/v1/analytics/stats/pdf")
         assert response.status_code == 200
         assert response.content[:4] == b"%PDF"
+
+
+# ---------------------------------------------------------------------------
+# /v1/analytics/knowledge-gaps
+# ---------------------------------------------------------------------------
+
+def _seed_question_and_call(db_session, session_id, question_text, *, rag_chunks_found, best_match_distance, when=None):
+    """flush() (pas juste commit()) pour récupérer message.id sans déclencher un rechargement
+    lazy sur un objet expiré par le commit -- nécessaire pour question_message_id."""
+    message = models.ChatMessage(id_session=session_id, type_envoyeur="user", contenu=question_text)
+    db_session.add(message)
+    db_session.flush()
+    call = models.AICallLog(
+        id_session=session_id, call_type="stream", model_name="mistral-small-latest",
+        latency_ms=1000, rag_chunks_found=rag_chunks_found, rag_context_chars=100,
+        best_match_distance=best_match_distance, question_message_id=message.id,
+        success=True, date_creation=when or datetime.utcnow(),
+    )
+    db_session.add(call)
+    db_session.commit()
+    return message, call
+
+
+class TestKnowledgeGaps:
+    """Vérifie /v1/analytics/knowledge-gaps : accès admin STRICT (plus restrictif que
+    is_admin_or_sav utilisé partout ailleurs) et le regroupement V1 des questions sans bonne
+    réponse (quasi-doublon de texte normalisé, pas un vrai clustering sémantique)."""
+
+    def test_unauthenticated_returns_401(self, client):
+        response = client.get("/v1/analytics/knowledge-gaps")
+        assert response.status_code == 401
+
+    def test_regular_user_returns_403(self, auth_client):
+        response = auth_client.get("/v1/analytics/knowledge-gaps")
+        assert response.status_code == 403
+
+    def test_sav_returns_403(self, client, mark_verified):
+        """Contrairement à /stats et /ai-metrics (is_admin_or_sav), sav n'a PAS accès ici --
+        décision validée le 2026-08-19 : questions brutes potentiellement personnelles."""
+        sav_client = _make_sav_client(client, mark_verified, role="sav")
+        response = sav_client.get("/v1/analytics/knowledge-gaps")
+        assert response.status_code == 403
+
+    def test_superviseur_returns_403(self, client, mark_verified):
+        supervisor_client = _make_sav_client(client, mark_verified, role="superviseur")
+        response = supervisor_client.get("/v1/analytics/knowledge-gaps")
+        assert response.status_code == 403
+
+    def test_admin_empty_db_returns_empty_list(self, client):
+        admin_client = _make_admin_client(client)
+        response = admin_client.get("/v1/analytics/knowledge-gaps")
+        assert response.status_code == 200
+        data = response.json()
+        assert data == {"gaps": [], "total_gap_calls": 0, "total_distinct_gaps": 0}
+
+    def test_groups_identical_questions_ignoring_case_and_whitespace(self, client, db_session):
+        admin_client = _make_admin_client(client)
+        me = admin_client.get("/v1/me").json()
+        session_id = admin_client.post("/v1/sessions", params={"user_id": me["id"]}, json={"title": "T"}).json()["id"]
+
+        _seed_question_and_call(db_session, session_id, "Comment configurer mon compte ?", rag_chunks_found=0, best_match_distance=None)
+        _seed_question_and_call(db_session, session_id, "  comment CONFIGURER mon compte ?  ", rag_chunks_found=0, best_match_distance=None)
+
+        response = admin_client.get("/v1/analytics/knowledge-gaps")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["total_gap_calls"] == 2
+        assert data["total_distinct_gaps"] == 1
+        assert data["gaps"][0]["occurrences"] == 2
+        # Le texte affiché est celui de l'occurrence traitée en premier (tri par date
+        # décroissante -> la plus RÉCENTE des deux), pas forcément la 1re saisie -- seule la
+        # casse/les espaces varient entre les deux, donc une comparaison insensible à la casse
+        # suffit à vérifier qu'aucune des deux n'a été perdue.
+        assert data["gaps"][0]["question"].strip().lower() == "comment configurer mon compte ?"
+
+    def test_flags_high_distance_even_when_chunks_were_found(self, client, db_session):
+        """rag_chunks_found > 0 ne suffit pas : le reranking ne rejette jamais par distance
+        (cf. rag_reranking.py), donc un best_match_distance élevé doit être détecté ici."""
+        admin_client = _make_admin_client(client)
+        me = admin_client.get("/v1/me").json()
+        session_id = admin_client.post("/v1/sessions", params={"user_id": me["id"]}, json={"title": "T"}).json()["id"]
+
+        _seed_question_and_call(db_session, session_id, "Question hors sujet totalement", rag_chunks_found=3, best_match_distance=0.9)
+
+        response = admin_client.get("/v1/analytics/knowledge-gaps")
+        data = response.json()
+        assert data["total_distinct_gaps"] == 1
+        assert data["gaps"][0]["question"] == "Question hors sujet totalement"
+
+    def test_excludes_calls_with_a_good_match(self, client, db_session):
+        admin_client = _make_admin_client(client)
+        me = admin_client.get("/v1/me").json()
+        session_id = admin_client.post("/v1/sessions", params={"user_id": me["id"]}, json={"title": "T"}).json()["id"]
+
+        _seed_question_and_call(db_session, session_id, "Comment réinitialiser mon mot de passe ?", rag_chunks_found=3, best_match_distance=0.05)
+
+        response = admin_client.get("/v1/analytics/knowledge-gaps")
+        data = response.json()
+        assert data["total_distinct_gaps"] == 0
+
+    def test_sorted_by_occurrence_descending(self, client, db_session):
+        admin_client = _make_admin_client(client)
+        me = admin_client.get("/v1/me").json()
+        session_id = admin_client.post("/v1/sessions", params={"user_id": me["id"]}, json={"title": "T"}).json()["id"]
+
+        _seed_question_and_call(db_session, session_id, "Question rare", rag_chunks_found=0, best_match_distance=None)
+        _seed_question_and_call(db_session, session_id, "Question fréquente", rag_chunks_found=0, best_match_distance=None)
+        _seed_question_and_call(db_session, session_id, "Question fréquente", rag_chunks_found=0, best_match_distance=None)
+
+        response = admin_client.get("/v1/analytics/knowledge-gaps")
+        data = response.json()
+        assert data["gaps"][0]["question"] == "Question fréquente"
+        assert data["gaps"][0]["occurrences"] == 2
+        assert data["gaps"][1]["question"] == "Question rare"
+        assert data["gaps"][1]["occurrences"] == 1

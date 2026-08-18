@@ -108,6 +108,8 @@ CREATE TABLE ai_call_logs (
     latency_ms INTEGER,                                       -- Latence de l'appel en millisecondes
     rag_chunks_found INTEGER,                                 -- Nombre de chunks RAG trouvés
     rag_context_chars INTEGER,                                -- Taille du contexte RAG injecté (caractères)
+    best_match_distance DOUBLE PRECISION,                     -- Distance cosinus du meilleur chunk AVANT reranking (détection de trous KB)
+    question_message_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL, -- Question posée (pas dupliquée ici, RGPD)
     success BOOLEAN NOT NULL DEFAULT TRUE,                    -- Succès ou échec de l'appel
     error_type VARCHAR(100),                                  -- Type d'erreur si échec
     tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001', -- Préparation multi-tenant

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Sequence, CheckConstraint
+from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, Boolean, Float, Sequence, CheckConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -140,6 +140,17 @@ class InstanceSubscription(Base):
 
 
 class AICallLog(Base):
+    """best_match_distance / question_message_id ajoutés le 2026-08-19 (chantier "Partie
+    admin : détecter les trous de la base de connaissances") : avant ça, rag_chunks_found==0
+    était le SEUL signal disponible, et il ne capture que le cas où la base est vide ou
+    l'embedding a échoué -- jamais le cas, bien plus fréquent, où la base contient des chunks
+    mais AUCUN n'est réellement pertinent (rag_reranking.py ne rejette jamais par distance, il
+    ne fait que réordonner : dès que la base a une ligne, l'IA génère toujours une réponse à
+    partir des top-k chunks retournés, même sans rapport avec la question). best_match_distance
+    capture la distance cosinus du meilleur candidat AVANT reranking (le reranking mélange
+    feedback/recouvrement lexical, ce qui fausserait la mesure de pertinence pure). question_
+    message_id référence chat_messages plutôt que de dupliquer le texte de la question ici --
+    une seule copie de cette donnée potentiellement personnelle (RGPD)."""
     __tablename__ = "ai_call_logs"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -149,6 +160,8 @@ class AICallLog(Base):
     latency_ms = Column(Integer, nullable=True)
     rag_chunks_found = Column(Integer, nullable=True)
     rag_context_chars = Column(Integer, nullable=True)
+    best_match_distance = Column(Float, nullable=True)
+    question_message_id = Column(Integer, ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True)
     success = Column(Boolean, nullable=False, default=True)
     error_type = Column(String(100), nullable=True)
     tenant_id = _tenant_id_column()

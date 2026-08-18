@@ -10,7 +10,7 @@ import {
 import {
     TrendingUp, TrendingDown, Clock, ShieldAlert, Database, Activity,
     AlertTriangle, AlertCircle, CheckCircle2, ExternalLink, RefreshCw,
-    Lightbulb, BookOpen, Wrench, Zap, Download, FileText,
+    Lightbulb, BookOpen, Wrench, Zap, Download, FileText, SearchX,
 } from "lucide-react"
 import { downloadCsv } from "@/lib/csv"
 import { useLocale } from "@/lib/i18n/LocaleContext"
@@ -19,6 +19,15 @@ import type { Messages } from "@/lib/i18n/translations"
 type LatencyEntry = { name: string; latence_ms: number; appels: number }
 type AlertEntry = { level: "warning" | "critical"; metric: string; message: string; recommendation?: string; value: number; threshold: number }
 type KbEvent = { date: string; chunks: number }
+
+type KnowledgeGap = {
+    question: string
+    occurrences: number
+    first_seen: string
+    last_seen: string
+    sample_session_id: number | null
+}
+type KnowledgeGapsData = { gaps: KnowledgeGap[]; total_gap_calls: number; total_distinct_gaps: number }
 
 type ComponentStatus = {
     name: string
@@ -70,6 +79,9 @@ export default function MonitoringPage() {
     const [mistralStatus, setMistralStatus] = useState<MistralStatus | null>(null)
     const [statusLoading, setStatusLoading] = useState(true)
     const [exportingPdf, setExportingPdf] = useState(false)
+    const [userRole, setUserRole] = useState<string | null>(null)
+    const [knowledgeGaps, setKnowledgeGaps] = useState<KnowledgeGapsData | null>(null)
+    const [isLoadingGaps, setIsLoadingGaps] = useState(true)
 
     const handleExportCsv = () => {
         if (!metrics) return
@@ -124,9 +136,27 @@ export default function MonitoringPage() {
     useEffect(() => {
         fetch("/api/me")
             .then(r => { if (r.status === 401) { router.replace("/login"); return null } return r.ok ? r.json() : null })
-            .then(me => { if (me && !["admin", "sav", "superviseur"].includes(me.role)) router.replace("/dashboard") })
+            .then(me => {
+                if (!me) return
+                if (!["admin", "sav", "superviseur"].includes(me.role)) { router.replace("/dashboard"); return }
+                setUserRole(me.role)
+            })
             .catch(() => {})
     }, [router])
+
+    // Section "trous de la base de connaissances" réservée à l'admin (décision validée le
+    // 2026-08-19) : questions brutes de clients, plus sensible que le reste des métriques
+    // agrégées de cette page (déjà admin+sav+superviseur). Pas de fetch pour les autres
+    // rôles -- le backend refuserait de toute façon (403), inutile d'émettre l'appel.
+    useEffect(() => {
+        if (userRole !== "admin") { setIsLoadingGaps(false); return }
+        setIsLoadingGaps(true)
+        fetch(`/api/analytics/knowledge-gaps?days=${days}`)
+            .then(r => r.ok ? r.json() : null)
+            .then(data => { if (data) setKnowledgeGaps(data) })
+            .catch(() => {})
+            .finally(() => setIsLoadingGaps(false))
+    }, [userRole, days])
 
     useEffect(() => {
         fetch("/api/mistral-status")
@@ -333,8 +363,56 @@ export default function MonitoringPage() {
                         </Card>
                     </div>
                 </div>
+
+                {/* Trous de la base de connaissances — admin uniquement */}
+                {userRole === "admin" && (
+                    <KnowledgeGapsCard data={knowledgeGaps} isLoading={isLoadingGaps} t={t} timeLocale={timeLocale} />
+                )}
             </div>
         </div>
+    )
+}
+
+function KnowledgeGapsCard({ data, isLoading, t, timeLocale }: { data: KnowledgeGapsData | null; isLoading: boolean; t: Messages; timeLocale: string }) {
+    return (
+        <Card>
+            <CardHeader className="pb-3">
+                <div className="flex items-center gap-2">
+                    <SearchX className="h-4 w-4 text-amber-500" />
+                    <CardTitle className="text-base">{t.monitoring.knowledgeGapsTitle}</CardTitle>
+                </div>
+                <CardDescription>{t.monitoring.knowledgeGapsSubtitle}</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {isLoading ? (
+                    <div className="py-6 text-center text-sm text-muted-foreground">{t.monitoring.knowledgeGapsLoading}</div>
+                ) : !data || data.gaps.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-8 gap-2 text-center">
+                        <CheckCircle2 className="h-6 w-6 text-emerald-500" />
+                        <p className="text-sm text-muted-foreground max-w-sm">{t.monitoring.knowledgeGapsEmpty}</p>
+                    </div>
+                ) : (
+                    <div className="space-y-3">
+                        <p className="text-xs text-muted-foreground">{t.monitoring.knowledgeGapsSummary(data.total_gap_calls, data.total_distinct_gaps)}</p>
+                        <div className="divide-y divide-slate-50 border rounded-lg">
+                            {data.gaps.map((gap, i) => (
+                                <div key={i} className="flex items-start justify-between gap-4 px-4 py-3">
+                                    <p className="text-sm text-foreground flex-1 min-w-0">{gap.question}</p>
+                                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                            {t.monitoring.knowledgeGapsOccurrences(gap.occurrences)}
+                                        </span>
+                                        <span className="text-[10px] text-muted-foreground">
+                                            {t.monitoring.knowledgeGapsLastSeen(new Date(gap.last_seen).toLocaleDateString(timeLocale))}
+                                        </span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </CardContent>
+        </Card>
     )
 }
 
