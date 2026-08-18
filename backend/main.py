@@ -154,6 +154,13 @@ def run_migrations() -> None:
                 conn.execute(_text("ALTER TABLE tickets ADD COLUMN IF NOT EXISTS reason VARCHAR(50)"))
                 conn.execute(_text("ALTER TABLE tickets ADD COLUMN IF NOT EXISTS context_cutoff_message_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL"))
 
+            # ai_call_logs.best_match_distance / question_message_id : ajoutés le 2026-08-19
+            # (chantier "détecter les trous de la base de connaissances"). ai_call_logs existe
+            # depuis le tout début (pas de garde _inspect nécessaire, contrairement à tickets
+            # ci-dessus qui a été ajoutée en cours de route).
+            conn.execute(_text("ALTER TABLE ai_call_logs ADD COLUMN IF NOT EXISTS best_match_distance DOUBLE PRECISION"))
+            conn.execute(_text("ALTER TABLE ai_call_logs ADD COLUMN IF NOT EXISTS question_message_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL"))
+
             conn.commit()
     except Exception as exc:
         _log.error("ALTER TABLE migration failed: %s", exc, exc_info=True)

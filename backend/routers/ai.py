@@ -77,8 +77,12 @@ def ask_question_stream(request: Request, payload: schemas.AskRequest, current_u
     if getattr(session, "status", "open") == "closed":
         raise HTTPException(status_code=400, detail="Cette conversation est clôturée.")
 
-    db.add(models.ChatMessage(id_session=session_id, type_envoyeur="user", contenu=question))
+    question_message = models.ChatMessage(id_session=session_id, type_envoyeur="user", contenu=question)
+    db.add(question_message)
     db.commit()
+    # Référencé par AICallLog.question_message_id plus bas plutôt que de dupliquer le texte
+    # de la question — une seule copie de cette donnée potentiellement personnelle (RGPD).
+    question_message_id = question_message.id
 
     if not session.title or session.title.strip().lower() == "nouvelle conversation":
         auto_title = question.strip().replace("\n", " ")
@@ -89,15 +93,23 @@ def ask_question_stream(request: Request, payload: schemas.AskRequest, current_u
     context = ""
     rag_chunks_found = 0
     rag_context_chars = 0
+    best_match_distance = None
     selected_kb_ids: list[int] = []
     try:
         query_embedding = embed_text(question, model=EMBED_MODEL, timeout=REQUEST_TIMEOUT)
         # On sur-échantillonne (KB_TOP_K * multiplicateur) puis on reclasse : la
         # similarité cosinus seule ne tient pas compte du feedback utilisateur
         # accumulé sur chaque chunk ni du recouvrement lexical avec la question.
-        candidates = db.query(models.KnowledgeBase).order_by(
-            models.KnowledgeBase.embedding.cosine_distance(query_embedding)
-        ).limit(KB_TOP_K * RERANK_FETCH_MULTIPLIER).all()
+        # La distance est sélectionnée explicitement (pas juste utilisée dans l'ORDER BY) pour
+        # capturer best_match_distance AVANT reranking -- le reranking mélange feedback et
+        # recouvrement lexical, ce qui fausserait une mesure de pertinence pure du RAG (cf.
+        # AICallLog, chantier "détecter les trous de la base de connaissances").
+        candidate_rows = db.query(
+            models.KnowledgeBase, models.KnowledgeBase.embedding.cosine_distance(query_embedding).label("distance"),
+        ).order_by("distance").limit(KB_TOP_K * RERANK_FETCH_MULTIPLIER).all()
+        candidates = [row[0] for row in candidate_rows]
+        if candidate_rows:
+            best_match_distance = float(candidate_rows[0][1])
         if candidates:
             feedback_by_kb_id = _fetch_feedback_by_kb_id(db, [c.id for c in candidates])
             kb_rows = rerank_chunks(question, candidates, feedback_by_kb_id, KB_TOP_K)
@@ -147,6 +159,8 @@ def ask_question_stream(request: Request, payload: schemas.AskRequest, current_u
                     latency_ms=latency_ms,
                     rag_chunks_found=rag_chunks_found,
                     rag_context_chars=rag_context_chars,
+                    best_match_distance=best_match_distance,
+                    question_message_id=question_message_id,
                     success=success,
                     error_type=error_type,
                 ))

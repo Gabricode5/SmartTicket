@@ -98,6 +98,12 @@ MAX_CSV_IMPORT_ROWS = int(os.getenv("MAX_CSV_IMPORT_ROWS", "500"))
 
 REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "10"))
 KB_TOP_K = int(os.getenv("KB_TOP_K", "10"))
+# Distance cosinus (pgvector, embeddings mistral-embed) au-delà de laquelle le meilleur chunk
+# retrouvé est considéré comme non pertinent -- 0 = identique, 1 = orthogonal/sans rapport
+# pour des embeddings normalisés. 0.4 est un point de départ raisonnable, PAS calibré sur des
+# données réelles (aucune vérité terrain disponible ici) -- à ajuster avec l'usage réel d'une
+# instance (comparer aux transferts effectifs et aux pouces rouges). Cf. AICallLog.
+RAG_LOW_CONFIDENCE_DISTANCE = float(os.getenv("RAG_LOW_CONFIDENCE_DISTANCE", "0.4"))
 KB_MAX_CONTEXT_CHARS = int(os.getenv("KB_MAX_CONTEXT_CHARS", "3000"))
 SUMMARY_MAX_CHARS = int(os.getenv("SUMMARY_MAX_CHARS", "4000"))
 SUMMARY_MAX_MESSAGES = int(os.getenv("SUMMARY_MAX_MESSAGES", "50"))
@@ -247,3 +253,13 @@ def can_manage_sav_team(user: models.Utilisateur | None) -> bool:
     if not user or not user.role:
         return False
     return user.role.nom_role in ["admin", "superviseur"]
+
+
+def is_admin_only(user: models.Utilisateur | None) -> bool:
+    """Strictement admin, ni sav ni superviseur (décision validée le 2026-08-19) : réservé
+    aux vues affichant des questions brutes de clients (potentiellement des données
+    personnelles), plus restreint que is_admin_or_sav utilisé par le reste des pages
+    Analytics/Monitoring."""
+    if not user or not user.role:
+        return False
+    return user.role.nom_role == "admin"

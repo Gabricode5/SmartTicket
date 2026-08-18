@@ -1,13 +1,15 @@
+import re
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 import models
 from constants import REASON_COLORS, REASON_LABELS
 from database import get_db
-from dependencies import get_current_user, get_user_by_email, is_admin_or_sav
+from dependencies import RAG_LOW_CONFIDENCE_DISTANCE, get_current_user, get_user_by_email, is_admin_only, is_admin_or_sav
 from pdf_export import build_ai_metrics_report_pdf, build_stats_report_pdf
 
 router = APIRouter(tags=["Analytics"])
@@ -304,3 +306,72 @@ def export_ai_metrics_pdf(days: int = 30, current_user: str = Depends(get_curren
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+def _normalize_question(text: str) -> str:
+    """Regroupement V1 volontairement simple (décision validée le 2026-08-19) : quasi-doublon
+    de texte (espaces/casse normalisés), pas un vrai clustering sémantique -- deux
+    reformulations différentes de la même question resteront deux groupes distincts pour
+    l'instant. Un vrai regroupement par similarité d'embedding est un chantier de suivi."""
+    return re.sub(r"\s+", " ", text.strip().lower())
+
+
+def _build_knowledge_gaps_data(db: Session, days: int) -> dict:
+    """Un appel IA est un "trou" si soit la base n'a rien retourné (rag_chunks_found == 0 --
+    base vide ou erreur d'embedding), soit le meilleur candidat trouvé est trop distant pour
+    être une réponse pertinente (best_match_distance > RAG_LOW_CONFIDENCE_DISTANCE, capturé
+    AVANT reranking dans routers/ai.py). Jointure sur question_message_id (pas de texte
+    dupliqué en base, cf. AICallLog) -- les appels antérieurs à cette migration ont
+    best_match_distance NULL et ne remontent que via le premier critère."""
+    from_date = datetime.utcnow() - timedelta(days=days)
+
+    gap_rows = db.query(models.AICallLog, models.ChatMessage).join(
+        models.ChatMessage, models.AICallLog.question_message_id == models.ChatMessage.id,
+    ).filter(
+        models.AICallLog.date_creation >= from_date,
+        models.AICallLog.call_type == "stream",
+        or_(
+            models.AICallLog.rag_chunks_found == 0,
+            models.AICallLog.best_match_distance > RAG_LOW_CONFIDENCE_DISTANCE,
+        ),
+    ).order_by(models.AICallLog.date_creation.desc()).all()
+
+    groups: dict[str, dict] = {}
+    for call_log, message in gap_rows:
+        key = _normalize_question(message.contenu or "")
+        if not key:
+            continue
+        group = groups.get(key)
+        if group is None:
+            group = {
+                "question": message.contenu.strip(),
+                "occurrences": 0,
+                "first_seen": call_log.date_creation,
+                "last_seen": call_log.date_creation,
+                "sample_session_id": call_log.id_session,
+            }
+            groups[key] = group
+        group["occurrences"] += 1
+        if call_log.date_creation < group["first_seen"]:
+            group["first_seen"] = call_log.date_creation
+        if call_log.date_creation > group["last_seen"]:
+            group["last_seen"] = call_log.date_creation
+            group["sample_session_id"] = call_log.id_session
+
+    gaps = sorted(groups.values(), key=lambda g: g["occurrences"], reverse=True)
+
+    return {"gaps": gaps, "total_gap_calls": len(gap_rows), "total_distinct_gaps": len(gaps)}
+
+
+@router.get(
+    "/analytics/knowledge-gaps",
+    summary="Questions où l'IA n'a pas trouvé de bonne réponse dans la base de connaissances (regroupées)",
+)
+def get_knowledge_gaps(days: int = 30, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    user = get_user_by_email(db, current_user)
+    # Admin uniquement (décision validée le 2026-08-19) : plus strict que is_admin_or_sav
+    # utilisé par le reste des pages Analytics/Monitoring -- cette vue affiche des questions
+    # brutes de clients, potentiellement des données personnelles.
+    if not is_admin_only(user):
+        raise HTTPException(status_code=403, detail="Accès refusé")
+    return _build_knowledge_gaps_data(db, days)
