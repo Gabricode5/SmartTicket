@@ -196,6 +196,24 @@ def update_user_by_admin(user_id: int, payload: schemas.UserAdminUpdateRequest, 
     target = db.query(models.Utilisateur).filter(models.Utilisateur.id == user_id, models.Utilisateur.deleted_at.is_(None)).first()
     if not target:
         raise HTTPException(status_code=404, detail="Utilisateur non trouvé")
+
+    # RGPD (décision validée le 2026-08-19) : un utilisateur final (rôle "user", un client de
+    # l'entreprise) est seul propriétaire de son identité -- l'admin peut voir ces infos,
+    # changer son rôle (ex. le promouvoir agent SAV) et supprimer le compte (droit à
+    # l'effacement), mais jamais réécrire prénom/nom/email/username à sa place. Un membre de
+    # l'équipe (sav/superviseur/admin, un compte créé par l'organisation) reste éditable en
+    # entier par un admin -- c'est un compte professionnel, pas l'identité d'un client.
+    # Rejeté dès qu'un champ d'identité est PRÉSENT dans la requête (pas seulement s'il
+    # changerait la valeur) : l'admin ne doit même pas pouvoir soumettre ces champs pour ce
+    # type de cible, la protection doit tenir même si le frontend est contourné.
+    target_is_end_user = target.role is not None and target.role.nom_role == "user"
+    identity_fields_requested = any(f is not None for f in (payload.username, payload.email, payload.prenom, payload.nom))
+    if target_is_end_user and identity_fields_requested:
+        raise HTTPException(
+            status_code=403,
+            detail="Un administrateur ne peut pas modifier les données personnelles (prénom, nom, email, username) d'un utilisateur final — RGPD. Seul le rôle peut être changé ici, ou le compte supprimé. L'utilisateur modifie lui-même ses informations via son compte.",
+        )
+
     if payload.username is not None:
         new_username = payload.username.strip()
         if not new_username:

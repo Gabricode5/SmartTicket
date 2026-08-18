@@ -161,16 +161,23 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
         setError(null)
         setUpdatingUserId(editingUser.id)
         try {
-            const res = await fetch(`/api/users/${editingUser.id}`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
+            // RGPD : un utilisateur final (rôle "user") est seul propriétaire de son
+            // identité -- ces champs ne sont même pas envoyés pour cette cible (le backend
+            // les refuse de toute façon, mais autant ne pas les soumettre du tout ici).
+            const isEndUser = editingUser.role === "user"
+            const body = isEndUser
+                ? { role: editForm.role.trim().toLowerCase() }
+                : {
                     username: editForm.username.trim(),
                     email: editForm.email.trim().toLowerCase(),
                     prenom: editForm.prenom.trim(),
                     nom: editForm.nom.trim(),
                     role: editForm.role.trim().toLowerCase(),
-                }),
+                }
+            const res = await fetch(`/api/users/${editingUser.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
             })
             const data = await res.json()
             if (!res.ok) {
@@ -743,23 +750,26 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                         <DialogTitle>{t.admin.editUserTitle}</DialogTitle>
                     </DialogHeader>
                     <div className="space-y-4 py-2">
+                        {editingUser?.role === "user" && (
+                            <p className="text-xs text-muted-foreground bg-muted/60 rounded-md px-3 py-2">{t.admin.endUserIdentityLocked}</p>
+                        )}
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                                 <Label htmlFor="edit-prenom">{t.admin.firstName}</Label>
-                                <Input id="edit-prenom" value={editForm.prenom} onChange={(e) => setEditForm((f) => ({ ...f, prenom: e.target.value }))} placeholder={t.admin.firstName} />
+                                <Input id="edit-prenom" value={editForm.prenom} disabled={editingUser?.role === "user"} onChange={(e) => setEditForm((f) => ({ ...f, prenom: e.target.value }))} placeholder={t.admin.firstName} />
                             </div>
                             <div className="space-y-1.5">
                                 <Label htmlFor="edit-nom">{t.admin.lastName}</Label>
-                                <Input id="edit-nom" value={editForm.nom} onChange={(e) => setEditForm((f) => ({ ...f, nom: e.target.value }))} placeholder={t.admin.lastName} />
+                                <Input id="edit-nom" value={editForm.nom} disabled={editingUser?.role === "user"} onChange={(e) => setEditForm((f) => ({ ...f, nom: e.target.value }))} placeholder={t.admin.lastName} />
                             </div>
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="edit-username">{t.admin.username}</Label>
-                            <Input id="edit-username" value={editForm.username} onChange={(e) => setEditForm((f) => ({ ...f, username: e.target.value }))} placeholder="username" />
+                            <Input id="edit-username" value={editForm.username} disabled={editingUser?.role === "user"} onChange={(e) => setEditForm((f) => ({ ...f, username: e.target.value }))} placeholder="username" />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="edit-email">{t.admin.email}</Label>
-                            <Input id="edit-email" type="email" value={editForm.email} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} placeholder="email@exemple.com" />
+                            <Input id="edit-email" type="email" value={editForm.email} disabled={editingUser?.role === "user"} onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))} placeholder="email@exemple.com" />
                         </div>
                         <div className="space-y-1.5">
                             <Label htmlFor="edit-role">{t.admin.role}</Label>

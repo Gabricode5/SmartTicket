@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from "@testing-library/react";
+import { render, screen, waitFor, fireEvent, within } from "@testing-library/react";
 import type { ReactNode } from "react";
 import AdminDashboard from "@/components/dashboard/AdminDashboard";
 import { mockFetch, jsonResponse } from "../test-utils/fetchMock";
@@ -137,6 +137,69 @@ describe("AdminDashboard", () => {
           body: JSON.stringify({ role: "sav" }),
         })
       );
+    });
+  });
+
+  // RGPD (2026-08-19) : un utilisateur final (rôle "user") est seul propriétaire de son
+  // identité -- le formulaire d'édition ne doit ni pré-remplir des champs modifiables pour
+  // lui, ni les envoyer au backend qui les refuserait de toute façon (défense en profondeur,
+  // la vraie protection est côté backend).
+  describe("edit dialog — protection RGPD des données personnelles d'un utilisateur final", () => {
+    function getUserRow(usernameText: string) {
+      const usernameNode = screen.getByText(usernameText);
+      return usernameNode.closest("button")!.parentElement as HTMLElement;
+    }
+
+    it("disables identity fields and shows an explanatory note for an end user (role=user)", async () => {
+      mockFetch(handler);
+      render(<AdminDashboard currentUserId={3} />, { wrapper: LocaleProvider });
+      await screen.findByText("alice");
+
+      const editButton = within(getUserRow("alice")).getAllByRole("button")[2];
+      fireEvent.click(editButton);
+
+      expect(await screen.findByText("Modifier l'utilisateur")).toBeInTheDocument();
+      expect(screen.getByText(/appartiennent au client/i)).toBeInTheDocument();
+      expect(screen.getByLabelText("Prénom")).toBeDisabled();
+      expect(screen.getByLabelText("Nom")).toBeDisabled();
+      expect(screen.getByLabelText("Nom d'utilisateur")).toBeDisabled();
+      expect(screen.getByLabelText("Email")).toBeDisabled();
+    });
+
+    it("only sends the role when saving an end user's edit, never identity fields", async () => {
+      const fetchMock = mockFetch((url, init) => {
+        if (url === "/api/users/1" && init?.method === "PUT") {
+          return jsonResponse({ id: 1, username: "alice", email: "alice@test.com", role: "sav" });
+        }
+        return handler(url, init);
+      });
+      render(<AdminDashboard currentUserId={3} />, { wrapper: LocaleProvider });
+      await screen.findByText("alice");
+
+      fireEvent.click(within(getUserRow("alice")).getAllByRole("button")[2]);
+      await screen.findByText("Modifier l'utilisateur");
+      fireEvent.click(screen.getByRole("button", { name: /enregistrer/i }));
+
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          "/api/users/1",
+          expect.objectContaining({ method: "PUT", body: JSON.stringify({ role: "user" }) })
+        );
+      });
+    });
+
+    it("keeps identity fields editable for a team member (sav/superviseur/admin)", async () => {
+      mockFetch(handler);
+      render(<AdminDashboard currentUserId={3} />, { wrapper: LocaleProvider });
+      await screen.findByText("bob"); // bob = role sav
+
+      const editButton = within(getUserRow("bob")).getAllByRole("button")[2];
+      fireEvent.click(editButton);
+
+      await screen.findByText("Modifier l'utilisateur");
+      expect(screen.queryByText(/appartiennent au client/i)).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Nom d'utilisateur")).not.toBeDisabled();
+      expect(screen.getByLabelText("Email")).not.toBeDisabled();
     });
   });
 });
