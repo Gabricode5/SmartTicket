@@ -65,6 +65,9 @@ def robots_check(url: str, current_user: str = Depends(get_current_user), db: Se
 
 @router.get("/knowledge-base/sources", summary="Lister les sources indexées")
 def get_knowledge_sources(current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    requester = get_user_by_email(db, current_user)
+    if not requester or not is_admin_or_sav(requester):
+        raise HTTPException(status_code=403, detail="Accès refusé")
     from sqlalchemy import func as sqlfunc
     rows = (db.query(models.KnowledgeBase.source, models.KnowledgeBase.category,
                      sqlfunc.count(models.KnowledgeBase.id).label("chunks"),
