@@ -1,10 +1,10 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Sparkles, Send, UserPlus } from "lucide-react"
-import { Input } from "@/components/ui/input"
+import { Textarea } from "@/components/ui/textarea"
 import { Button } from "@/components/ui/button"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
@@ -43,12 +43,25 @@ export default function TicketDetailPage() {
     const [isTaking, setIsTaking] = useState(false)
     const [isSending, setIsSending] = useState(false)
     const [assignTarget, setAssignTarget] = useState<string>("")
+    const replyTextareaRef = useRef<HTMLTextAreaElement>(null)
 
     const canManageTeam = user?.role === "admin" || user?.role === "superviseur"
 
     useEffect(() => {
         if (!isLoadingUser && user && user.role === "user") router.replace("/dashboard")
     }, [isLoadingUser, user, router])
+
+    // Zone de réponse multi-lignes qui s'agrandit avec le contenu (3-4 lignes au repos, cf.
+    // min-h sur le Textarea), plafonnée à 280px au-delà de quoi elle scrolle plutôt que de
+    // pousser tout l'écran. Recalculée à chaque frappe car scrollHeight ne peut être connu
+    // qu'après un premier passage à "auto" (sinon la hauteur ne rétrécit jamais en supprimant
+    // du texte).
+    useEffect(() => {
+        const el = replyTextareaRef.current
+        if (!el) return
+        el.style.height = "auto"
+        el.style.height = `${Math.min(el.scrollHeight, 280)}px`
+    }, [reply])
 
     const loadTicket = async () => {
         setIsLoading(true)
@@ -332,16 +345,19 @@ export default function TicketDetailPage() {
                         ))}
                     </div>
                     <div className="border-t border-border p-4">
-                        <form onSubmit={(e) => { e.preventDefault(); void handleSendReply() }} className="relative">
-                            <Input
+                        <form onSubmit={(e) => { e.preventDefault(); void handleSendReply() }}>
+                            <Textarea
+                                ref={replyTextareaRef}
                                 value={reply}
                                 onChange={(e) => setReply(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSendReply() } }}
                                 placeholder={t.tickets.replyPlaceholder}
                                 disabled={isSending || (!isMine && !canManageTeam && !isUnassigned)}
-                                className="h-12 pl-4 pr-24 rounded-xl border-2 border-border focus-visible:ring-emerald-500"
+                                rows={3}
+                                className="min-h-[88px] max-h-[280px] overflow-y-auto rounded-xl border-2 border-border focus-visible:ring-emerald-500 px-4 py-3"
                             />
-                            <div className="absolute right-1.5 top-1.5">
+                            <div className="flex items-center justify-between mt-2">
+                                <p className="text-[11px] text-muted-foreground">{t.tickets.replyHint}</p>
                                 <Button type="submit" size="sm" disabled={!reply.trim() || isSending} className="h-9 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700">
                                     <Send className="h-3.5 w-3.5 mr-1.5" /> {t.tickets.send}
                                 </Button>
