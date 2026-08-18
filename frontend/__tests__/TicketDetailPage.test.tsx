@@ -149,6 +149,53 @@ describe("TicketDetailPage", () => {
     });
   });
 
+  it("shows a multi-line textarea for the reply box, not a single-line input", async () => {
+    mockLoad();
+    render(<TicketDetailPage />, { wrapper: LocaleProvider });
+    await screen.findByText("Conversation complète");
+
+    const textarea = screen.getByPlaceholderText("Écrire une réponse au client...");
+    expect(textarea.tagName).toBe("TEXTAREA");
+    expect(screen.getByText(/entrée pour envoyer/i)).toBeInTheDocument();
+  });
+
+  it("sends the reply on Enter without Shift", async () => {
+    const fetchMock = mockLoad();
+    render(<TicketDetailPage />, { wrapper: LocaleProvider });
+    await screen.findByText("Conversation complète");
+
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/messages" && init?.method === "POST") {
+        return Promise.resolve(jsonResponse({ id: 5, contenu: "Réponse rapide.", date_creation: "2026-01-01T10:10:00Z" }));
+      }
+      if (url === "/api/tickets/7") return Promise.resolve(jsonResponse(baseTicket));
+      return Promise.resolve(jsonResponse({}, 404));
+    });
+
+    const textarea = screen.getByPlaceholderText("Écrire une réponse au client...");
+    fireEvent.change(textarea, { target: { value: "Réponse rapide." } });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: false });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith("/api/messages", expect.objectContaining({
+        method: "POST", body: JSON.stringify({ id_session: 3, type_envoyeur: "sav", contenu: "Réponse rapide." }),
+      }));
+    });
+  });
+
+  it("does not send on Shift+Enter, so the agent can write a new line instead", async () => {
+    const fetchMock = mockLoad();
+    render(<TicketDetailPage />, { wrapper: LocaleProvider });
+    await screen.findByText("Conversation complète");
+
+    const textarea = screen.getByPlaceholderText("Écrire une réponse au client...");
+    fireEvent.change(textarea, { target: { value: "Première ligne" } });
+    fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
+
+    const postCalls = fetchMock.mock.calls.filter((c) => c[0] === "/api/messages");
+    expect(postCalls.length).toBe(0);
+  });
+
   it("lets a supervisor assign the ticket to a chosen agent", async () => {
     mockLoad(baseTicket, supervisorUser);
     render(<TicketDetailPage />, { wrapper: LocaleProvider });
