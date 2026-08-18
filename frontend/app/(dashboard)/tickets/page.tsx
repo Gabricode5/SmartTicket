@@ -3,23 +3,31 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Ticket as TicketIcon, ChevronLeft, ChevronRight, Search, Inbox, User as UserIcon } from "lucide-react"
+import { Ticket as TicketIcon, ChevronLeft, ChevronRight, ChevronDown, Search, Inbox, User as UserIcon, Reply, Clock, CheckCircle2 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
 import { useCurrentUser } from "@/hooks/useCurrentUser"
 import { useLocale } from "@/lib/i18n/LocaleContext"
+import type { Messages } from "@/lib/i18n/translations"
 import type { Ticket, TicketListResponse } from "@/components/dashboard/types"
 
 const PAGE_SIZE = 20
+// Vue groupée par défaut (pas de fetch paginé classique) : une seule requête plus large,
+// suffisante à l'échelle d'une instance SmartTicket (support d'un client, pas une plateforme
+// multi-tenant à gros volume). Si un agent dépasse ce volume de tickets actifs un jour, ça
+// deviendra un vrai sujet de pagination serveur par section — pas fait ici (UI seulement).
+const GROUPED_FETCH_SIZE = 100
 
 // Convention établie côté backend (routers/sessions.py::create_guest_session) : un compte
 // invité a toujours un username "guest_{suffixe}" — aucun flag "is_guest" n'est renvoyé par
 // GET /v1/tickets, donc on le détecte via ce préfixe plutôt que d'étendre le backend pour ça.
 const isGuestUsername = (username: string | null | undefined) => Boolean(username?.startsWith("guest_"))
 
+// "Nouveau" doit sauter aux yeux (demande explicite) : badge plein plutôt que pastel, à
+// l'inverse des autres statuts qui restent discrets tant qu'ils n'appellent pas d'action.
 const STATUS_STYLES: Record<string, string> = {
-    new: "bg-sky-100 text-sky-700 border-sky-200",
+    new: "bg-indigo-600 text-white border-indigo-600 font-bold",
     in_progress: "bg-amber-100 text-amber-700 border-amber-200",
     resolved: "bg-emerald-100 text-emerald-700 border-emerald-200",
     closed: "bg-slate-100 text-slate-600 border-slate-200",
@@ -34,6 +42,95 @@ const WAITING_ON_STYLES: Record<string, string> = {
 const PRIORITY_STYLES: Record<string, string> = {
     normal: "bg-slate-100 text-slate-600 border-slate-200",
     urgent: "bg-red-100 text-red-700 border-red-200 font-semibold",
+}
+
+// status resolved/closed prime sur waiting_on : un ticket clôturé sort du flux de travail
+// actif quel que soit son waiting_on, même si celui-ci n'a jamais été reflippé (cf. demande :
+// sections "hors du flux de travail actif" indépendantes de qui attend quoi).
+function bucketTickets(tickets: Ticket[]) {
+    const needsReply: Ticket[] = []
+    const waitingCustomer: Ticket[] = []
+    const resolvedClosed: Ticket[] = []
+    for (const ticket of tickets) {
+        if (ticket.status === "resolved" || ticket.status === "closed") resolvedClosed.push(ticket)
+        else if (ticket.waiting_on === "us") needsReply.push(ticket)
+        else waitingCustomer.push(ticket)
+    }
+    return { needsReply, waitingCustomer, resolvedClosed }
+}
+
+function TicketRow({ ticket, t, dateLocale }: { ticket: Ticket; t: Messages; dateLocale: string }) {
+    const clientLabel = isGuestUsername(ticket.client_username)
+        ? t.tickets.guest
+        : ticket.client_username || ticket.client_email || "—"
+    const isNewAndUnassigned = ticket.status === "new" && !ticket.assigned_agent_id
+    const statusLabel = { new: t.tickets.statusNew, in_progress: t.tickets.statusInProgress, resolved: t.tickets.statusResolved, closed: t.tickets.statusClosed }[ticket.status] ?? ticket.status
+    const waitingOnLabel = ticket.waiting_on === "us" ? t.tickets.waitingOnUs : t.tickets.waitingOnCustomer
+    const priorityLabel = ticket.priority === "urgent" ? t.tickets.priorityUrgent : t.tickets.priorityNormal
+
+    return (
+        <Link
+            href={`/tickets/${ticket.id}`}
+            className="flex items-center gap-4 px-5 py-3 hover:bg-muted/80 transition-colors"
+        >
+            {isNewAndUnassigned && (
+                <span className="h-2 w-2 rounded-full bg-indigo-600 flex-shrink-0 animate-pulse" title={t.tickets.statusNew} />
+            )}
+            <span className="text-xs font-mono text-muted-foreground w-14 flex-shrink-0">#{ticket.ticket_number}</span>
+            <span className="text-sm font-medium text-foreground flex-1 min-w-0 truncate">{clientLabel}</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full border flex-shrink-0 ${STATUS_STYLES[ticket.status] ?? ""}`}>
+                {statusLabel}
+            </span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full border flex-shrink-0 ${WAITING_ON_STYLES[ticket.waiting_on] ?? ""}`}>
+                {waitingOnLabel}
+            </span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full border flex-shrink-0 ${PRIORITY_STYLES[ticket.priority] ?? ""}`}>
+                {priorityLabel}
+            </span>
+            <span className="text-xs text-muted-foreground w-32 flex-shrink-0 truncate">
+                {ticket.assigned_agent_username || t.tickets.unassigned}
+            </span>
+            <span className="text-xs text-muted-foreground w-32 flex-shrink-0 text-right">
+                {new Date(ticket.updated_at).toLocaleString(dateLocale, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
+            </span>
+        </Link>
+    )
+}
+
+function TicketSection({
+    icon, title, count, emphasis, tickets, emptyLabel, t, dateLocale, collapsible, defaultOpen,
+}: {
+    icon: React.ReactNode; title: string; count: number; emphasis?: boolean; tickets: Ticket[]
+    emptyLabel: string; t: Messages; dateLocale: string; collapsible?: boolean; defaultOpen?: boolean
+}) {
+    const [isOpen, setIsOpen] = useState(defaultOpen ?? true)
+
+    return (
+        <div className={`bg-card rounded-xl border shadow-sm overflow-hidden ${emphasis ? "border-red-200" : "border-border"}`}>
+            <button
+                type="button"
+                onClick={() => collapsible && setIsOpen((v) => !v)}
+                className={`w-full px-5 py-3 flex items-center justify-between ${emphasis ? "bg-red-50/60" : ""} ${collapsible ? "cursor-pointer hover:bg-muted/60" : "cursor-default"}`}
+            >
+                <div className="flex items-center gap-2">
+                    {icon}
+                    <p className={`text-sm font-semibold ${emphasis ? "text-red-700" : "text-foreground"}`}>{title} ({count})</p>
+                </div>
+                {collapsible && (
+                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? "" : "-rotate-90"}`} />
+                )}
+            </button>
+            {isOpen && (
+                count === 0 ? (
+                    <div className="px-5 py-6 text-center text-sm text-muted-foreground border-t border-border">{emptyLabel}</div>
+                ) : (
+                    <div className="divide-y divide-slate-50 border-t border-border">
+                        {tickets.map((ticket) => <TicketRow key={ticket.id} ticket={ticket} t={t} dateLocale={dateLocale} />)}
+                    </div>
+                )
+            )}
+        </div>
+    )
 }
 
 export default function TicketsListPage() {
@@ -56,6 +153,12 @@ export default function TicketsListPage() {
     const [searchInput, setSearchInput] = useState("")
     const [searchQuery, setSearchQuery] = useState("")
 
+    // Regroupement par sections = comportement PAR DÉFAUT (demande explicite) ; dès que
+    // l'agent filtre par statut/camp ou recherche, retour à la liste plate paginée existante
+    // (Étape 3, inchangée) — filtrer un statut/camp précis revient déjà à demander UNE des
+    // sections, pas besoin de les afficher toutes.
+    const isGroupedView = !statusFilter && !waitingOnFilter && !searchQuery
+
     useEffect(() => {
         if (!isLoadingUser && user && user.role === "user") router.replace("/dashboard")
     }, [isLoadingUser, user, router])
@@ -70,8 +173,8 @@ export default function TicketsListPage() {
             setSubscriptionSuspended(false)
             try {
                 const params = new URLSearchParams()
-                params.set("page", String(page))
-                params.set("page_size", String(PAGE_SIZE))
+                params.set("page", String(isGroupedView ? 1 : page))
+                params.set("page_size", String(isGroupedView ? GROUPED_FETCH_SIZE : PAGE_SIZE))
                 let url = "/api/tickets"
                 if (searchQuery) {
                     params.set("q", searchQuery)
@@ -101,22 +204,15 @@ export default function TicketsListPage() {
         loadTickets()
         return () => { cancelled = true }
         // eslint-disable-next-line react-hooks/exhaustive-deps -- t change avec la langue, ne doit pas redéclencher un fetch
-    }, [user, page, statusFilter, waitingOnFilter, priorityFilter, quickFilter, searchQuery])
+    }, [user, page, statusFilter, waitingOnFilter, priorityFilter, quickFilter, searchQuery, isGroupedView])
 
     const resetToPageOne = () => setPage(1)
 
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
-    const statusLabel = (status: string) => ({
-        new: t.tickets.statusNew, in_progress: t.tickets.statusInProgress,
-        resolved: t.tickets.statusResolved, closed: t.tickets.statusClosed,
-    }[status] ?? status)
-
-    const waitingOnLabel = (waitingOn: string) => (waitingOn === "us" ? t.tickets.waitingOnUs : t.tickets.waitingOnCustomer)
-
-    const priorityLabel = (priority: string) => (priority === "urgent" ? t.tickets.priorityUrgent : t.tickets.priorityNormal)
-
     if (isLoadingUser || !user || user.role === "user") return null
+
+    const { needsReply, waitingCustomer, resolvedClosed } = bucketTickets(tickets)
 
     return (
         <div className="flex flex-col min-h-full bg-muted/50">
@@ -212,66 +308,75 @@ export default function TicketsListPage() {
                     </div>
                 </div>
 
-                {/* Liste */}
-                <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
-                    <div className="px-5 py-3 border-b border-border flex items-center justify-between">
-                        <p className="text-sm font-semibold text-foreground">{t.tickets.resultsCount(total)}</p>
+                {isLoading ? (
+                    <div className="bg-card rounded-xl border border-border shadow-sm px-5 py-12 text-center text-sm text-muted-foreground">
+                        {t.tickets.loading}
                     </div>
+                ) : isGroupedView ? (
+                    /* Vue groupée par défaut : priorité visuelle = ce qui attend l'agent. */
+                    <div className="space-y-4">
+                        <TicketSection
+                            icon={<Reply className="h-4 w-4 text-red-600" />}
+                            title={t.tickets.sectionNeedsReply}
+                            count={needsReply.length}
+                            emphasis
+                            tickets={needsReply}
+                            emptyLabel={t.tickets.sectionNeedsReplyEmpty}
+                            t={t}
+                            dateLocale={dateLocale}
+                        />
+                        <TicketSection
+                            icon={<Clock className="h-4 w-4 text-slate-500" />}
+                            title={t.tickets.sectionWaitingCustomer}
+                            count={waitingCustomer.length}
+                            tickets={waitingCustomer}
+                            emptyLabel={t.tickets.sectionWaitingCustomerEmpty}
+                            t={t}
+                            dateLocale={dateLocale}
+                        />
+                        <TicketSection
+                            icon={<CheckCircle2 className="h-4 w-4 text-emerald-600" />}
+                            title={t.tickets.sectionResolvedClosed}
+                            count={resolvedClosed.length}
+                            tickets={resolvedClosed}
+                            emptyLabel={t.tickets.sectionResolvedClosedEmpty}
+                            t={t}
+                            dateLocale={dateLocale}
+                            collapsible
+                            defaultOpen={false}
+                        />
+                    </div>
+                ) : (
+                    /* Filtre explicite ou recherche active : liste plate paginée (comportement Étape 3, inchangé). */
+                    <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+                        <div className="px-5 py-3 border-b border-border flex items-center justify-between">
+                            <p className="text-sm font-semibold text-foreground">{t.tickets.resultsCount(total)}</p>
+                        </div>
 
-                    {isLoading ? (
-                        <div className="px-5 py-12 text-center text-sm text-muted-foreground">{t.tickets.loading}</div>
-                    ) : tickets.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center h-40 gap-2 px-5">
-                            <TicketIcon className="h-8 w-8 text-muted-foreground" />
-                            <p className="text-sm text-muted-foreground">{t.tickets.empty}</p>
-                        </div>
-                    ) : (
-                        <div className="divide-y divide-slate-50">
-                            {tickets.map((ticket) => {
-                                const clientLabel = isGuestUsername(ticket.client_username)
-                                    ? t.tickets.guest
-                                    : ticket.client_username || ticket.client_email || "—"
-                                return (
-                                    <Link
-                                        key={ticket.id}
-                                        href={`/tickets/${ticket.id}`}
-                                        className="flex items-center gap-4 px-5 py-3 hover:bg-muted/80 transition-colors"
-                                    >
-                                        <span className="text-xs font-mono text-muted-foreground w-14 flex-shrink-0">#{ticket.ticket_number}</span>
-                                        <span className="text-sm font-medium text-foreground flex-1 min-w-0 truncate">{clientLabel}</span>
-                                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${STATUS_STYLES[ticket.status] ?? ""}`}>
-                                            {statusLabel(ticket.status)}
-                                        </span>
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full border flex-shrink-0 ${WAITING_ON_STYLES[ticket.waiting_on] ?? ""}`}>
-                                            {waitingOnLabel(ticket.waiting_on)}
-                                        </span>
-                                        <span className={`text-[10px] px-2 py-0.5 rounded-full border flex-shrink-0 ${PRIORITY_STYLES[ticket.priority] ?? ""}`}>
-                                            {priorityLabel(ticket.priority)}
-                                        </span>
-                                        <span className="text-xs text-muted-foreground w-32 flex-shrink-0 truncate">
-                                            {ticket.assigned_agent_username || t.tickets.unassigned}
-                                        </span>
-                                        <span className="text-xs text-muted-foreground w-32 flex-shrink-0 text-right">
-                                            {new Date(ticket.updated_at).toLocaleString(dateLocale, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
-                                        </span>
-                                    </Link>
-                                )
-                            })}
-                        </div>
-                    )}
+                        {tickets.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-40 gap-2 px-5">
+                                <TicketIcon className="h-8 w-8 text-muted-foreground" />
+                                <p className="text-sm text-muted-foreground">{t.tickets.empty}</p>
+                            </div>
+                        ) : (
+                            <div className="divide-y divide-slate-50">
+                                {tickets.map((ticket) => <TicketRow key={ticket.id} ticket={ticket} t={t} dateLocale={dateLocale} />)}
+                            </div>
+                        )}
 
-                    {totalPages > 1 && (
-                        <div className="flex items-center justify-between px-5 py-3 border-t border-border">
-                            <button onClick={() => setPage((p) => p - 1)} disabled={page <= 1} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
-                                <ChevronLeft className="h-4 w-4" />
-                            </button>
-                            <span className="text-xs text-muted-foreground">{t.tickets.pageOf(page, totalPages)}</span>
-                            <button onClick={() => setPage((p) => p + 1)} disabled={page >= totalPages} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
-                                <ChevronRight className="h-4 w-4" />
-                            </button>
-                        </div>
-                    )}
-                </div>
+                        {totalPages > 1 && (
+                            <div className="flex items-center justify-between px-5 py-3 border-t border-border">
+                                <button onClick={() => setPage((p) => p - 1)} disabled={page <= 1} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
+                                    <ChevronLeft className="h-4 w-4" />
+                                </button>
+                                <span className="text-xs text-muted-foreground">{t.tickets.pageOf(page, totalPages)}</span>
+                                <button onClick={() => setPage((p) => p + 1)} disabled={page >= totalPages} className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed">
+                                    <ChevronRight className="h-4 w-4" />
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     )
