@@ -149,6 +149,28 @@ describe("TicketDetailPage", () => {
     });
   });
 
+  it("shows a visible error and keeps the draft when sending a reply fails", async () => {
+    const fetchMock = mockLoad();
+    render(<TicketDetailPage />, { wrapper: LocaleProvider });
+    await screen.findByText("Conversation complète");
+
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url === "/api/messages" && init?.method === "POST") return Promise.resolve(jsonResponse({}, 500));
+      return Promise.resolve(jsonResponse({}, 404));
+    });
+
+    const input = screen.getByPlaceholderText("Écrire une réponse au client...");
+    fireEvent.change(input, { target: { value: "Voici la solution." } });
+    fireEvent.click(screen.getByRole("button", { name: /envoyer/i }));
+
+    expect(await screen.findByText("Action impossible pour le moment.")).toBeInTheDocument();
+    // Le texte n'est PAS perdu (le textarea le contient toujours) et le message n'a PAS été
+    // ajouté à la conversation en plus -- une seule occurrence, celle du brouillon. L'agent
+    // ne doit jamais croire qu'une réponse est partie alors que rien n'a été envoyé.
+    expect(input).toHaveValue("Voici la solution.");
+    expect(screen.getAllByText("Voici la solution.")).toHaveLength(1);
+  });
+
   it("shows a multi-line textarea for the reply box, not a single-line input", async () => {
     mockLoad();
     render(<TicketDetailPage />, { wrapper: LocaleProvider });

@@ -19,26 +19,34 @@ export default function SavDashboard() {
     const [reply, setReply] = useState("")
     const [isLoading, setIsLoading] = useState(false)
     const [isResolving, setIsResolving] = useState(false)
+    const [isSending, setIsSending] = useState(false)
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
         async function loadTransferred() {
             setIsLoading(true)
+            setError(null)
             try {
                 const res = await fetch("/api/sessions/transferred")
                 if (res.ok) setTransferredSessions(await res.json())
-            } catch { /* ignore */ } finally {
+                else setError(t.sav.loadError)
+            } catch {
+                setError(t.sav.loadError)
+            } finally {
                 setIsLoading(false)
             }
         }
         loadTransferred()
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- chargement initial uniquement, t ne doit pas le redéclencher
     }, [])
 
     const handleSelectSession = async (s: TransferredSession) => {
         setSelectedSession(s)
         setMessages([])
+        setError(null)
         try {
             const res = await fetch(`/api/messages?session_id=${s.id}`)
-            if (!res.ok) return
+            if (!res.ok) { setError(t.sav.loadError); return }
             const data = await res.json()
             if (!Array.isArray(data)) return
             setMessages(data.map((item: { id?: number | string; type_envoyeur: string; contenu?: string | null; date_creation?: string | null }) => ({
@@ -49,19 +57,26 @@ export default function SavDashboard() {
                     ? new Date(item.date_creation).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })
                     : "",
             })))
-        } catch { /* ignore */ }
+        } catch {
+            setError(t.sav.loadError)
+        }
     }
 
     const handleSendReply = async () => {
         const trimmed = reply.trim()
-        if (!trimmed || !selectedSession) return
+        if (!trimmed || !selectedSession || isSending) return
+        setIsSending(true)
+        setError(null)
         try {
             const res = await fetch("/api/messages", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ id_session: selectedSession.id, type_envoyeur: "sav", contenu: trimmed }),
             })
-            if (!res.ok) return
+            // reply n'est vidé qu'après un succès confirmé : sur échec, l'agent garde son texte
+            // ET voit l'erreur -- ne doit jamais croire qu'un message parti alors que rien n'a
+            // été envoyé (cf. correctif sécurité/RGPD, 2026-08-19).
+            if (!res.ok) { setError(t.sav.sendError); return }
             const data = await res.json()
             setMessages((prev) => [...prev, {
                 id: String(data.id),
@@ -72,20 +87,29 @@ export default function SavDashboard() {
                     : "",
             }])
             setReply("")
-        } catch { /* ignore */ }
+        } catch {
+            setError(t.sav.sendError)
+        } finally {
+            setIsSending(false)
+        }
     }
 
     const handleResolve = async () => {
         if (!selectedSession || isResolving) return
         setIsResolving(true)
+        setError(null)
         try {
             const res = await fetch(`/api/sessions/${selectedSession.id}/resolve`, { method: "POST" })
             if (res.ok) {
                 setTransferredSessions((prev) => prev.filter((s) => s.id !== selectedSession.id))
                 setSelectedSession(null)
                 setMessages([])
+            } else {
+                setError(t.sav.resolveError)
             }
-        } catch { /* ignore */ } finally {
+        } catch {
+            setError(t.sav.resolveError)
+        } finally {
             setIsResolving(false)
         }
     }
@@ -198,6 +222,13 @@ export default function SavDashboard() {
                     </div>
                 </header>
 
+                {error && (
+                    <div className="mx-6 mt-4 flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm text-red-700 dark:text-red-400">
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" />
+                        {error}
+                    </div>
+                )}
+
                 <div className="flex-1 overflow-y-auto p-6">
                     {!selectedSession ? (
                         <div className="flex flex-col items-center justify-center h-full max-w-md mx-auto space-y-4">
@@ -248,13 +279,13 @@ export default function SavDashboard() {
                                     onChange={(e) => setReply(e.target.value)}
                                     onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void handleSendReply() } }}
                                     placeholder={selectedSession ? t.sav.replyPlaceholder : t.sav.replyPlaceholderDisabled}
-                                    disabled={!selectedSession}
+                                    disabled={!selectedSession || isSending}
                                     className="h-14 pl-6 pr-24 rounded-2xl border-2 border-border focus-visible:ring-emerald-500 bg-muted/30 transition-all text-base"
                                 />
                                 <div className="absolute right-2 top-2">
                                     <Button
                                         type="submit"
-                                        disabled={!selectedSession || !reply.trim()}
+                                        disabled={!selectedSession || !reply.trim() || isSending}
                                         size="sm"
                                         className="h-10 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 shadow-lg shadow-emerald-100 transition-all"
                                     >
