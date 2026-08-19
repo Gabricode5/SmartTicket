@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, EmailStr, ValidationError
 from sqlalchemy.orm import Session
 
+import gdpr_purge
 import models
 import schemas
 from database import get_db
@@ -262,4 +263,9 @@ def delete_user_by_admin(user_id: int, current_user: str = Depends(get_current_u
         models.ChatSession.id_utilisateur == target.id,
         models.ChatSession.deleted_at.is_(None),
     ).update({"deleted_at": now})
+    # Le compte et ses sessions ne sont que soft-deleted ici (récupérables 30 jours, cf.
+    # purge_soft_deleted dans main.py) -- mais les entrées knowledge_base dérivées de ses
+    # tickets sont déjà exposées au RAG de tout autre utilisateur (cf. INDEX_CLOSED_TICKETS) :
+    # on les efface immédiatement plutôt que d'attendre le hard-delete à 30 jours.
+    gdpr_purge.purge_knowledge_base_for_user(db, target.id)
     db.commit()

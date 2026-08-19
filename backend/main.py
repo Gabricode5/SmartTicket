@@ -161,6 +161,17 @@ def run_migrations() -> None:
             conn.execute(_text("ALTER TABLE ai_call_logs ADD COLUMN IF NOT EXISTS best_match_distance DOUBLE PRECISION"))
             conn.execute(_text("ALTER TABLE ai_call_logs ADD COLUMN IF NOT EXISTS question_message_id INTEGER REFERENCES chat_messages(id) ON DELETE SET NULL"))
 
+            # knowledge_base.source_user_id / source_session_id : ajoutés le 2026-08-19 (RGPD
+            # bloquant #4 -- cf. INDEX_CLOSED_TICKETS dans dependencies.py). ON DELETE CASCADE :
+            # purge_soft_deleted() n'a rien à appeler explicitement, la cascade PostgreSQL efface
+            # les entrées vectorielles dès que l'utilisateur/la session est hard-deleted. Garde-fou :
+            # ne jamais activer INDEX_CLOSED_TICKETS sur une instance dont les migrations n'ont pas
+            # encore posé ces colonnes -- knowledge_base existe depuis le tout début (pas de garde
+            # _inspect nécessaire, comme ai_call_logs ci-dessus).
+            conn.execute(_text("ALTER TABLE knowledge_base ADD COLUMN IF NOT EXISTS source_user_id INTEGER REFERENCES utilisateur(id) ON DELETE CASCADE"))
+            conn.execute(_text("ALTER TABLE knowledge_base ADD COLUMN IF NOT EXISTS source_session_id INTEGER REFERENCES chat_sessions(id) ON DELETE CASCADE"))
+            conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_knowledge_base_source_user_id ON knowledge_base (source_user_id)"))
+
             conn.commit()
     except Exception as exc:
         _log.error("ALTER TABLE migration failed: %s", exc, exc_info=True)
