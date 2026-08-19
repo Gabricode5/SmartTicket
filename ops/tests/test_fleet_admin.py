@@ -550,7 +550,7 @@ def test_create_route_rejects_invalid_slug_format_without_starting_a_job(provisi
     client = TestClient(fleet_admin.app)
 
     response = client.post("/instances/create", data={
-        "client_name": "Acme", "slug": "Not A Slug!", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
+        "client_name": "Acme", "slug": "Not A Slug!", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb", "mistral_api_key": "test-mistral-key",
     })
 
     assert "invalide" in response.text
@@ -562,7 +562,7 @@ def test_create_route_rejects_missing_required_fields(provision_mock, synchronou
     client = TestClient(fleet_admin.app)
 
     response = client.post("/instances/create", data={
-        "client_name": "   ", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
+        "client_name": "   ", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb", "mistral_api_key": "test-mistral-key",
     })
 
     assert "requis" in response.text
@@ -576,7 +576,7 @@ def test_create_route_rejects_slug_already_in_registry(provision_mock, synchrono
     client = TestClient(fleet_admin.app)
 
     response = client.post("/instances/create", data={
-        "client_name": "Acme Bis", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
+        "client_name": "Acme Bis", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb", "mistral_api_key": "test-mistral-key",
     })
 
     assert "existe déjà" in response.text
@@ -592,11 +592,12 @@ def test_create_route_calls_provision_with_the_right_arguments(provision_mock, s
     client = TestClient(fleet_admin.app)
 
     response = client.post("/instances/create", data={
-        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_1gb",
+        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_1gb", "mistral_api_key": "test-mistral-key",
     })
 
     provision_mock.provision.assert_called_once_with(
         client_name="Acme Corp", slug="acme", admin_email="a@acme.com", postgres_plan="basic_1gb",
+        mistral_api_key="test-mistral-key", brevo_api_key="",
     )
     assert "lancée en tâche de fond" in response.text
     # Grâce à synchronous_background_thread, le job est déjà terminé à ce stade.
@@ -605,6 +606,37 @@ def test_create_route_calls_provision_with_the_right_arguments(provision_mock, s
     assert 'class="job-card job-succeeded"' in response.text
     assert "https://smartticket-acme.onrender.com/setup?token=abc123" in response.text
     assert "Email de bienvenue envoyé" in response.text
+
+
+def test_create_route_passes_brevo_key_through_when_provided(provision_mock, synchronous_background_thread):
+    """Clé Brevo DÉDIÉE à ce client (2026-08-19) — optionnelle, mais transmise telle quelle
+    à provision() quand elle est renseignée dans le formulaire."""
+    provision_mock.provision.return_value = provision_client.ProvisionResult(slug="acme", status="active")
+    client = TestClient(fleet_admin.app)
+
+    client.post("/instances/create", data={
+        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_1gb",
+        "mistral_api_key": "test-mistral-key", "brevo_api_key": "test-brevo-key",
+    })
+
+    provision_mock.provision.assert_called_once_with(
+        client_name="Acme Corp", slug="acme", admin_email="a@acme.com", postgres_plan="basic_1gb",
+        mistral_api_key="test-mistral-key", brevo_api_key="test-brevo-key",
+    )
+
+
+def test_create_route_rejects_missing_mistral_key_without_starting_a_job(provision_mock, synchronous_background_thread):
+    """Plus de repli implicite vers une clé partagée (2026-08-19) : la clé Mistral dédiée au
+    client est requise, comme le nom du client ou l'email admin."""
+    client = TestClient(fleet_admin.app)
+
+    response = client.post("/instances/create", data={
+        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
+        "mistral_api_key": "   ",
+    })
+
+    assert "requis" in response.text
+    provision_mock.provision.assert_not_called()
 
 
 def test_create_job_reports_provision_failure_honestly_never_as_success(provision_mock, synchronous_background_thread):
@@ -617,7 +649,7 @@ def test_create_job_reports_provision_failure_honestly_never_as_success(provisio
     client = TestClient(fleet_admin.app)
 
     response = client.post("/instances/create", data={
-        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
+        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb", "mistral_api_key": "test-mistral-key",
     })
 
     assert 'class="job-card job-failed"' in response.text
@@ -633,7 +665,7 @@ def test_create_job_survives_an_unexpected_exception_from_provision(provision_mo
     client = TestClient(fleet_admin.app)
 
     response = client.post("/instances/create", data={
-        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
+        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb", "mistral_api_key": "test-mistral-key",
     })
 
     assert 'class="job-card job-failed"' in response.text
@@ -648,7 +680,7 @@ def test_create_job_never_exposes_vendor_key(provision_mock, synchronous_backgro
     client = TestClient(fleet_admin.app)
 
     response = client.post("/instances/create", data={
-        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
+        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb", "mistral_api_key": "test-mistral-key",
     })
 
     assert "super-secret-vendor-key" not in response.text
@@ -762,7 +794,7 @@ def test_create_route_returns_a_303_redirect_to_root_not_html_directly(provision
     client = TestClient(fleet_admin.app, follow_redirects=False)
 
     response = client.post("/instances/create", data={
-        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
+        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb", "mistral_api_key": "test-mistral-key",
     })
 
     assert response.status_code == 303

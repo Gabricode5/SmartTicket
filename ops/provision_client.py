@@ -3,21 +3,29 @@
 + frontend Render), enregistre l'instance dans ops/instances.db.
 
 Usage :
-    python provision_client.py --name "Acme Corp" --slug acme-corp --admin-email admin@acme.com --postgres-plan starter
-    python provision_client.py --name "Acme Corp" --slug acme-corp --admin-email admin@acme.com --postgres-plan starter --dry-run
+    python provision_client.py --name "Acme Corp" --slug acme-corp --admin-email admin@acme.com --postgres-plan starter --mistral-api-key "clé Mistral dédiée à Acme Corp"
+    python provision_client.py --name "Acme Corp" --slug acme-corp --admin-email admin@acme.com --postgres-plan starter --mistral-api-key "clé Mistral dédiée à Acme Corp" --dry-run
 
 Prérequis (cf. docs/FLEET_PROVISIONING_PLAN.md, Phase 0) :
-    - RENDER_API_KEY exporté dans l'environnement
-    - MISTRAL_API_KEY / BREVO_API_KEY exportés (secrets partagés entre clients pour l'instant,
-      cf. décision Phase 0 — à revoir une fois le métering par instance en place)
-    - Si BREVO_API_KEY est exportée : SMTP_FROM DOIT l'être aussi, avec une adresse validée
-      dans Brevo → Senders (sans quoi Brevo répond 401 sur CHAQUE envoi — l'email de
-      bienvenue ops/notify.py ET, plus grave, les emails de vérification/reset de TOUTES les
-      instances provisionnées, cf. bug réel du 2026-07-16 : seule gabriel.guery10@gmail.com
-      était validée, "no-reply@smartticket.app" ne l'était pas et échouait silencieusement,
-      l'erreur étant interceptée et seulement loggée côté backend/email_utils.py). En
-      production, valider une adresse sur le domaine (ex: noreply@smartticket.fr, avec
-      SPF/DKIM) plutôt qu'une adresse Gmail.
+    - RENDER_API_KEY exporté dans l'environnement.
+    - --mistral-api-key : clé Mistral DÉDIÉE à ce client (2026-08-19, isolation des secrets
+      vendeur par instance — cf. ROADMAP.md, bloquant sécurité/RGPD n°3 : une clé partagée
+      entre tous les clients ne peut être ni révoquée ni attribuée par client, et une fuite
+      compromet toute la flotte). À créer manuellement dans la console Mistral avant chaque
+      provisioning (pas d'API de gestion de sous-comptes accessible hors tier Enterprise,
+      vérifié). Aucun repli implicite vers une clé partagée : argument requis.
+    - --brevo-api-key (optionnel) : clé Brevo dédiée à ce client, même logique. Sans elle,
+      les emails transactionnels (vérification, reset, invitation, réponse SAV, bienvenue)
+      sont simplement loggués au lieu d'être envoyés — utile en test.
+    - Adresse expéditrice : calculée automatiquement (build_sender_email(), alias
+      "noreply+{slug}@{sender_domain}") plutôt que fournie par client — un seul domaine à
+      authentifier (SPF/DKIM/DMARC) côté SmartTicket, décision validée pour ne pas imposer de
+      friction d'onboarding (vérification de domaine) à chaque client. --sender-domain
+      surchage DEFAULT_SENDER_DOMAIN si besoin (tests, domaine différent). ATTENTION : ce
+      domaine doit être RÉELLEMENT authentifié dans Brevo → Senders avant tout client réel
+      avec --brevo-api-key posée, sans quoi Brevo répondra 401 sur chaque envoi (même classe
+      de bug que le 2026-07-16, cf. historique git) — aucune vérification automatique de ce
+      prérequis n'est faite ici (pas d'appel à l'API Brevo pour ça), c'est une étape manuelle.
     - Si --domain est fourni : le domaine doit déjà exister et pointer vers Render (wildcard
       DNS), cf. Phase 0. Sans --domain, l'instance reste accessible via son URL *.onrender.com.
 
@@ -84,6 +92,11 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_REPO = "https://github.com/Gabricode5/SmartTicket"
 DEFAULT_BRANCH = "main"
+# Un seul domaine expéditeur pour toute la flotte (décision validée le 2026-08-19) : chaque
+# client reçoit un alias "noreply+{slug}@{domaine}" plutôt qu'un domaine à authentifier
+# lui-même dans Brevo — voir build_sender_email() ci-dessous. Surchargeable pour les tests
+# (SMTP_SENDER_DOMAIN) sans toucher au code.
+DEFAULT_SENDER_DOMAIN = os.getenv("SMTP_SENDER_DOMAIN", "smartticket.fr")
 
 
 @dataclass
@@ -129,11 +142,13 @@ def build_domain_urls(slug: str, domain: str) -> tuple[str, str]:
     return f"https://{slug}-api.{domain}", f"https://{slug}.{domain}"
 
 
-def _shared_secret(env_var: str, required: bool = True) -> str:
-    value = os.getenv(env_var)
-    if not value and required:
-        raise RuntimeError(f"{env_var} manquante dans l'environnement du script (secret partagé entre instances, cf. Phase 0 du plan).")
-    return value or ""
+def build_sender_email(slug: str, sender_domain: str) -> str:
+    """Alias sous un domaine unique SmartTicket (décision validée le 2026-08-19, chantier
+    isolation des clés vendeur, cf. ROADMAP.md) plutôt qu'un domaine vérifié par client : un
+    seul domaine à authentifier (SPF/DKIM/DMARC) côté SmartTicket, aucune friction
+    d'onboarding supplémentaire pour le client. Le "+slug" permet quand même d'attribuer/
+    filtrer par client côté réception si besoin, sans exiger une vraie boîte par client."""
+    return f"noreply+{slug}@{sender_domain}"
 
 
 def _rollback(slug: str, created_resources: list[tuple[str, str, str]], *, error: str) -> ProvisionResult:
@@ -179,6 +194,7 @@ def _rollback(slug: str, created_resources: list[tuple[str, str, str]], *, error
 
 def provision(
     *, client_name: str, slug: str, postgres_plan: str, admin_email: str,
+    mistral_api_key: str, brevo_api_key: str = "", sender_domain: str = DEFAULT_SENDER_DOMAIN,
     domain: str | None = None, web_plan: str = "starter",
     postgres_version: str = render.DEFAULT_POSTGRES_VERSION,
     repo: str = DEFAULT_REPO, branch: str = DEFAULT_BRANCH,
@@ -186,6 +202,10 @@ def provision(
     """Crée Postgres + backend + frontend Render pour un nouveau client et enregistre
     l'instance dans ops/instances.db. Ne fait aucun appel réseau tant que l'idempotence et
     la validité du plan Postgres n'ont pas été vérifiées.
+
+    mistral_api_key/brevo_api_key sont DÉDIÉES à ce client (2026-08-19, cf. docstring du
+    module) — plus aucun repli implicite vers un secret partagé lu depuis l'environnement de
+    l'opérateur : l'appelant (CLI ou fleet_admin.py) doit les fournir explicitement.
 
     Le slug est réservé dans instances.db (statut 'provisioning') AVANT le moindre appel
     Render, et chaque ID de ressource y est persisté dès sa création (pas seulement à la
@@ -206,23 +226,10 @@ def provision(
     vendor_key = generate_secret()
     admin_setup_token = generate_secret()  # jamais un mot de passe : cf. POST /v1/setup côté backend
 
-    brevo_api_key = _shared_secret("BREVO_API_KEY", required=False)
-    smtp_from = os.getenv("SMTP_FROM", "")
-    if brevo_api_key and not smtp_from:
-        # Échec Brevo 401 réel du 2026-07-16 : le sender par défaut de backend/email_utils.py
-        # ("no-reply@smartticket.app") n'est validé nulle part dans Brevo → Senders. Toutes
-        # les instances provisionnées sans SMTP_FROM explicite auraient donc leurs emails de
-        # vérification/reset qui échouent en 401, SILENCIEUSEMENT (l'exception est
-        # interceptée et seulement loggée côté backend, jamais remontée à l'utilisateur) —
-        # mieux vaut échouer fort ici, avant de créer quoi que ce soit sur Render.
-        raise RuntimeError(
-            "BREVO_API_KEY est définie mais SMTP_FROM ne l'est pas : chaque instance "
-            "provisionnée utiliserait l'adresse expéditrice par défaut de "
-            "backend/email_utils.py, qui n'est validée dans aucun compte Brevo → Senders. "
-            "Tous les emails (vérification, reset) échoueraient en 401 sans que personne ne "
-            "s'en aperçoive. Exportez SMTP_FROM avec une adresse validée dans Brevo avant de "
-            "relancer le provisioning."
-        )
+    # Calculée systématiquement (pas seulement si brevo_api_key est posée) : même sans clé
+    # Brevo pour cette instance, la valeur reste cohérente si un jour SMTP_HOST générique est
+    # aussi câblé ici (cf. commentaire sur backend_env["SMTP_FROM"] plus bas).
+    sender_email = build_sender_email(slug, sender_domain)
 
     # Avec --domain : déterministe, nous choisissons le domaine (cf. build_domain_urls()).
     # Sans --domain : (None, None), l'URL réelle *.onrender.com de chaque service n'est
@@ -290,17 +297,15 @@ def provision(
             # backend/routers/auth.py) sur une instance client de production — cf. décision
             # documentée dans docs/FLEET_PROVISIONING_PLAN.md.
             "ADMIN_SETUP_TOKEN": admin_setup_token,
-            "MISTRAL_API_KEY": _shared_secret("MISTRAL_API_KEY"),
+            # Clé DÉDIÉE à ce client (2026-08-19) — plus un secret partagé entre toutes les
+            # instances, cf. docstring du module et ROADMAP.md.
+            "MISTRAL_API_KEY": mistral_api_key,
             "EMBED_MODEL": "mistral-embed",
             "BREVO_API_KEY": brevo_api_key,
-            # Sans ça, backend/email_utils.py retombait sur son défaut
-            # ("no-reply@smartticket.app"), jamais validé dans Brevo → Senders : les emails de
-            # vérification/reset de CHAQUE instance provisionnée échouaient en 401 sans que
-            # personne ne s'en aperçoive (bug réel du 2026-07-16). Garanti non vide à ce point
-            # si brevo_api_key est non vide (cf. le fail-fast plus haut) ; sinon transmis quand
-            # même tel quel (vide ou une valeur explicite) pour rester cohérent avec le défaut
-            # SMTP_FROM du backend si un jour SMTP_HOST est aussi câblé ici.
-            "SMTP_FROM": smtp_from,
+            # Calculée par build_sender_email(), jamais fournie par client (cf. docstring du
+            # module) — transmise même si brevo_api_key est vide, pour rester cohérente avec
+            # le défaut SMTP_FROM du backend si un jour SMTP_HOST générique est aussi câblé ici.
+            "SMTP_FROM": sender_email,
         }
 
         logger.info("Création du service backend '%s'...", backend_name)
@@ -408,8 +413,13 @@ def provision(
     )
 
     logger.info("Envoi de l'email de bienvenue à %s...", admin_email)
+    # Même clé/expéditeur dédiés que le reste de l'instance (2026-08-19) — avant ce chantier,
+    # ops/notify.py lisait BREVO_API_KEY/SMTP_FROM depuis l'environnement de l'OPÉRATEUR
+    # séparément de backend_env ci-dessus, donc l'email de bienvenue restait mutualisé même
+    # après avoir isolé le reste. Transmis explicitement pour fermer ce trou.
     welcome_email_sent = notify.send_welcome_email(
         admin_email=admin_email, client_name=client_name, setup_url=setup_url,
+        api_key=brevo_api_key, sender_email=sender_email,
     )
 
     return ProvisionResult(
@@ -424,6 +434,18 @@ def main() -> int:
     parser.add_argument("--name", required=True, help="Nom lisible du client (ex: 'Acme Corp')")
     parser.add_argument("--slug", required=True, help="Identifiant court, sans espaces (ex: acme-corp)")
     parser.add_argument("--admin-email", required=True, help="Email du compte admin du client (recevra le lien de setup)")
+    parser.add_argument(
+        "--mistral-api-key", required=True,
+        help="Clé Mistral DÉDIÉE à ce client (créée manuellement dans la console Mistral avant ce provisioning — jamais une clé partagée entre plusieurs clients)",
+    )
+    parser.add_argument(
+        "--brevo-api-key", default="",
+        help="Clé Brevo dédiée à ce client (optionnel — sans elle, les emails transactionnels sont loggués au lieu d'être envoyés)",
+    )
+    parser.add_argument(
+        "--sender-domain", default=DEFAULT_SENDER_DOMAIN,
+        help=f"Domaine sous lequel l'adresse expéditrice est calculée (noreply+{{slug}}@domaine) — défaut: {DEFAULT_SENDER_DOMAIN}. DOIT être authentifié (SPF/DKIM/DMARC) dans Brevo avant tout client réel avec --brevo-api-key.",
+    )
     parser.add_argument("--postgres-plan", required=True, help="Plan Postgres Render (JAMAIS 'free' — aucun backup sur ce plan)")
     parser.add_argument(
         "--postgres-version", default=render.DEFAULT_POSTGRES_VERSION,
@@ -464,13 +486,16 @@ def main() -> int:
             print("                de chaque service (jamais devinées, cf. bug réel du 2026-08-15 documenté")
             print("                en tête de ce fichier) : provision() les relit via l'API après coup.")
         print(f"Admin email   : {args.admin_email}")
+        print(f"Adresse exp.  : {build_sender_email(args.slug, args.sender_domain)}")
         print(f"Suffixe Render: {render_suffix} (exemple — régénéré à chaque exécution réelle, cf. generate_render_suffix())")
         print("Secrets générés (non affichés en dry-run — regénérés à chaque exécution réelle)")
         return 0
 
     result = provision(
         client_name=args.name, slug=args.slug, postgres_plan=args.postgres_plan,
-        admin_email=args.admin_email, domain=args.domain, web_plan=args.web_plan,
+        admin_email=args.admin_email, mistral_api_key=args.mistral_api_key,
+        brevo_api_key=args.brevo_api_key, sender_domain=args.sender_domain,
+        domain=args.domain, web_plan=args.web_plan,
         postgres_version=args.postgres_version, repo=args.repo, branch=args.branch,
     )
 

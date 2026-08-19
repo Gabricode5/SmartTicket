@@ -8,7 +8,6 @@ code doit rester lisible et exécutable seul, sans installer les dépendances ba
 Duplication de quelques lignes d'appel HTTP à l'API Brevo assumée pour cette raison.
 """
 import logging
-import os
 
 import requests
 
@@ -16,19 +15,23 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 BREVO_API_URL = "https://api.brevo.com/v3/smtp/email"
-SENDER_EMAIL = os.getenv("SMTP_FROM", "no-reply@smartticket.app")
 
 
-def send_welcome_email(*, admin_email: str, client_name: str, setup_url: str) -> bool:
+def send_welcome_email(*, admin_email: str, client_name: str, setup_url: str, api_key: str, sender_email: str) -> bool:
     """Envoie le lien de setup au client. Retourne True si l'appel Brevo a réussi, False
-    sinon (BREVO_API_KEY absente ou erreur HTTP) — dans les deux cas, ne lève jamais : un
-    échec d'email ne doit pas faire échouer un provisioning déjà terminé côté Render, le
-    lien reste de toute façon affiché en console par provision_client.py."""
-    api_key = os.getenv("BREVO_API_KEY")
+    sinon (api_key vide ou erreur HTTP) — dans les deux cas, ne lève jamais : un échec
+    d'email ne doit pas faire échouer un provisioning déjà terminé côté Render, le lien reste
+    de toute façon affiché en console par provision_client.py.
+
+    api_key/sender_email DÉDIÉS à ce client, transmis explicitement par provision() (2026-08-19)
+    — avant ce chantier, cette fonction lisait BREVO_API_KEY/SMTP_FROM depuis l'environnement
+    de l'opérateur, indépendamment de backend_env : l'email de bienvenue restait mutualisé
+    même après avoir isolé le reste des secrets par instance. Plus de lecture d'environnement
+    ici du tout."""
     if not api_key:
         logger.warning(
-            "BREVO_API_KEY absente de l'environnement : email de bienvenue NON envoyé à %s. "
-            "Le lien de setup doit être transmis manuellement au client : %s",
+            "Aucune clé Brevo fournie pour cette instance : email de bienvenue NON envoyé à "
+            "%s. Le lien de setup doit être transmis manuellement au client : %s",
             admin_email, setup_url,
         )
         return False
@@ -59,7 +62,7 @@ def send_welcome_email(*, admin_email: str, client_name: str, setup_url: str) ->
             BREVO_API_URL,
             headers={"api-key": api_key, "Content-Type": "application/json", "Accept": "application/json"},
             json={
-                "sender": {"name": "SmartTicket", "email": SENDER_EMAIL},
+                "sender": {"name": "SmartTicket", "email": sender_email},
                 "to": [{"email": admin_email}],
                 "subject": subject,
                 "textContent": text_body,

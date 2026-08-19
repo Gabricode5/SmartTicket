@@ -1,8 +1,4 @@
-import os
-
-# provision() exige MISTRAL_API_KEY dans l'environnement (secret partagé entre instances,
-# cf. ops/provision_client.py::_shared_secret) — sans cette valeur, l'échec se produirait
-# avant même la création du service backend, ce qui fausserait les scénarios de rollback
-# ci-dessous (pensés pour échouer plus tard, à la création du frontend). Même pattern que
-# backend/tests/conftest.py : une valeur de test, jamais une vraie clé.
-os.environ.setdefault("MISTRAL_API_KEY", "test-mistral-key-for-ci-only")
+"""provision() prend désormais mistral_api_key/brevo_api_key en paramètres explicites plutôt
+que de les lire dans l'environnement (isolation des secrets vendeur par instance, 2026-08-19)
+— plus rien à poser ici, cf. les tests eux-mêmes (_TEST_MISTRAL_KEY dans
+test_provision_rollback.py)."""
