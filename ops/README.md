@@ -30,25 +30,35 @@ unique est `render_client.py` (tous les appels HTTP y passent par la fonction `_
 ```bash
 pip install -r requirements.txt
 export RENDER_API_KEY=...       # Render → Account Settings → API Keys
-export MISTRAL_API_KEY=...      # secret partagé entre toutes les instances (pour l'instant)
-export BREVO_API_KEY=...        # optionnel — sans lui, les emails sont juste loggés côté client
-export SMTP_FROM=...            # OBLIGATOIRE si BREVO_API_KEY est définie, cf. ci-dessous
 ```
 
-**`SMTP_FROM` doit être une adresse validée dans Brevo → Senders** (Brevo répond 401 sur
-*tout* envoi sinon — bug réel rencontré le 2026-07-16 : la clé API était valide, seule
-l'adresse expéditrice ne l'était pas). Cette variable sert deux usages distincts :
+**Isolation des secrets vendeur par instance (2026-08-19, ROADMAP.md bloquant sécurité/RGPD
+n°3)** : `MISTRAL_API_KEY`/`BREVO_API_KEY` ne sont plus des variables d'environnement
+partagées lues implicitement par `provision()` — chaque client a sa PROPRE clé, créée
+manuellement dans la console Mistral (et Brevo si les emails transactionnels sont voulus)
+AVANT le provisioning, et passée explicitement :
 
-- L'email de bienvenue envoyé par `notify.py` à la fin du provisioning (lien de setup).
-- Sans elle, `provision()` **refuse de démarrer** dès que `BREVO_API_KEY` est définie (échec
-  rapide, avant tout appel Render) : injectée dans l'environnement de CHAQUE instance
-  provisionnée pour que `backend/email_utils.py` (emails de vérification/reset) l'utilise
-  aussi — sans quoi le backend serait retombé sur son adresse par défaut
-  (`no-reply@smartticket.app`), jamais validée nulle part, et ses emails auraient échoué en
-  401 silencieusement (l'erreur est interceptée et seulement loggée côté backend).
+```bash
+python provision_client.py --name "Acme Corp" --slug acme-corp --admin-email admin@acme.com \
+    --postgres-plan starter --mistral-api-key "clé Mistral d'Acme Corp" \
+    --brevo-api-key "clé Brevo d'Acme Corp"      # optionnel
+```
 
-En test : une adresse Gmail validée manuellement suffit. En production : une adresse sur le
-domaine (ex: `noreply@smartticket.fr`) avec SPF/DKIM configurés côté Brevo.
+Pourquoi : une clé partagée entre tous les clients ne peut être ni révoquée ni attribuée par
+client, et une fuite compromet toute la flotte — un vrai no-go DPO pour la cible secteur
+régulé. Vérifié (pas supposé) : ni Mistral ni Brevo n'exposent d'API de création
+programmatique de sous-comptes/clés hors de leur tier Enterprise (sur devis) — la création
+reste donc manuelle dans les deux consoles web, une clé par client, à chaque provisioning.
+
+`--sender-domain` (défaut `smartticket.fr`, variable `SMTP_SENDER_DOMAIN` pour surcharger) :
+l'adresse expéditrice des emails n'est **pas** demandée par client — elle est calculée
+automatiquement (`noreply+{slug}@{domaine}`), pour n'avoir qu'un seul domaine à authentifier
+(SPF/DKIM/DMARC) côté SmartTicket plutôt qu'un domaine vérifié par client (friction
+d'onboarding jugée disproportionnée à cette échelle). **Ce domaine doit être RÉELLEMENT
+authentifié dans Brevo → Senders avant tout client réel avec `--brevo-api-key` posée** —
+sans quoi Brevo répond 401 sur *tout* envoi (bug réel rencontré le 2026-07-16, avant que
+l'expéditeur soit calculé automatiquement plutôt que fourni à la main) ; aucune vérification
+automatique de ce prérequis n'est faite par le script.
 
 ### Tests
 
@@ -73,8 +83,8 @@ le fichier) : elle contient les `VENDOR_KEY`/`ADMIN_SETUP_KEY` de toutes les ins
 ### `provision_client.py` — créer une instance
 
 ```bash
-python provision_client.py --name "Acme Corp" --slug acme-corp --admin-email admin@acme.com --postgres-plan starter --dry-run
-python provision_client.py --name "Acme Corp" --slug acme-corp --admin-email admin@acme.com --postgres-plan starter
+python provision_client.py --name "Acme Corp" --slug acme-corp --admin-email admin@acme.com --postgres-plan starter --mistral-api-key "clé Mistral d'Acme Corp" --dry-run
+python provision_client.py --name "Acme Corp" --slug acme-corp --admin-email admin@acme.com --postgres-plan starter --mistral-api-key "clé Mistral d'Acme Corp"
 ```
 
 - `--postgres-plan` ne peut jamais être `free` (aucun backup automatique sur ce plan,
@@ -99,10 +109,13 @@ python provision_client.py --name "Acme Corp" --slug acme-corp --admin-email adm
   48h). Le script affiche une fois, en fin d'exécution, `VENDOR_KEY` (coupe-circuit
   d'abonnement, à conserver) et le lien `.../setup?token=...`.
 - **Email de bienvenue automatique** (`notify.py`, API Brevo) : envoyé au client une fois
-  l'instance active, avec le lien de setup. Si `BREVO_API_KEY` est absente ou que l'appel
-  échoue, un WARNING/ERROR visible s'affiche et le lien reste de toute façon imprimé en
-  console par `provision_client.py` — à transmettre manuellement dans ce cas. `notify.py`
-  est volontairement indépendant de `backend/email_utils.py` (pas de dépendance `ops/` →
+  l'instance active, avec le lien de setup, via la même clé/expéditeur dédiés que le reste
+  de l'instance (`--brevo-api-key` + adresse calculée, cf. ci-dessus — avant le 2026-08-19,
+  `notify.py` lisait ses propres variables partagées, donc cet email restait mutualisé même
+  après avoir isolé le reste). Si `--brevo-api-key` est absente ou que l'appel échoue, un
+  WARNING/ERROR visible s'affiche et le lien reste de toute façon imprimé en console par
+  `provision_client.py` — à transmettre manuellement dans ce cas. `notify.py` est
+  volontairement indépendant de `backend/email_utils.py` (pas de dépendance `ops/` →
   `backend/`), au prix d'une petite duplication de l'appel HTTP à Brevo.
 - **Séparation site vitrine / instance client** (2026-08-15) : le frontend affichait la
   landing marketing SmartTicket ("Essayer gratuitement", "Propulsé par Mistral AI"...) à sa
@@ -204,8 +217,10 @@ directement — le coupe-circuit d'abonnement (`GET`/`PUT /v1/instance/subscript
   une case à cocher explicite ("je comprends que les données seront détruites"). Une instance
   suspendue depuis longtemps affiche un rappel de facturation (cf. ci-dessous). Disponible
   pour toute instance dont le statut local n'est pas déjà `'supprimee'`.
-- **Partie B.3 (créer une instance)** : formulaire (nom, email admin, plan Postgres) qui
-  appelle `provision_client.provision()` — la MÊME fonction que la CLI, rien réimplémenté.
+- **Partie B.3 (créer une instance)** : formulaire (nom, email admin, plan Postgres, clé API
+  Mistral dédiée au client — requise —, clé API Brevo dédiée — optionnelle, cf. isolation des
+  secrets vendeur ci-dessus) qui appelle `provision_client.provision()` — la MÊME fonction
+  que la CLI, rien réimplémenté.
   `provision()` prend ~5 minutes en conditions réelles (confirmé) : lancée dans un **thread
   daemon séparé**, la requête HTTP répond immédiatement, jamais d'attente synchrone. Le slug
   est dérivé automatiquement du nom côté navigateur (minuscules, accents retirés, tirets —

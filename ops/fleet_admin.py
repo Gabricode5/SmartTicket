@@ -100,7 +100,10 @@ _provision_jobs: dict[str, ProvisionJob] = {}
 _provision_jobs_lock = threading.Lock()
 
 
-def _run_provision_job(*, client_name: str, slug: str, admin_email: str, postgres_plan: str) -> None:
+def _run_provision_job(
+    *, client_name: str, slug: str, admin_email: str, postgres_plan: str,
+    mistral_api_key: str, brevo_api_key: str = "",
+) -> None:
     """Tourne dans un thread daemon séparé — cf. docstring du module pour le choix
     d'architecture. provision() ne devrait normalement jamais lever (elle catche déjà tout en
     interne et retourne un ProvisionResult), mais le filet de sécurité `except Exception`
@@ -109,6 +112,7 @@ def _run_provision_job(*, client_name: str, slug: str, admin_email: str, postgre
     try:
         result = provision_client.provision(
             client_name=client_name, slug=slug, admin_email=admin_email, postgres_plan=postgres_plan,
+            mistral_api_key=mistral_api_key, brevo_api_key=brevo_api_key,
         )
     except Exception as exc:
         logger.error("provision() a levé une exception non gérée pour '%s' : %s", slug, exc, exc_info=True)
@@ -435,19 +439,26 @@ def delete_instance_route(
 def create_instance_route(
     client_name: str = Form(...), slug: str = Form(...),
     admin_email: str = Form(...), postgres_plan: str = Form(render.DEFAULT_POSTGRES_PLAN),
+    mistral_api_key: str = Form(...), brevo_api_key: str = Form(""),
 ) -> RedirectResponse:
     """Lance provision() en tâche de fond (cf. docstring du module) et répond IMMÉDIATEMENT
     par une redirection — jamais d'attente synchrone des ~5 minutes que prend un
     provisioning réel, et jamais de rendu HTML directement sur cette URL de POST (sans ça,
     un F5 ou le <meta refresh> de la page suivante rejouerait ce POST en GET -> 405, bug réel
     du 2026-08-15). MÊME fonction que la CLI (provision_client.provision()), rien
-    réimplémenté ici."""
+    réimplémenté ici.
+
+    mistral_api_key/brevo_api_key : clés DÉDIÉES à ce client (2026-08-19, cf. ROADMAP.md
+    bloquant sécurité/RGPD n°3), créées manuellement dans les consoles Mistral/Brevo avant de
+    remplir ce formulaire — plus aucun secret partagé lu depuis l'environnement du poste."""
     client_name = client_name.strip()
     slug = slug.strip().lower()
     admin_email = admin_email.strip()
+    mistral_api_key = mistral_api_key.strip()
+    brevo_api_key = brevo_api_key.strip()
 
-    if not client_name or not admin_email:
-        creation_result = {"ok": False, "message": "Le nom du client et l'email admin sont requis."}
+    if not client_name or not admin_email or not mistral_api_key:
+        creation_result = {"ok": False, "message": "Le nom du client, l'email admin et la clé API Mistral sont requis."}
     elif not _SLUG_PATTERN.match(slug):
         creation_result = {"ok": False, "message": f"Slug '{slug}' invalide — minuscules, chiffres et tirets uniquement, sans tiret en début/fin (ex: acme-corp)."}
     elif db.slug_exists(slug):
@@ -462,7 +473,10 @@ def create_instance_route(
             )
         threading.Thread(
             target=_run_provision_job,
-            kwargs=dict(client_name=client_name, slug=slug, admin_email=admin_email, postgres_plan=postgres_plan),
+            kwargs=dict(
+                client_name=client_name, slug=slug, admin_email=admin_email, postgres_plan=postgres_plan,
+                mistral_api_key=mistral_api_key, brevo_api_key=brevo_api_key,
+            ),
             daemon=True,
         ).start()
         creation_result = {

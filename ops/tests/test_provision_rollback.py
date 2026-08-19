@@ -15,6 +15,12 @@ import db
 import provision_client
 import render_client  # module réel, non mocké — pour lire ses vraies constantes dans les tests
 
+# provision() exige mistral_api_key en paramètre explicite depuis le 2026-08-19 (isolation
+# des secrets vendeur par instance — plus de repli sur un secret partagé lu dans
+# l'environnement, cf. ROADMAP.md bloquant sécurité/RGPD n°3). Valeur de test réutilisée
+# partout où la clé Mistral elle-même n'est pas l'objet du test.
+_TEST_MISTRAL_KEY = "test-mistral-key-for-ci-only"
+
 
 @pytest.fixture(autouse=True)
 def isolated_db(tmp_path, monkeypatch):
@@ -72,6 +78,7 @@ def test_full_success_never_calls_delete_and_marks_instance_active(render_mock, 
     notify_mock.send_welcome_email.return_value = True
 
     result = provision_client.provision(
+        mistral_api_key=_TEST_MISTRAL_KEY,
         client_name="Acme", slug="acme-success", postgres_plan="starter", admin_email="a@acme.com",
     )
 
@@ -94,6 +101,7 @@ def test_partial_failure_rolls_back_in_reverse_order_and_frees_slug(render_mock,
     render_mock.delete_resources.return_value = []  # rollback réussi à 100%
 
     result = provision_client.provision(
+        mistral_api_key=_TEST_MISTRAL_KEY,
         client_name="Acme2", slug="acme-rollback-ok", postgres_plan="starter", admin_email="a@acme2.com",
     )
 
@@ -116,6 +124,7 @@ def test_incomplete_rollback_burns_the_slug_and_reports_orphans(render_mock, not
     render_mock.delete_resources.return_value = [("service backend", "service", "backend-3")]
 
     result = provision_client.provision(
+        mistral_api_key=_TEST_MISTRAL_KEY,
         client_name="Acme3", slug="acme-rollback-fail", postgres_plan="starter", admin_email="a@acme3.com",
     )
 
@@ -135,12 +144,14 @@ def test_burned_slug_blocks_retry_without_touching_render_again(render_mock, not
     render_mock.delete_resources.return_value = [("service backend", "service", "backend-4")]
 
     first = provision_client.provision(
+        mistral_api_key=_TEST_MISTRAL_KEY,
         client_name="Acme4", slug="acme-burned", postgres_plan="starter", admin_email="a@acme4.com",
     )
     assert first.status == "failed"
     assert db.slug_exists("acme-burned")
 
     retry = provision_client.provision(
+        mistral_api_key=_TEST_MISTRAL_KEY,
         client_name="Acme4", slug="acme-burned", postgres_plan="starter", admin_email="a@acme4.com",
     )
 
@@ -177,6 +188,7 @@ class TestFrontendReceivesTheRealBackendUrl:
         notify_mock.send_welcome_email.return_value = True
 
         result = provision_client.provision(
+            mistral_api_key=_TEST_MISTRAL_KEY,
             client_name="Acme5", slug="acme5", postgres_plan="starter", admin_email="a@acme5.com",
         )
 
@@ -212,6 +224,7 @@ class TestFrontendReceivesTheRealBackendUrl:
         notify_mock.send_welcome_email.return_value = True
 
         result = provision_client.provision(
+            mistral_api_key=_TEST_MISTRAL_KEY,
             client_name="Acme6", slug="acme6", postgres_plan="starter", admin_email="a@acme6.com",
             domain="smartticket.fr",
         )
@@ -248,6 +261,7 @@ class TestPostgresAvailabilityIsAwaitedBeforeConnectionInfo:
         manager.attach_mock(render_mock.get_postgres_connection_info, "get_postgres_connection_info")
 
         result = provision_client.provision(
+            mistral_api_key=_TEST_MISTRAL_KEY,
             client_name="Acme8", slug="acme8", postgres_plan="starter", admin_email="a@acme8.com",
         )
 
@@ -266,6 +280,7 @@ class TestPostgresAvailabilityIsAwaitedBeforeConnectionInfo:
         render_mock.delete_resources.return_value = []  # rollback réussi à 100%
 
         result = provision_client.provision(
+            mistral_api_key=_TEST_MISTRAL_KEY,
             client_name="Acme9", slug="acme9", postgres_plan="starter", admin_email="a@acme9.com",
         )
 
@@ -285,51 +300,53 @@ class TestPostgresAvailabilityIsAwaitedBeforeConnectionInfo:
         assert not db.slug_exists("acme9")
 
 
-class TestSmtpFromSenderValidation:
-    """Bug réel du 2026-07-16 : Brevo répondait 401 sur les emails de vérification/reset de
-    l'instance provisionnée. La clé BREVO_API_KEY était valide — le problème venait de
-    l'adresse expéditrice (backend/email_utils.py retombait sur son défaut
-    "no-reply@smartticket.app", jamais validée dans Brevo → Senders), et l'échec était
-    intercepté et seulement loggé côté backend, donc invisible. provision() doit maintenant
-    refuser de démarrer si BREVO_API_KEY est définie sans SMTP_FROM, et transmettre SMTP_FROM
-    à chaque instance provisionnée pour que son backend l'utilise aussi."""
+class TestPerInstanceVendorKeys:
+    """Isolation des secrets vendeur par instance (2026-08-19, ROADMAP.md bloquant sécurité/
+    RGPD n°3) : MISTRAL_API_KEY/BREVO_API_KEY étaient partagées entre TOUTES les instances
+    (une seule valeur lue depuis l'environnement de l'opérateur). provision() prend
+    désormais mistral_api_key/brevo_api_key en paramètres explicites, dédiés à CHAQUE client
+    — plus aucun repli implicite. L'adresse expéditrice n'est plus fournie (bug réel du
+    2026-07-16 : Brevo répondait 401 car "no-reply@smartticket.app" n'était validée nulle
+    part) mais CALCULÉE (build_sender_email()) : un seul domaine à authentifier côté
+    SmartTicket, jamais un domaine par client."""
 
-    def test_provision_raises_before_any_render_call_when_brevo_key_set_without_smtp_from(
-        self, render_mock, notify_mock, monkeypatch,
-    ):
-        monkeypatch.setenv("BREVO_API_KEY", "test-brevo-key")
-        monkeypatch.delenv("SMTP_FROM", raising=False)
+    def test_mistral_api_key_flows_to_backend_env(self, render_mock, notify_mock):
+        _mock_common_steps(render_mock, postgres_id="pg-10")
+        render_mock.create_web_service.side_effect = [
+            {"id": "backend-10", "serviceDetails": {"url": "https://backend-10.onrender.com"}},
+            {"id": "frontend-10", "serviceDetails": {"url": "https://frontend-10.onrender.com"}},
+        ]
+        notify_mock.send_welcome_email.return_value = True
 
-        with pytest.raises(RuntimeError, match="SMTP_FROM"):
-            provision_client.provision(
-                client_name="Acme10", slug="acme10", postgres_plan="starter", admin_email="a@acme10.com",
-            )
+        result = provision_client.provision(
+            client_name="Acme10", slug="acme10", postgres_plan="starter", admin_email="a@acme10.com",
+            mistral_api_key="mistral-key-dedicated-to-acme10",
+        )
 
-        # Échec avant le moindre appel Render, et rien de persisté dans instances.db —
-        # exactement comme les échecs de validation existants (ex: slug déjà pris).
-        render_mock.get_owner_id.assert_not_called()
-        render_mock.create_postgres.assert_not_called()
-        assert db.get_instance("acme10") is None
+        assert result.status == "active"
+        backend_call_kwargs = render_mock.create_web_service.call_args_list[0].kwargs
+        assert backend_call_kwargs["env_vars"]["MISTRAL_API_KEY"] == "mistral-key-dedicated-to-acme10"
 
-    def test_provision_does_not_raise_when_brevo_key_absent_even_without_smtp_from(self, render_mock, notify_mock):
-        """Sans BREVO_API_KEY (email juste loggé côté client, cf. notify.py), l'absence de
-        SMTP_FROM est sans conséquence — ne doit pas bloquer un provisioning de test."""
+    def test_provision_succeeds_without_a_brevo_key(self, render_mock, notify_mock):
+        """Brevo reste optionnel (email juste loggué côté ops/notify.py, jamais envoyé) —
+        aucune conséquence sur le provisioning lui-même."""
         _mock_common_steps(render_mock, postgres_id="pg-11")
         render_mock.create_web_service.side_effect = [
             {"id": "backend-11", "serviceDetails": {"url": "https://backend-11.onrender.com"}},
             {"id": "frontend-11", "serviceDetails": {"url": "https://frontend-11.onrender.com"}},
         ]
-        notify_mock.send_welcome_email.return_value = True
+        notify_mock.send_welcome_email.return_value = False
 
         result = provision_client.provision(
+            mistral_api_key=_TEST_MISTRAL_KEY,
             client_name="Acme11", slug="acme11", postgres_plan="starter", admin_email="a@acme11.com",
         )
 
         assert result.status == "active"
+        backend_call_kwargs = render_mock.create_web_service.call_args_list[0].kwargs
+        assert backend_call_kwargs["env_vars"]["BREVO_API_KEY"] == ""
 
-    def test_provision_passes_smtp_from_to_backend_env(self, render_mock, notify_mock, monkeypatch):
-        monkeypatch.setenv("BREVO_API_KEY", "test-brevo-key")
-        monkeypatch.setenv("SMTP_FROM", "gabriel.guery10@gmail.com")
+    def test_brevo_key_flows_to_backend_env_and_sender_is_computed_from_slug(self, render_mock, notify_mock):
         _mock_common_steps(render_mock, postgres_id="pg-12")
         render_mock.create_web_service.side_effect = [
             {"id": "backend-12", "serviceDetails": {"url": "https://backend-12.onrender.com"}},
@@ -338,14 +355,56 @@ class TestSmtpFromSenderValidation:
         notify_mock.send_welcome_email.return_value = True
 
         result = provision_client.provision(
+            mistral_api_key=_TEST_MISTRAL_KEY, brevo_api_key="brevo-key-dedicated-to-acme12",
             client_name="Acme12", slug="acme12", postgres_plan="starter", admin_email="a@acme12.com",
         )
 
         assert result.status == "active"
         backend_call_kwargs = render_mock.create_web_service.call_args_list[0].kwargs
-        # C'est ce champ qui était absent avant le correctif — le backend de l'instance
-        # provisionnée retombait silencieusement sur une adresse expéditrice non validée.
-        assert backend_call_kwargs["env_vars"]["SMTP_FROM"] == "gabriel.guery10@gmail.com"
+        assert backend_call_kwargs["env_vars"]["BREVO_API_KEY"] == "brevo-key-dedicated-to-acme12"
+        # Alias sous le domaine SmartTicket, pas un domaine par client (décision validée) —
+        # calculé à partir du slug, jamais fourni en paramètre.
+        assert backend_call_kwargs["env_vars"]["SMTP_FROM"] == "noreply+acme12@smartticket.fr"
+
+    def test_sender_domain_is_overridable(self, render_mock, notify_mock):
+        _mock_common_steps(render_mock, postgres_id="pg-13b")
+        render_mock.create_web_service.side_effect = [
+            {"id": "backend-13b", "serviceDetails": {"url": "https://backend-13b.onrender.com"}},
+            {"id": "frontend-13b", "serviceDetails": {"url": "https://frontend-13b.onrender.com"}},
+        ]
+        notify_mock.send_welcome_email.return_value = True
+
+        result = provision_client.provision(
+            mistral_api_key=_TEST_MISTRAL_KEY, brevo_api_key="brevo-key",
+            sender_domain="test.example.com",
+            client_name="Acme13b", slug="acme13b", postgres_plan="starter", admin_email="a@acme13b.com",
+        )
+
+        assert result.status == "active"
+        backend_call_kwargs = render_mock.create_web_service.call_args_list[0].kwargs
+        assert backend_call_kwargs["env_vars"]["SMTP_FROM"] == "noreply+acme13b@test.example.com"
+
+    def test_welcome_email_uses_the_same_dedicated_key_and_computed_sender(self, render_mock, notify_mock):
+        """Avant ce chantier, ops/notify.py lisait BREVO_API_KEY/SMTP_FROM depuis
+        l'environnement de l'OPÉRATEUR séparément de backend_env : l'email de bienvenue
+        restait mutualisé même après avoir isolé le reste. Vérifie que ce n'est plus le cas."""
+        _mock_common_steps(render_mock, postgres_id="pg-14b")
+        render_mock.create_web_service.side_effect = [
+            {"id": "backend-14b", "serviceDetails": {"url": "https://backend-14b.onrender.com"}},
+            {"id": "frontend-14b", "serviceDetails": {"url": "https://frontend-14b.onrender.com"}},
+        ]
+        notify_mock.send_welcome_email.return_value = True
+
+        result = provision_client.provision(
+            mistral_api_key=_TEST_MISTRAL_KEY, brevo_api_key="brevo-key-dedicated-to-acme14b",
+            client_name="Acme14b", slug="acme14b", postgres_plan="starter", admin_email="a@acme14b.com",
+        )
+
+        assert result.status == "active"
+        notify_mock.send_welcome_email.assert_called_once_with(
+            admin_email="a@acme14b.com", client_name="Acme14b", setup_url=result.setup_url,
+            api_key="brevo-key-dedicated-to-acme14b", sender_email="noreply+acme14b@smartticket.fr",
+        )
 
 
 class TestSlugReuseGeneratesFreshRenderNames:
@@ -382,6 +441,7 @@ class TestSlugReuseGeneratesFreshRenderNames:
         notify_mock.send_welcome_email.return_value = True
 
         first = provision_client.provision(
+            mistral_api_key=_TEST_MISTRAL_KEY,
             client_name="Acme13", slug="acme13", postgres_plan="starter", admin_email="a@acme13.com",
         )
         assert first.status == "active"
@@ -395,6 +455,7 @@ class TestSlugReuseGeneratesFreshRenderNames:
         db.delete_instance_row("acme13")
 
         second = provision_client.provision(
+            mistral_api_key=_TEST_MISTRAL_KEY,
             client_name="Acme13", slug="acme13", postgres_plan="starter", admin_email="a@acme13.com",
         )
 
@@ -436,6 +497,7 @@ class TestBackendEmailLinksUseTheRealFrontendUrl:
         notify_mock.send_welcome_email.return_value = True
 
         result = provision_client.provision(
+            mistral_api_key=_TEST_MISTRAL_KEY,
             client_name="Acme14", slug="acme14", postgres_plan="starter", admin_email="a@acme14.com",
         )
 
@@ -463,6 +525,7 @@ class TestBackendEmailLinksUseTheRealFrontendUrl:
         notify_mock.send_welcome_email.return_value = True
 
         result = provision_client.provision(
+            mistral_api_key=_TEST_MISTRAL_KEY,
             client_name="Acme15", slug="acme15", postgres_plan="starter", admin_email="a@acme15.com",
             domain="smartticket.fr",
         )
@@ -488,6 +551,7 @@ class TestFrontendReceivesTheBrandName:
         notify_mock.send_welcome_email.return_value = True
 
         result = provision_client.provision(
+            mistral_api_key=_TEST_MISTRAL_KEY,
             client_name="Martin Technologies", slug="acme16", postgres_plan="starter", admin_email="a@acme16.com",
         )
 
@@ -518,6 +582,7 @@ class TestProvisionSetsClientInstanceDeploymentMode:
         notify_mock.send_welcome_email.return_value = True
 
         result = provision_client.provision(
+            mistral_api_key=_TEST_MISTRAL_KEY,
             client_name="Acme17", slug="acme17", postgres_plan="starter", admin_email="a@acme17.com",
         )
 

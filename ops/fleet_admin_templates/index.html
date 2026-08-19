@@ -97,6 +97,16 @@
             <label>Email admin
                 <input type="email" name="admin_email" placeholder="admin@client.com" required autocomplete="off">
             </label>
+            <label>Clé API Mistral (dédiée à ce client)
+                <input type="text" name="mistral_api_key" placeholder="clé créée manuellement dans la console Mistral pour ce client" required autocomplete="off">
+            </label>
+            <label>Clé API Brevo (optionnelle — emails transactionnels de ce client)
+                <input type="text" name="brevo_api_key" placeholder="laisser vide = emails simplement loggués, pas envoyés" autocomplete="off">
+            </label>
+            <p class="hint">Ces deux clés doivent être créées à la main dans les consoles Mistral
+            et Brevo AVANT de remplir ce formulaire — une clé par client, jamais partagée entre
+            plusieurs instances (isolation des secrets vendeur, 2026-08-19). L'adresse
+            expéditrice des emails est calculée automatiquement.</p>
             <label>Plan Postgres
                 <select name="postgres_plan">
                     {% for plan in postgres_plans %}
