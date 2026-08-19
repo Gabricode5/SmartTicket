@@ -177,5 +177,12 @@ class KnowledgeBase(Base):
     embedding = Column(Vector(1024), nullable=False)
     category = Column(String(50), nullable=True)
     source = Column(String(500), nullable=True)
+    # Identifie les entrées dérivées d'un ticket/session (cf. INDEX_CLOSED_TICKETS,
+    # routers/sessions.py::close_session) pour purge RGPD ciblée et filtrage RAG anti-fuite
+    # B2B2C -- CASCADE : purger l'utilisateur/la session doit automatiquement effacer l'entrée
+    # vectorielle correspondante, pas de purge applicative séparée à maintenir. NULL pour les
+    # documents ingérés normalement (ingest_postgres.py), jamais concernés par ces mécanismes.
+    source_user_id = Column(Integer, ForeignKey("utilisateur.id", ondelete="CASCADE"), nullable=True)
+    source_session_id = Column(Integer, ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=True)
     tenant_id = _tenant_id_column()
     date_creation = Column(DateTime(timezone=True), server_default=func.now())

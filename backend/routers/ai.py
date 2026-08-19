@@ -3,7 +3,7 @@ import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import text as sqltext
+from sqlalchemy import or_, text as sqltext
 from sqlalchemy.orm import Session
 
 import models
@@ -104,9 +104,20 @@ def ask_question_stream(request: Request, payload: schemas.AskRequest, current_u
         # capturer best_match_distance AVANT reranking -- le reranking mélange feedback et
         # recouvrement lexical, ce qui fausserait une mesure de pertinence pure du RAG (cf.
         # AICallLog, chantier "détecter les trous de la base de connaissances").
-        candidate_rows = db.query(
+        candidates_query = db.query(
             models.KnowledgeBase, models.KnowledgeBase.embedding.cosine_distance(query_embedding).label("distance"),
-        ).order_by("distance").limit(KB_TOP_K * RERANK_FETCH_MULTIPLIER).all()
+        )
+        # Entrées dérivées d'un ticket clos (INDEX_CLOSED_TICKETS, cf. routers/sessions.py) --
+        # potentiellement des données personnelles d'un autre client final en B2B2C. Un agent
+        # SAV/admin les voit toutes (même accès qu'ailleurs dans le code) ; un utilisateur
+        # normal ne voit que les siennes -- les documents ingérés normalement (source_user_id
+        # NULL) ne sont jamais concernés par ce filtre.
+        if not is_admin_or_sav(user):
+            candidates_query = candidates_query.filter(or_(
+                models.KnowledgeBase.source_user_id.is_(None),
+                models.KnowledgeBase.source_user_id == user.id,
+            ))
+        candidate_rows = candidates_query.order_by("distance").limit(KB_TOP_K * RERANK_FETCH_MULTIPLIER).all()
         candidates = [row[0] for row in candidate_rows]
         if candidate_rows:
             best_match_distance = float(candidate_rows[0][1])

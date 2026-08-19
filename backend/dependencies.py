@@ -74,6 +74,12 @@ def rate_limit_key_by_user(request: Request) -> str:
 # usage B2B interne (collègues de confiance), mais un vrai risque de fuite entre clients
 # finaux dans un contexte B2B2C (support public). À activer explicitement instance par
 # instance si le cas d'usage s'y prête.
+#
+# GARDE-FOU RGPD (2026-08-19) : ne JAMAIS activer ce flag sur une instance dont les
+# migrations n'incluent pas encore knowledge_base.source_user_id/source_session_id (cf.
+# main.py::run_migrations étape 3) ni le filtre RAG par source_user_id (routers/ai.py). Sans
+# ces deux éléments, les entrées indexées ne sont ni purgeables lors d'un effacement RGPD
+# (art. 17) ni isolées entre clients finaux — c'est exactement le trou que ce correctif bouche.
 INDEX_CLOSED_TICKETS = os.getenv("INDEX_CLOSED_TICKETS", "false").lower() == "true"
 
 # Chat anonyme B2B2C : un visiteur public peut discuter sans créer de compte au préalable

@@ -42,6 +42,26 @@ class TestClosedTicketIndexingWhenEnabled:
             resp = auth_client.post(f"/v1/sessions/{session_id}/close")
 
         assert resp.status_code == 200
-        categories = {row.category for row in db_session.query(models.KnowledgeBase).all()}
+        rows = db_session.query(models.KnowledgeBase).all()
+        categories = {row.category for row in rows}
         assert "ticket_summary" in categories
         assert "ticket_transcript" in categories
+
+    def test_indexed_entries_are_tagged_with_source_user_and_session_for_gdpr_purge(self, auth_client, db_session):
+        """Les colonnes structurées (source_user_id/source_session_id) doivent être posées à
+        l'indexation — c'est ce qui rend ces entrées purgeables par un effacement RGPD (art.
+        17) sans dépendre du texte libre `contenu`, qui ne doit jamais servir de clé de purge."""
+        me = auth_client.get("/v1/me").json()
+        session_id = _create_session_with_message(auth_client, me["id"])
+
+        with patch("routers.sessions.INDEX_CLOSED_TICKETS", True), \
+             patch("routers.sessions.generate_text", return_value="Résumé du ticket."), \
+             patch("routers.sessions.embed_text", return_value=[0.0] * 1024):
+            resp = auth_client.post(f"/v1/sessions/{session_id}/close")
+
+        assert resp.status_code == 200
+        rows = db_session.query(models.KnowledgeBase).all()
+        assert rows
+        for row in rows:
+            assert row.source_user_id == me["id"]
+            assert row.source_session_id == session_id

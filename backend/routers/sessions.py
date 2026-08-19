@@ -240,7 +240,7 @@ def close_session(session_id: int, current_user: str = Depends(get_current_user)
 
         try:
             summary_embedding = embed_text(sanitize_text(summary_text), model=EMBED_MODEL, timeout=REQUEST_TIMEOUT)
-            db.add(models.KnowledgeBase(source_message_id=None, contenu=f"Résumé session #{session_id} (user_id={session.id_utilisateur})\n{summary_text}", embedding=summary_embedding, category="ticket_summary"))
+            db.add(models.KnowledgeBase(source_message_id=None, contenu=f"Résumé session #{session_id} (user_id={session.id_utilisateur})\n{summary_text}", embedding=summary_embedding, category="ticket_summary", source_user_id=session.id_utilisateur, source_session_id=session_id))
         except Exception:
             pass
 
@@ -252,7 +252,7 @@ def close_session(session_id: int, current_user: str = Depends(get_current_user)
                     if not chunk:
                         continue
                     vector = embed_text(chunk, model=EMBED_MODEL, timeout=REQUEST_TIMEOUT)
-                    db.add(models.KnowledgeBase(source_message_id=None, contenu=f"Transcript session #{session_id} (user_id={session.id_utilisateur}) [{idx}/{len(chunks)}]\n{chunk}", embedding=vector, category="ticket_transcript"))
+                    db.add(models.KnowledgeBase(source_message_id=None, contenu=f"Transcript session #{session_id} (user_id={session.id_utilisateur}) [{idx}/{len(chunks)}]\n{chunk}", embedding=vector, category="ticket_transcript", source_user_id=session.id_utilisateur, source_session_id=session_id))
             except Exception:
                 pass
 

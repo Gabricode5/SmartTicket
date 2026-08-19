@@ -128,6 +128,8 @@ CREATE TABLE knowledge_base (
     embedding vector(1024) NOT NULL,                          -- Vecteur embedding (mistral-embed 1024)
     category VARCHAR(50),                                     -- Catégorie logique (ex: service-public)
     source VARCHAR(500),                                      -- Nom/fichier/source logique du document indexé
+    source_user_id INTEGER REFERENCES utilisateur(id) ON DELETE CASCADE, -- Propriétaire si dérivé d'un ticket (RGPD, cf. INDEX_CLOSED_TICKETS) -- NULL pour un document ingéré normalement
+    source_session_id INTEGER REFERENCES chat_sessions(id) ON DELETE CASCADE, -- Session source si dérivé d'un ticket
     tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001', -- Préparation multi-tenant (table des chunks vectoriels — la plus sensible en cas de future bascule multi-tenant)
     date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP -- Date d'insertion
 );
@@ -135,6 +137,7 @@ CREATE TABLE knowledge_base (
 -- Index HNSW pour accélérer la recherche vectorielle (similarité cosinus)
 CREATE INDEX ON knowledge_base USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX ON knowledge_base (tenant_id);
+CREATE INDEX ON knowledge_base (source_user_id);
 
 -- =========================================
 -- TABLE NOTIFICATIONS
