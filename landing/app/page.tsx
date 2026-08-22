@@ -8,7 +8,7 @@ import { useLocale } from "@/lib/i18n/LocaleContext"
 import { BRAND_NAME, APP_URL } from "@/lib/brand"
 import {
     MessageSquare, Zap, BookOpen, BarChart2, ArrowRight,
-    ShieldCheck, Users, Activity, CheckCircle2, Building2,
+    ShieldCheck, Users, Activity, Building2,
     Lock, TrendingUp, Headset,
 } from "lucide-react"
 
@@ -59,7 +59,7 @@ export default function LandingPage() {
                             <Link href={`${APP_URL}/login`}>{t.landing.nav.login}</Link>
                         </Button>
                         <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white" asChild>
-                            <Link href={`${APP_URL}/sign-up`}>{t.landing.nav.tryFree}</Link>
+                            <Link href="mailto:contact@tiqia.fr?subject=Demande%20de%20d%C3%A9mo">{t.landing.nav.tryFree}</Link>
                         </Button>
                     </div>
                 </div>
@@ -69,10 +69,6 @@ export default function LandingPage() {
             <section className="relative overflow-hidden bg-gradient-to-br from-slate-50 via-indigo-50/30 to-white pt-20 pb-24 px-6">
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-indigo-100/40 via-transparent to-transparent pointer-events-none" />
                 <div className="max-w-4xl mx-auto text-center relative">
-                    <span className="inline-flex items-center gap-2 text-xs font-semibold text-indigo-600 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-full mb-6">
-                        <Zap className="h-3 w-3" />
-                        {t.landing.hero.badge}
-                    </span>
                     <h1 className="text-5xl md:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight mb-6">
                         {t.landing.hero.titleStart}{" "}
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-violet-600">
@@ -85,7 +81,7 @@ export default function LandingPage() {
                     </p>
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
                         <Button size="lg" className="bg-indigo-600 hover:bg-indigo-700 text-white px-8 h-12 text-base" asChild>
-                            <Link href={`${APP_URL}/sign-up`}>
+                            <Link href="mailto:contact@tiqia.fr?subject=Demande%20de%20d%C3%A9mo">
                                 {t.landing.hero.ctaPrimary}
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Link>
@@ -94,12 +90,6 @@ export default function LandingPage() {
                             <Link href={`${APP_URL}/login`}>{t.landing.hero.ctaSecondary}</Link>
                         </Button>
                     </div>
-                    <p className="mt-5 text-sm text-slate-400">
-                        {t.landing.hero.guestPrompt}{" "}
-                        <Link href={`${APP_URL}/chat`} className="text-indigo-600 font-medium hover:underline">
-                            {t.landing.hero.guestLink}
-                        </Link>
-                    </p>
                 </div>
 
                 {/* Preview card */}
@@ -234,7 +224,7 @@ export default function LandingPage() {
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4 justify-center">
                         <Button size="lg" className="bg-white text-indigo-600 hover:bg-indigo-50 h-12 px-8 text-base font-semibold" asChild>
-                            <Link href={`${APP_URL}/sign-up`}>
+                            <Link href="mailto:contact@tiqia.fr?subject=Demande%20de%20d%C3%A9mo">
                                 {t.landing.cta.primary}
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Link>
@@ -259,10 +249,6 @@ export default function LandingPage() {
                         <Link href={`${APP_URL}/politique-confidentialite`} className="hover:text-slate-600 hover:underline">{t.landing.footer.privacy}</Link>
                         <Link href={`${APP_URL}/cgv`} className="hover:text-slate-600 hover:underline">{t.landing.footer.cgv}</Link>
                     </nav>
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
-                        <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                        {t.landing.footer.poweredBy}
-                    </div>
                 </div>
             </footer>
         </div>
