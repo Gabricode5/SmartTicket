@@ -54,7 +54,7 @@ export default function AnalyticsPage() {
 
     const handleExportCsv = () => {
         if (!data) return
-        downloadCsv(`analytics-smartticket-${new Date().toISOString().slice(0, 10)}.csv`, [
+        downloadCsv(`analytics-tiqia-${new Date().toISOString().slice(0, 10)}.csv`, [
             {
                 title: "Évolution quotidienne des conversations",
                 headers: ["Jour", "Messages IA", "Messages humains"],
@@ -82,7 +82,7 @@ export default function AnalyticsPage() {
             const url = URL.createObjectURL(blob)
             const a = document.createElement("a")
             a.href = url
-            a.download = `analytics-smartticket-${new Date().toISOString().slice(0, 10)}.pdf`
+            a.download = `analytics-tiqia-${new Date().toISOString().slice(0, 10)}.pdf`
             document.body.appendChild(a)
             a.click()
             document.body.removeChild(a)

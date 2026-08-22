@@ -85,7 +85,7 @@ export default function MonitoringPage() {
 
     const handleExportCsv = () => {
         if (!metrics) return
-        downloadCsv(`monitoring-ia-smartticket-${new Date().toISOString().slice(0, 10)}.csv`, [
+        downloadCsv(`monitoring-ia-tiqia-${new Date().toISOString().slice(0, 10)}.csv`, [
             {
                 title: t.monitoring.csvLatencyTitle,
                 headers: t.monitoring.csvLatencyHeaders,
@@ -108,7 +108,7 @@ export default function MonitoringPage() {
             const url = URL.createObjectURL(blob)
             const a = document.createElement("a")
             a.href = url
-            a.download = `monitoring-ia-smartticket-${new Date().toISOString().slice(0, 10)}.pdf`
+            a.download = `monitoring-ia-tiqia-${new Date().toISOString().slice(0, 10)}.pdf`
             document.body.appendChild(a)
             a.click()
             document.body.removeChild(a)
