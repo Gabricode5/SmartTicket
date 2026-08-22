@@ -144,7 +144,7 @@ export default function SettingsPage() {
             const url = URL.createObjectURL(blob)
             const a = document.createElement("a")
             a.href = url
-            a.download = `mes-donnees-smartticket-${new Date().toISOString().slice(0, 10)}.pdf`
+            a.download = `mes-donnees-tiqia-${new Date().toISOString().slice(0, 10)}.pdf`
             document.body.appendChild(a)
             a.click()
             document.body.removeChild(a)

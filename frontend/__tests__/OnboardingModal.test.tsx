@@ -8,13 +8,13 @@ beforeEach(() => {
 describe("OnboardingModal", () => {
   it("shows the first step on first visit", () => {
     render(<OnboardingModal userId={1} role="user" />);
-    expect(screen.getByText("Bienvenue sur SmartTicket")).toBeInTheDocument();
+    expect(screen.getByText("Bienvenue sur Tiqia")).toBeInTheDocument();
   });
 
   it("does not reopen once dismissed for this user/role", () => {
     window.localStorage.setItem(onboardingStorageKey(1, "user"), "1");
     render(<OnboardingModal userId={1} role="user" />);
-    expect(screen.queryByText("Bienvenue sur SmartTicket")).not.toBeInTheDocument();
+    expect(screen.queryByText("Bienvenue sur Tiqia")).not.toBeInTheDocument();
   });
 
   it("shows role-specific content", () => {
@@ -24,7 +24,7 @@ describe("OnboardingModal", () => {
 
   it("falls back to the user steps for an unknown role", () => {
     render(<OnboardingModal userId={3} role="something_unexpected" />);
-    expect(screen.getByText("Bienvenue sur SmartTicket")).toBeInTheDocument();
+    expect(screen.getByText("Bienvenue sur Tiqia")).toBeInTheDocument();
   });
 
   it("navigates forward and back through steps", () => {
@@ -33,7 +33,7 @@ describe("OnboardingModal", () => {
     expect(screen.getByText("Démarrez une conversation")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /précédent/i }));
-    expect(screen.getByText("Bienvenue sur SmartTicket")).toBeInTheDocument();
+    expect(screen.getByText("Bienvenue sur Tiqia")).toBeInTheDocument();
   });
 
   it("marks onboarding as seen and closes when skipped", () => {
@@ -41,7 +41,7 @@ describe("OnboardingModal", () => {
     fireEvent.click(screen.getByRole("button", { name: /passer/i }));
 
     expect(window.localStorage.getItem(onboardingStorageKey(1, "user"))).toBe("1");
-    expect(screen.queryByText("Bienvenue sur SmartTicket")).not.toBeInTheDocument();
+    expect(screen.queryByText("Bienvenue sur Tiqia")).not.toBeInTheDocument();
   });
 
   it("shows a Terminé button on the last step and marks onboarding as seen", () => {

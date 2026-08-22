@@ -120,7 +120,7 @@ def export_stats_pdf(days: int = 30, current_user: str = Depends(get_current_use
         raise HTTPException(status_code=403, detail="Accès refusé")
     data = _build_stats_data(db, days)
     pdf_bytes = build_stats_report_pdf(data, days)
-    filename = f"analytics-smartticket-{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
+    filename = f"analytics-tiqia-{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
@@ -300,7 +300,7 @@ def export_ai_metrics_pdf(days: int = 30, current_user: str = Depends(get_curren
         raise HTTPException(status_code=403, detail="Accès refusé")
     data = _build_ai_metrics_data(db, days)
     pdf_bytes = build_ai_metrics_report_pdf(data, days)
-    filename = f"monitoring-ia-smartticket-{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
+    filename = f"monitoring-ia-tiqia-{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

@@ -188,7 +188,7 @@ def run_migrations() -> None:
 
             admin_role = session.query(models.Role).filter_by(nom_role="admin").first()
             if admin_role:
-                admin_email = os.getenv("ADMIN_EMAIL", "admin@smartticket.app")
+                admin_email = os.getenv("ADMIN_EMAIL", "admin@tiqia.fr")
                 admin_username = os.getenv("ADMIN_USERNAME", "admin")
                 # Cherche par email d'abord, puis par username en fallback
                 existing_admin = (
@@ -344,7 +344,7 @@ async def enforce_subscription_status(request: Request, call_next):
             if row and row.status == "suspended":
                 return JSONResponse(
                     status_code=402,
-                    content={"detail": row.reason or "Ce service est suspendu. Contactez votre fournisseur SmartTicket."},
+                    content={"detail": row.reason or "Ce service est suspendu. Contactez votre fournisseur Tiqia."},
                 )
     except Exception as exc:
         # Fail-open : une erreur transitoire sur cette vérification ne doit jamais bloquer

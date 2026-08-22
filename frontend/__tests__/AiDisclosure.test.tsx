@@ -33,7 +33,7 @@ describe("AiAssistantPage — transparence IA (art. 50)", () => {
 
     render(<AiAssistantPage />, { wrapper: LocaleProvider });
 
-    expect(await screen.findByText(/échangez avec l'assistant IA de SmartTicket/i)).toBeInTheDocument();
+    expect(await screen.findByText(/échangez avec l'assistant IA de Tiqia/i)).toBeInTheDocument();
   });
 
   it("never mentions Mistral anywhere on the chat screen end-users actually see", async () => {

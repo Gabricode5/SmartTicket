@@ -19,7 +19,7 @@ Prérequis (cf. docs/FLEET_PROVISIONING_PLAN.md, Phase 0) :
       sont simplement loggués au lieu d'être envoyés — utile en test.
     - Adresse expéditrice : calculée automatiquement (build_sender_email(), alias
       "noreply+{slug}@{sender_domain}") plutôt que fournie par client — un seul domaine à
-      authentifier (SPF/DKIM/DMARC) côté SmartTicket, décision validée pour ne pas imposer de
+      authentifier (SPF/DKIM/DMARC) côté Tiqia, décision validée pour ne pas imposer de
       friction d'onboarding (vérification de domaine) à chaque client. --sender-domain
       surchage DEFAULT_SENDER_DOMAIN si besoin (tests, domaine différent). ATTENTION : ce
       domaine doit être RÉELLEMENT authentifié dans Brevo → Senders avant tout client réel
@@ -96,7 +96,7 @@ DEFAULT_BRANCH = "main"
 # client reçoit un alias "noreply+{slug}@{domaine}" plutôt qu'un domaine à authentifier
 # lui-même dans Brevo — voir build_sender_email() ci-dessous. Surchargeable pour les tests
 # (SMTP_SENDER_DOMAIN) sans toucher au code.
-DEFAULT_SENDER_DOMAIN = os.getenv("SMTP_SENDER_DOMAIN", "smartticket.fr")
+DEFAULT_SENDER_DOMAIN = os.getenv("SMTP_SENDER_DOMAIN", "tiqia.fr")
 
 
 @dataclass
@@ -143,9 +143,9 @@ def build_domain_urls(slug: str, domain: str) -> tuple[str, str]:
 
 
 def build_sender_email(slug: str, sender_domain: str) -> str:
-    """Alias sous un domaine unique SmartTicket (décision validée le 2026-08-19, chantier
+    """Alias sous un domaine unique Tiqia (décision validée le 2026-08-19, chantier
     isolation des clés vendeur, cf. ROADMAP.md) plutôt qu'un domaine vérifié par client : un
-    seul domaine à authentifier (SPF/DKIM/DMARC) côté SmartTicket, aucune friction
+    seul domaine à authentifier (SPF/DKIM/DMARC) côté Tiqia, aucune friction
     d'onboarding supplémentaire pour le client. Le "+slug" permet quand même d'attribuer/
     filtrer par client côté réception si besoin, sans exiger une vraie boîte par client."""
     return f"noreply+{slug}@{sender_domain}"
@@ -455,7 +455,7 @@ def main() -> int:
              "Postgres 13+ côté Render)",
     )
     parser.add_argument("--web-plan", default="starter", help="Plan Render pour les services web (défaut: starter)")
-    parser.add_argument("--domain", default=None, help="Suffixe de domaine (ex: smartticket.fr) — sans domaine, l'instance reste sur *.onrender.com")
+    parser.add_argument("--domain", default=None, help="Suffixe de domaine (ex: tiqia.fr) — sans domaine, l'instance reste sur *.onrender.com")
     parser.add_argument("--repo", default=DEFAULT_REPO, help=f"Repo GitHub à déployer (défaut: {DEFAULT_REPO})")
     parser.add_argument("--branch", default=DEFAULT_BRANCH, help=f"Branche à déployer (défaut: {DEFAULT_BRANCH})")
     parser.add_argument("--dry-run", action="store_true", help="Affiche ce qui serait fait sans rien créer")
