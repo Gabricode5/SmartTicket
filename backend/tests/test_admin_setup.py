@@ -12,7 +12,7 @@ import models
 from main import run_migrations
 
 _TEST_PASSWORD = secrets.token_urlsafe(16)
-_ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@smartticket.app")
+_ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@tiqia.fr")
 
 
 def _give_admin_a_setup_token(db_session, *, expires_delta=timedelta(hours=48)):

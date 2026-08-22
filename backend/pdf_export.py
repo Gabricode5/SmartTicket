@@ -26,7 +26,7 @@ class _Report:
         self.pdf.set_auto_page_break(auto=True, margin=15)
         self.pdf.add_page()
         self.line(title, size=16, style="B")
-        self.line(f"SmartTicket - généré le {datetime.utcnow().strftime('%d/%m/%Y %H:%M')} UTC - période : {days} derniers jours")
+        self.line(f"Tiqia - généré le {datetime.utcnow().strftime('%d/%m/%Y %H:%M')} UTC - période : {days} derniers jours")
         self.pdf.ln(4)
 
     def line(self, text: str, size: int = 10, style: str = "") -> None:
@@ -78,7 +78,7 @@ def build_user_data_export_pdf(user, sessions_with_messages: list[dict]) -> byte
         pdf.multi_cell(0, 6 if size <= 11 else 10, _safe(text), new_x="LMARGIN", new_y="NEXT")
 
     line("Export de mes données personnelles", size=16, style="B")
-    line(f"SmartTicket - généré le {datetime.utcnow().strftime('%d/%m/%Y %H:%M')} UTC")
+    line(f"Tiqia - généré le {datetime.utcnow().strftime('%d/%m/%Y %H:%M')} UTC")
     pdf.ln(4)
 
     line("Profil", size=12, style="B")
@@ -129,7 +129,7 @@ def build_user_data_export_pdf(user, sessions_with_messages: list[dict]) -> byte
 
 def build_stats_report_pdf(data: dict, days: int) -> bytes:
     """Builds the business/SAV analytics report (mirrors GET /v1/analytics/stats)."""
-    report = _Report("Rapport Analytics - SmartTicket", days)
+    report = _Report("Rapport Analytics - Tiqia", days)
 
     report.section("Alertes")
     report.alerts(data.get("alerts", []))
@@ -170,7 +170,7 @@ def build_stats_report_pdf(data: dict, days: int) -> bytes:
 
 def build_ai_metrics_report_pdf(data: dict, days: int) -> bytes:
     """Builds the AI monitoring report (mirrors GET /v1/analytics/ai-metrics)."""
-    report = _Report("Rapport Monitoring IA - SmartTicket", days)
+    report = _Report("Rapport Monitoring IA - Tiqia", days)
     if data.get("model_name"):
         report.line(f"Modèle : {data['model_name']}")
 

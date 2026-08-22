@@ -19,7 +19,7 @@ SMTP_HOST = os.getenv("SMTP_HOST")
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "no-reply@smartticket.app")
+SMTP_FROM = os.getenv("SMTP_FROM", SMTP_USER or "no-reply@tiqia.fr")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3005")
 
 
@@ -29,7 +29,7 @@ def _send_via_brevo_api(to_email: str, subject: str, text_body: str, html_body: 
             BREVO_API_URL,
             headers={"api-key": BREVO_API_KEY, "Content-Type": "application/json", "Accept": "application/json"},
             json={
-                "sender": {"name": "SmartTicket", "email": SMTP_FROM},
+                "sender": {"name": "Tiqia", "email": SMTP_FROM},
                 "to": [{"email": to_email}],
                 "subject": subject,
                 "textContent": text_body,
@@ -77,16 +77,16 @@ def send_verification_email(to_email: str, username: str, token: str) -> None:
     link = f"{FRONTEND_URL}/verify-email?token={token}"
     text_body = (
         f"Bonjour {username},\n\n"
-        f"Merci de confirmer votre adresse email pour activer votre compte SmartTicket :\n{link}\n\n"
+        f"Merci de confirmer votre adresse email pour activer votre compte Tiqia :\n{link}\n\n"
         "Ce lien expire dans 48 heures. Si vous n'êtes pas à l'origine de cette inscription, ignorez cet email."
     )
     html_body = (
         f"<p>Bonjour {username},</p>"
-        f"<p>Merci de confirmer votre adresse email pour activer votre compte SmartTicket :</p>"
+        f"<p>Merci de confirmer votre adresse email pour activer votre compte Tiqia :</p>"
         f'<p><a href="{link}">Confirmer mon adresse email</a></p>'
         "<p>Ce lien expire dans 48 heures. Si vous n'êtes pas à l'origine de cette inscription, ignorez cet email.</p>"
     )
-    send_email(to_email, "Confirmez votre adresse email — SmartTicket", text_body, html_body)
+    send_email(to_email, "Confirmez votre adresse email — Tiqia", text_body, html_body)
 
 
 def send_account_invitation_email(to_email: str, username: str, token: str) -> None:
@@ -96,29 +96,29 @@ def send_account_invitation_email(to_email: str, username: str, token: str) -> N
     link = f"{FRONTEND_URL}/reset-password?token={token}"
     text_body = (
         f"Bonjour {username},\n\n"
-        f"Un compte SmartTicket vient d'être créé pour vous. Cliquez sur ce lien pour choisir votre mot de passe et vous connecter :\n{link}\n\n"
+        f"Un compte Tiqia vient d'être créé pour vous. Cliquez sur ce lien pour choisir votre mot de passe et vous connecter :\n{link}\n\n"
         "Ce lien expire dans 1 heure. Passé ce délai, utilisez \"Mot de passe oublié\" sur la page de connexion pour en recevoir un nouveau."
     )
     html_body = (
         f"<p>Bonjour {username},</p>"
-        f"<p>Un compte SmartTicket vient d'être créé pour vous. Cliquez sur ce lien pour choisir votre mot de passe et vous connecter :</p>"
+        f"<p>Un compte Tiqia vient d'être créé pour vous. Cliquez sur ce lien pour choisir votre mot de passe et vous connecter :</p>"
         f'<p><a href="{link}">Choisir mon mot de passe</a></p>'
         "<p>Ce lien expire dans 1 heure. Passé ce délai, utilisez \"Mot de passe oublié\" sur la page de connexion pour en recevoir un nouveau.</p>"
     )
-    send_email(to_email, "Bienvenue sur SmartTicket — créez votre mot de passe", text_body, html_body)
+    send_email(to_email, "Bienvenue sur Tiqia — créez votre mot de passe", text_body, html_body)
 
 
 def send_password_reset_email(to_email: str, username: str, token: str) -> None:
     link = f"{FRONTEND_URL}/reset-password?token={token}"
     text_body = (
         f"Bonjour {username},\n\n"
-        f"Vous avez demandé à réinitialiser votre mot de passe SmartTicket. Cliquez sur ce lien pour en choisir un nouveau :\n{link}\n\n"
+        f"Vous avez demandé à réinitialiser votre mot de passe Tiqia. Cliquez sur ce lien pour en choisir un nouveau :\n{link}\n\n"
         "Ce lien expire dans 1 heure. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email — votre mot de passe reste inchangé."
     )
     html_body = (
         f"<p>Bonjour {username},</p>"
-        f"<p>Vous avez demandé à réinitialiser votre mot de passe SmartTicket. Cliquez sur ce lien pour en choisir un nouveau :</p>"
+        f"<p>Vous avez demandé à réinitialiser votre mot de passe Tiqia. Cliquez sur ce lien pour en choisir un nouveau :</p>"
         f'<p><a href="{link}">Réinitialiser mon mot de passe</a></p>'
         "<p>Ce lien expire dans 1 heure. Si vous n'êtes pas à l'origine de cette demande, ignorez cet email — votre mot de passe reste inchangé.</p>"
     )
-    send_email(to_email, "Réinitialisation de votre mot de passe — SmartTicket", text_body, html_body)
+    send_email(to_email, "Réinitialisation de votre mot de passe — Tiqia", text_body, html_body)

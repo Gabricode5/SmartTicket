@@ -193,7 +193,7 @@ def reset_password(payload: schemas.ResetPasswordRequest, db: Session = Depends(
 ADMIN_SETUP_MIN_PASSWORD_LENGTH = 12
 _COMMON_PASSWORDS = frozenset({
     "password", "password123", "administrator", "changeme123",
-    "azertyuiop", "qwertyuiop123", "smartticket", "welcome123",
+    "azertyuiop", "qwertyuiop123", "tiqia", "welcome123",
     "motdepasse", "motdepasse123", "letmein12345", "changeme123!",
 })
 
@@ -235,7 +235,7 @@ def setup_account(request: Request, payload: schemas.AdminSetupRequest, db: Sess
             "POST /v1/setup rejeté : token_expired (compte %s, expiré depuis le %s, maintenant %s)",
             user.email, user.admin_setup_token_expires_at, datetime.utcnow(),
         )
-        raise HTTPException(status_code=400, detail={"code": "token_expired", "message": "Ce lien a expiré. Contactez votre fournisseur SmartTicket pour en recevoir un nouveau."})
+        raise HTTPException(status_code=400, detail={"code": "token_expired", "message": "Ce lien a expiré. Contactez votre fournisseur Tiqia pour en recevoir un nouveau."})
 
     new_username = payload.username.strip()
     new_email = payload.email.strip().lower()
@@ -376,7 +376,7 @@ def export_my_data(current_user: str = Depends(get_current_user), db: Session = 
         })
 
     pdf_bytes = build_user_data_export_pdf(user, sessions_data)
-    filename = f"mes-donnees-smartticket-{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
+    filename = f"mes-donnees-tiqia-{datetime.utcnow().strftime('%Y-%m-%d')}.pdf"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",

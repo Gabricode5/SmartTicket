@@ -36,25 +36,25 @@ def send_welcome_email(*, admin_email: str, client_name: str, setup_url: str, ap
         )
         return False
 
-    subject = f"Bienvenue sur SmartTicket — configurez votre compte administrateur ({client_name})"
+    subject = f"Bienvenue sur Tiqia — configurez votre compte administrateur ({client_name})"
     text_body = (
         f"Bonjour,\n\n"
-        f"Votre instance SmartTicket pour {client_name} est prête. Cliquez sur ce lien pour "
+        f"Votre instance Tiqia pour {client_name} est prête. Cliquez sur ce lien pour "
         f"choisir votre nom d'utilisateur, votre email et votre mot de passe administrateur :\n"
         f"{setup_url}\n\n"
         "Ce lien est à usage unique et expire après un délai fixé côté instance (48h par défaut). "
-        "Si vous ne parvenez pas à l'utiliser à temps, contactez votre fournisseur SmartTicket "
+        "Si vous ne parvenez pas à l'utiliser à temps, contactez votre fournisseur Tiqia "
         "pour en recevoir un nouveau."
     )
     html_body = (
         f"<p>Bonjour,</p>"
-        f"<p>Votre instance SmartTicket pour <strong>{client_name}</strong> est prête. "
+        f"<p>Votre instance Tiqia pour <strong>{client_name}</strong> est prête. "
         f"Cliquez sur ce lien pour choisir votre nom d'utilisateur, votre email et votre mot "
         f"de passe administrateur :</p>"
         f'<p><a href="{setup_url}">Configurer mon compte administrateur</a></p>'
         "<p>Ce lien est à usage unique et expire après un délai fixé côté instance (48h par "
         "défaut). Si vous ne parvenez pas à l'utiliser à temps, contactez votre fournisseur "
-        "SmartTicket pour en recevoir un nouveau.</p>"
+        "Tiqia pour en recevoir un nouveau.</p>"
     )
 
     try:
@@ -62,7 +62,7 @@ def send_welcome_email(*, admin_email: str, client_name: str, setup_url: str, ap
             BREVO_API_URL,
             headers={"api-key": api_key, "Content-Type": "application/json", "Accept": "application/json"},
             json={
-                "sender": {"name": "SmartTicket", "email": sender_email},
+                "sender": {"name": "Tiqia", "email": sender_email},
                 "to": [{"email": admin_email}],
                 "subject": subject,
                 "textContent": text_body,

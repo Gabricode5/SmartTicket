@@ -35,6 +35,6 @@ def queue_session_transferred(db: Session, session: models.ChatSession, reason_l
 
 def send_sav_reply_email(owner_email: str, session_title: str | None) -> None:
     title = session_title or "Sans titre"
-    text = f"Un agent SAV a répondu à votre ticket « {title} ». Connectez-vous à SmartTicket pour voir la réponse."
-    html = f"<p>Un agent SAV a répondu à votre ticket « {title} ». Connectez-vous à SmartTicket pour voir la réponse.</p>"
-    send_email(owner_email, "Nouvelle réponse SAV — SmartTicket", text, html)
+    text = f"Un agent SAV a répondu à votre ticket « {title} ». Connectez-vous à Tiqia pour voir la réponse."
+    html = f"<p>Un agent SAV a répondu à votre ticket « {title} ». Connectez-vous à Tiqia pour voir la réponse.</p>"
+    send_email(owner_email, "Nouvelle réponse SAV — Tiqia", text, html)

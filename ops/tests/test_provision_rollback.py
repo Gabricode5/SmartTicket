@@ -362,9 +362,9 @@ class TestPerInstanceVendorKeys:
         assert result.status == "active"
         backend_call_kwargs = render_mock.create_web_service.call_args_list[0].kwargs
         assert backend_call_kwargs["env_vars"]["BREVO_API_KEY"] == "brevo-key-dedicated-to-acme12"
-        # Alias sous le domaine SmartTicket, pas un domaine par client (décision validée) —
+        # Alias sous le domaine Tiqia, pas un domaine par client (décision validée) —
         # calculé à partir du slug, jamais fourni en paramètre.
-        assert backend_call_kwargs["env_vars"]["SMTP_FROM"] == "noreply+acme12@smartticket.fr"
+        assert backend_call_kwargs["env_vars"]["SMTP_FROM"] == "noreply+acme12@tiqia.fr"
 
     def test_sender_domain_is_overridable(self, render_mock, notify_mock):
         _mock_common_steps(render_mock, postgres_id="pg-13b")
@@ -403,7 +403,7 @@ class TestPerInstanceVendorKeys:
         assert result.status == "active"
         notify_mock.send_welcome_email.assert_called_once_with(
             admin_email="a@acme14b.com", client_name="Acme14b", setup_url=result.setup_url,
-            api_key="brevo-key-dedicated-to-acme14b", sender_email="noreply+acme14b@smartticket.fr",
+            api_key="brevo-key-dedicated-to-acme14b", sender_email="noreply+acme14b@tiqia.fr",
         )
 
 
@@ -559,7 +559,7 @@ class TestFrontendReceivesTheBrandName:
         frontend_call_kwargs = render_mock.create_web_service.call_args_list[1].kwargs
 
         # C'est CE champ qui était absent avant le correctif — le frontend retombait sur le
-        # défaut "SmartTicket" de lib/brand.ts, quel que soit le client.
+        # défaut "Tiqia" de lib/brand.ts, quel que soit le client.
         brand_name = frontend_call_kwargs["env_vars"]["NEXT_PUBLIC_BRAND_NAME"]
         assert brand_name, "NEXT_PUBLIC_BRAND_NAME ne doit jamais être vide au moment du build frontend"
         assert brand_name == "Martin Technologies"
