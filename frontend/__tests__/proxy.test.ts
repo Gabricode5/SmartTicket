@@ -30,7 +30,7 @@ describe("proxy", () => {
     expect(response.headers.get("location")).not.toContain("/login");
   });
 
-  it.each(["/logo_smartticket.png", "/favicon.ico", "/robots.txt", "/some-font.woff2"])(
+  it.each(["/logo-T.png", "/favicon.ico", "/robots.txt", "/some-font.woff2"])(
     "allows unauthenticated access to any static asset path %s (extension-based, not name-based)",
     (path) => {
       const response = proxy(makeRequest(path, false));

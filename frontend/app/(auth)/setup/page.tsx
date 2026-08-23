@@ -72,7 +72,7 @@ function SetupContent() {
                     {t.login.backToHome}
                 </Link>
                 <div className="flex items-center gap-2 font-bold text-slate-800">
-                    <Image src="/logo_smartticket.png" alt={BRAND_NAME} width={28} height={28} className="h-7 w-7" />
+                    <Image src="/logo-T.png" alt={BRAND_NAME} width={28} height={28} className="h-7 w-7" />
                     <span>{BRAND_NAME}</span>
                 </div>
             </header>
@@ -106,7 +106,7 @@ function SetupContent() {
                             <>
                                 <div className="text-center mb-7">
                                     <div className="inline-flex items-center justify-center w-12 h-12 mb-4">
-                                        <Image src="/logo_smartticket.png" alt={BRAND_NAME} width={48} height={48} className="w-12 h-12" />
+                                        <Image src="/logo-T.png" alt={BRAND_NAME} width={48} height={48} className="w-12 h-12" />
                                     </div>
                                     <h1 className="text-2xl font-bold text-slate-900">{t.setup.title}</h1>
                                     <p className="text-slate-500 text-sm mt-1">{t.setup.subtitle}</p>
