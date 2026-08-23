@@ -2,7 +2,96 @@
 
 Suivi des évolutions techniques et fonctionnelles du projet. Statuts : **Fait**, **En cours**, **À faire**.
 
+> **Mise à jour (2026-08-15)** : Phase 0 (provisioning) validée de bout en bout contre Render, console d'opérateur locale (page de gestion de flotte) construite et testée, modèle de vente clarifié (3 niveaux). Aucune entrée historique supprimée.
+
+---
+
+## Fait récemment (chantier provisioning + page de gestion)
+
+### Phase 0 — Provisioning validé en réel contre Render ✅
+Série de bugs invisibles aux tests mockés, trouvés et corrigés en lançant le provisioning pour de vrai :
+- [x] Champ `version` Postgres requis par l'API Render (défaut 18).
+- [x] 5 écarts de schéma OpenAPI (déballage `service`/`deploy`, `runtime` requis, `pre_deploy_failed`) — sans le fix `deploys`, `wait_for_deploy_live` timeout 900s même sur succès.
+- [x] Plan Postgres `starter` legacy → `basic_256mb`. Coût réel confirmé : ~25 $/mois par instance (Postgres 6 $ + stockage 4,50 $ + 2 services web).
+- [x] Race condition `connection-info` avant `available` → vrai polling `wait_for_postgres_available`.
+- [x] `NEXT_PUBLIC_API_URL` vide (frontend appelait son propre domaine) → URL backend déterministe posée au build.
+- [x] `FRONTEND_URL` (backend) pointait `localhost:3005` → liens email cassés. Injectée au provisioning.
+- [x] Réutilisation de slug → 404 `/setup`. Résolu par suffixe unique sur les noms Render.
+- [x] `delete_client.py` : ne retire plus la ligne du registre si la suppression Render échoue (fail-fast + `deletion_failed` + IDs conservés).
+- [x] Email Brevo débloqué (restriction d'IP désactivée côté compte). Flux complet validé : provisioning → email bienvenue → `/setup` → connexion admin → **création compte utilisateur → mail de vérification → connexion** → chat IA répond (avec garde-fou anti-injection confirmé en réel).
+- [x] `audit_render_resources.py` (lecture seule) : détecte les ressources orphelines, croise avec `instances.db`.
+- [x] Rollback validé en conditions réelles (échecs successifs nettoyés, zéro orpheline).
+
+### Console d'opérateur — page de gestion de flotte locale (`ops/fleet_admin.py`) ✅
+Page web locale (FastAPI + Jinja2, `127.0.0.1` uniquement, jamais exposée), appelle `provision()`/`delete_instance()` sans dupliquer la logique.
+- [x] **Voir** : liste des instances (registre + API Render), santé (ping GET /), statut, plan, abonnement, liens dashboard, détection d'orphelines.
+- [x] **Suspendre / réactiver** via le coupe-circuit `VENDOR_KEY` — testé en réel (402 sur `/v1/*` quand suspendu, health check `GET /` préservé à 200).
+- [x] **Supprimer** définitivement (double confirmation : saisie du slug + case cochée), rappel « suspendre ≠ arrêter de facturer », date de suspension via `InstanceSubscription.updated_at`.
+- [x] **Créer** depuis un formulaire (nom entreprise → slug auto → provisioning en tâche de fond, ~5 min, suivi honnête, POST-Redirect-GET). White-label du nom (`NEXT_PUBLIC_BRAND_NAME`) injecté depuis `--name`.
+- [x] Retry sur 5xx Render transitoire dans le rollback ; contraste corrigé ; redirection 303 après chaque action POST.
+
+### White-label — nom d'entreprise dynamique ✅ (partiel)
+- [x] `NEXT_PUBLIC_BRAND_NAME` (défaut « SmartTicket ») remplace le nom codé en dur (header, sidebar, titres, pages auth). Injecté au provisioning depuis le nom du client. Pages légales volontairement exclues (identifient l'entité contractante réelle).
+
+---
+
+## En cours / à vérifier
+
+- [ ] **404 sur la colonne « Santé » de la page de gestion** : le ping santé d'une instance fraîchement créée renvoie parfois 404 alors que Render la dit « ok » et que l'instance fonctionne. À élucider : la page ping-t-elle la bonne URL (backend vs frontend, bon endpoint de health check) ? Non bloquant (l'instance marche), mais à corriger pour la fiabilité de l'affichage.
+- [ ] **Passe design de la page de gestion** : lisibilité, contraste, mise en page — regroupée en une fois plutôt qu'au coup par coup.
+- [ ] **Passe design de l'instance client** : corriger les défauts visuels repérés (à faire en même temps que le white-label complet ci-dessous).
+
+---
+
+## À faire
+
+### Modèle de vente — clarifié (3 niveaux)
+Cible : **secteur régulé** (santé, fintech, assurance, juridique, RH, public) où l'isolation est un critère contractuel — **sales-led**. MAIS on ouvre aussi la porte aux clients entrants via un paiement en ligne, sans construire le self-service complet.
+
+- **Niveau 1 (dispo dès que le juridique est prêt)** : démo → paiement (virement / facture / Stripe Payment Link) → je déclenche la création depuis la page locale. Onboarding client en ~5 min.
+- **Niveau 2 (petit ajout, recommandé)** : bouton « S'abonner » sur le site → paiement carte (Stripe Checkout / Payment Links, sans coder) → je reçois la notif → je clique « créer ». Ouvre les ventes ENTRANTES sans démo préalable. **Ne nécessite PAS** de service hébergé ni de webhook. Coexiste avec un bouton « Demander une démo » pour les gros comptes régulés.
+- **Niveau 3 (plus tard, gros chantier)** : paiement → création 100 % automatique sans intervention. Nécessite service de provisioning hébergé + webhook Stripe + registre Postgres + gestion des échecs. À construire seulement quand le volume rend le clic manuel pénible.
+
+### Prérequis AVANT le premier euro (bloquant, priorité)
+- [ ] **Entité juridique** déclarée (micro-entreprise suffit pour démarrer) — nécessaire pour Stripe et pour encaisser.
+- [ ] **Finaliser CGV + mentions légales + politique de confidentialité + DPA** (brouillons déjà rédigés, cf. « Fait ») : compléter les `[À COMPLÉTER]` une fois l'entité créée + relecture avocat SaaS/RGPD. Le DPA est non négociable sur le régulé (sous-traitant art. 28).
+- [ ] **Moyen d'encaisser** : Stripe Payment Links (le plus simple, bouton payer en ~10 min sans code) ou virement/facture.
+- [ ] **Instance de démo** prête et montrable.
+- [ ] **1-2 premiers prospects** à qui parler.
+
+### Alignement produit sur la cible régulée (avant tout démarchage sérieux)
+- [ ] **White-label complet** (au-delà du nom, déjà fait) : logo, couleurs du client, et surtout **retrait de « Propulsé par Mistral » côté utilisateur final** (no-go absolu sur le régulé). La mention « vous interagissez avec une IA » reste (AI Act).
+- [ ] **Séparer le site vitrine de l'instance client** : la landing marketing (« Essayer gratuitement », etc.) appartient à `smartticket.fr`, pas à l'instance du client. Choix : deux builds vs flag `IS_MARKETING_SITE`/`IS_CLIENT_INSTANCE`.
+- [ ] **Secrets isolés par tenant** : `MISTRAL_API_KEY` / `BREVO_API_KEY` sont aujourd'hui partagées entre instances (un DPO le verra). Cible : clé par instance, injectée au provisioning.
+- [ ] **Conformité AI Act art. 50** (obligation depuis le 2 août 2026) : vérifier/ajouter la mention « vous parlez à une IA » visible dès le début de l'interaction.
+- [ ] **Traçabilité de l'isolation** : documenter l'architecture (bases/secrets/réseau/logs séparés) dans un format présentable à un DPO. Vérifier que `INDEX_CLOSED_TICKETS=false` reste actif par défaut.
+- [ ] **Hébergement UE strict** : confirmer qu'aucun edge/CDN Render hors UE n'est dans le chemin ; backups et logs en UE. Discours : « hébergé en UE, conforme RGPD ».
+- [ ] **Déprovisioning avec purge vérifiable** : produire une preuve de destruction (base + backups + logs) présentable au client.
+
+### Connexion client depuis la landing (à faire à la première signature)
+Permettre à un client existant de se connecter à son instance depuis tiqia.fr.
+- **Contexte** : archi mono-tenant, chaque client a son instance sur un sous-domaine dédié (ex: client.tiqia.fr). La landing tiqia.fr est commune et ne peut pas router un visiteur vers la bonne instance sans information.
+- **Solution retenue** (modèle Slack/Notion) : bouton « Se connecter » → page intermédiaire « Entrez le nom de votre espace » → le client tape son identifiant (ex: « martin ») → redirection vers {identifiant}.tiqia.fr. Pas d'annuaire central (respecte l'isolation), la landing construit juste l'URL du sous-domaine.
+- **Prérequis** : au moins un vrai client avec un sous-domaine {client}.tiqia.fr en place, pour pouvoir tester réellement le flux + gérer le cas d'erreur « cet espace n'existe pas ».
+- **Pourquoi reporté** : aucun client aujourd'hui = fonctionnalité non testable et sans valeur immédiate. À construire à la première signature.
+
+### Outillage de flotte (avant le 3e client)
+- [ ] **Patch/update de masse** : `update_all_instances.py` existe, à valider en réel (`--dry-run`, `--only` pour rollout progressif). Rappel : un push sur `main` redéploie déjà TOUS les clients → `main` toujours déployable, CI = garde-fou.
+- [ ] **Registre SQLite → Postgres** : `instances.db` local ne suit pas entre machines (constaté). Prioritaire dès qu'on opère depuis plus d'un poste, ou pour tout service hébergé (Niveau 3).
+- [ ] **Metering d'usage par tenant** (`usage_monthly`, jamais fait) : conversations + tokens LLM par instance/mois. Sans ça, impossible de savoir quel client plombe la facture Mistral, ni de facturer à l'usage. Urgent au 2e client.
+- [ ] **Backups** : Render fait déjà PITR 3 jours (7 en Pro) + Export 7 jours — vérifié. À TESTER : une vraie restauration. À CONSTRUIRE plus tard (cible régulée) : exports périodiques chiffrés vers stockage objet UE (rétention longue + copie hors-Render), conditionné au service hébergé.
+- [ ] **Monitoring/alerting par tenant** (santé, coût, incidents).
+
+### Question de stack à trancher (§6 du brief)
+- [ ] Terraform/Pulumi vs scripts + API Render actuels. **Décision provisoire : rester sur les scripts Python** (l'IaC déclaratif devient pertinent vers ~10 clients ou si le patch de masse devient fragile). À réévaluer à 10 clients.
+
+### Hébergement France (Scaleway + Terraform) — décision CONDITIONNELLE
+- [ ] **Déclencheur** : un client exige *contractuellement* la France (pas seulement UE). Render/Frankfurt suffit pour la plupart. Implique de réécrire toute la couche de provisioning (API Scaleway ≠ Render) + adopter Terraform. **Ne lancer qu'avec un contrat signé qui le justifie.**
+
+---
+
 ## Fait
+
 
 ### Nettoyage (2026-07-07)
 - [x] Suppression des fichiers polluants versionnés (index pgvector binaire, lock LibreOffice, lockfiles pnpm en double avec npm)
@@ -108,12 +197,7 @@ Suivi des évolutions techniques et fonctionnelles du projet. Statuts : **Fait**
 
 - [x] **Anglais (i18n) — extension à tout le reste de l'app** — remonté par l'utilisateur avec insistance après le point précédent ("bah je te l'avais demandé !") : la sidebar et le tableau de bord utilisateur étaient traduits, mais tous les autres écrans authentifiés (SAV, admin, superviseur, base de connaissances, monitoring, paramètres, chat IA) et toutes les pages publiques hors landing/connexion (inscription, mots de passe oublié/réinitialisation, vérification email, configuration admin, mentions légales, politique de confidentialité, CGV) restaient intégralement en français codé en dur. Traité en un seul passage cette fois, sans redécouper le périmètre. Nouvelles clés `common.reasons`, `chat.*`, `sav.*`, `supervisor.*`, `admin.*`, `settings.*`, `monitoring.*`, `knowledgeBase.*`, `signUp.*`, `forgotPassword.*`, `resetPassword.*`, `verifyEmail.*`, `setup.*`, `legal.*` dans `translations.ts` (fr/en, plus de 300 clés ajoutées). `SavDashboard.tsx`, `SupervisorDashboard.tsx`, `AdminDashboard.tsx`, `settings/page.tsx` (+ nouvelle carte "Langue" avec `LanguageToggle`, jusque-là absente hors sidebar), `monitoring/page.tsx`, `knowledge-base/page.tsx`, `ai-assistant/[id]/page.tsx`, et les 5 pages `(auth)` intégralement traduits. **Cas particulier pages légales** : `mentions-legales`, `politique-confidentialite` et `cgv` sont des Server Components (`export const metadata`), incompatibles avec `useLocale()` (contexte client-only, choix assumé dès l'infra pour garder le rendu statique) — extraction du contenu de chaque page dans un composant client dédié (`MentionsLegalesContent.tsx` etc.) importé par un `page.tsx` resté Server Component pour conserver le `metadata` ; `(legal)/layout.tsx` passé en client component au passage pour y ajouter le `LanguageToggle` (absent jusqu'ici). Contenu des pages légales traduit tel quel, y compris les marqueurs `[À COMPLÉTER]` (traduits en `[TO BE COMPLETED]`) — ce sont des brouillons non validés juridiquement (déjà noté dans une entrée précédente), aucune tentative de "corriger" le fond en le traduisant. **Un agent en arrière-plan lancé pour paralléliser les pages auth/légales a échoué** (limite de session API atteinte) : ce lot a finalement été traité directement dans cette conversation plutôt qu'en sous-tâche. Pas de bump de version (UI uniquement, aucun contrat d'API changé). Vérifié réellement : `tsc --noEmit` et `eslint .` propres sur l'ensemble du frontend (seuls les 2 avertissements `react-hooks/exhaustive-deps` pré-existants sur `AdminDashboard`/`SupervisorDashboard` subsistent, confirmés antérieurs à cette session via `git stash`), tous les fichiers de test affectés (`SavDashboard`, `SupervisorDashboard`, `AdminDashboard`, `SettingsPage`, `SignUpPage`, `ForgotPasswordPage`, `ResetPasswordPage`, `VerifyEmailPage`, `SetupPage`, `AiAssistantSuggestions`, `AiAssistantResolve`) adaptés avec le wrapper `LocaleProvider`, 112 tests Jest toujours au total et tous verts, `npm run build` passe avec toutes les pages concernées toujours generées statiquement (`○ Static`, y compris les 8 pages `(auth)`/`(legal)` — confirmation que l'extension n'a pas cassé le rendu statique). **Non testé visuellement dans un vrai navigateur** (même limite que les incréments i18n précédents : pas de Postgres local pour se connecter et voir les dashboards authentifiés réels) ; les messages d'alerte IA générés côté backend (`monitoring/page.tsx`, champ `alert.message`/`alert.recommendation` venant de l'API) restent en français quel que soit la langue choisie côté frontend — hors périmètre de ce chantier purement frontend, à traiter si besoin lors d'un futur passage d'i18n côté backend
 
-## En cours
-
-_Rien en cours actuellement._
-
-## À faire
-_Rien en attente actuellement._
+---
 
 ## Stratégie de commercialisation (2026-07-08)
 
@@ -135,3 +219,18 @@ Plan détaillé (décisions à trancher, provisioning + sous-domaine + mise à j
 
 ### Pricing envisagé (à valider avant fixation définitive)
 Structure à 3 paliers indexée sur le volume de tickets IA traités (coût variable réel = tokens Mistral + stockage vectoriel) et le nombre d'agents SAV : Starter (~99-149€/mois, 1 agent, ~500 tickets IA/mois), Pro (~299-499€/mois, 3-5 agents, tickets illimités raisonnables), Business (sur devis 800€+/mois, agents illimités, SLA, DPA, onboarding assisté). Facture annuelle avec 15-20% de remise pour la trésorerie. **Point d'attention** : le coût infra fixe par client (~40-60€/mois d'instance Render) doit rester une fraction minoritaire du prix Starter, sinon la marge sur les petits comptes est nulle — à vérifier avant de fixer le prix plancher définitif.
+
+
+
+### Email transactionnel (Brevo) — statut et reste à faire
+
+**Débloqué pour le test (2026-08-14)** : le 401 intermittent venait de la restriction d'IP d'envoi côté Brevo (compte gratuit, IP mutualisée, IP résidentielle qui change). Résolu en désactivant le filtrage d'IP pour les clés API (Brevo → Sécurité). `SMTP_FROM=gabriel.guery10@gmail.com` (seule adresse validée dans Brevo → Senders). L'email de bienvenue part désormais correctement.
+
+**À faire pour la production (bloquant) :**
+- [ ] Acheter le domaine `smartticket.fr` (nécessaire aussi pour les sous-domaines par instance).
+- [ ] Expéditeur sur domaine authentifié : `noreply@smartticket.fr` avec SPF + DKIM + DMARC configurés dans Brevo — règle à la fois le 401 IP, le spam Gmail (avertissement DMARC « Freemail non recommandé » constaté) et l'exigence Google/Yahoo/Microsoft.
+- [ ] Envoi depuis une IP stable : quand le provisioning tournera sur un service hébergé (Render), l'IP d'envoi sera celle du serveur → plus de reconfirmation. Whitelister cette IP sortante plutôt que de tout ouvrir.
+- [ ] Mettre à jour `SMTP_FROM` (partagé backend d'instance + `ops/notify.py`) vers l'adresse du domaine authentifié.
+- [ ] Vérifier la délivrabilité réelle (mail reçu en boîte principale, pas en spam) avant le 1er client.
+
+**Posture visée** : la sécurité vient de l'authentification du domaine (SPF/DKIM/DMARC) + de la clé API, pas du filtrage d'IP résidentielle. Ne pas s'appuyer sur la restriction d'IP comme garde-fou de fiabilité (une IP qui change casse l'envoi), mais ne pas tout laisser ouvert non plus : IP serveur stable + domaine authentifié.
