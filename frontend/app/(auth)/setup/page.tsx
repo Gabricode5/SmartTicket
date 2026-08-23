@@ -71,9 +71,8 @@ function SetupContent() {
                     <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
                     {t.login.backToHome}
                 </Link>
-                <div className="flex items-center gap-2 font-bold text-slate-800">
-                    <Image src="/logo-T.png" alt={BRAND_NAME} width={28} height={28} className="h-7 w-7" />
-                    <span>{BRAND_NAME}</span>
+                <div className="flex items-center">
+                    <Image src="/logo-Tiqia-noir.png" alt={BRAND_NAME} width={67} height={28} className="h-7 w-auto" />
                 </div>
             </header>
 
