@@ -13,7 +13,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
             <header className="border-b border-slate-100 px-6 py-4">
                 <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
                     <Link href="/" className="flex items-center gap-2 text-slate-700">
-                        <Image src="/logo_smartticket.png" alt={BRAND_NAME} width={24} height={24} className="h-6 w-6" />
+                        <Image src="/logo-T.png" alt={BRAND_NAME} width={24} height={24} className="h-6 w-6" />
                         <span className="font-semibold">{BRAND_NAME}</span>
                     </Link>
                     <div className="flex items-center gap-4">

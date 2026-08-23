@@ -73,7 +73,7 @@ function VerifyEmailContent() {
                     {t.login.backToHome}
                 </Link>
                 <div className="flex items-center gap-2 font-bold text-slate-800">
-                    <Image src="/logo_smartticket.png" alt={BRAND_NAME} width={28} height={28} className="h-7 w-7" />
+                    <Image src="/logo-T.png" alt={BRAND_NAME} width={28} height={28} className="h-7 w-7" />
                     <span>{BRAND_NAME}</span>
                 </div>
             </header>
