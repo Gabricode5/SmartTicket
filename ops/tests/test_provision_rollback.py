@@ -403,6 +403,7 @@ class TestPerInstanceVendorKeys:
         assert result.status == "active"
         notify_mock.send_welcome_email.assert_called_once_with(
             admin_email="a@acme14b.com", client_name="Acme14b", setup_url=result.setup_url,
+            instance_url=result.frontend_url,
             api_key="brevo-key-dedicated-to-acme14b", sender_email="noreply+acme14b@tiqia.fr",
         )
 

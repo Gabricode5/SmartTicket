@@ -419,7 +419,7 @@ def provision(
     # après avoir isolé le reste. Transmis explicitement pour fermer ce trou.
     welcome_email_sent = notify.send_welcome_email(
         admin_email=admin_email, client_name=client_name, setup_url=setup_url,
-        api_key=brevo_api_key, sender_email=sender_email,
+        instance_url=frontend_url, api_key=brevo_api_key, sender_email=sender_email,
     )
 
     return ProvisionResult(
