@@ -74,6 +74,10 @@ class InstanceView:
     subscription_detail: str
     subscription_since_days: int | None  # nb de jours dans le statut actuel (suspended surtout) — None si inconnu
     can_manage_subscription: bool  # False si vendor_key ou backend_url absent — désactive les boutons
+    contact_name: str | None
+    contact_email: str | None
+    contact_phone: str | None
+    crm_notes: str | None
 
 
 @dataclasses.dataclass
@@ -320,6 +324,8 @@ def load_fleet_data(*, check_health: bool = True, check_subscription: bool = Tru
             subscription_status=subscription_status, subscription_detail=subscription_detail,
             subscription_since_days=_days_since(subscription_updated_at) if subscription_status == "suspended" else None,
             can_manage_subscription=can_manage_subscription,
+            contact_name=row["contact_name"], contact_email=row["contact_email"],
+            contact_phone=row["contact_phone"], crm_notes=row["crm_notes"],
         ))
 
     orphans: list[dict] = []
@@ -398,6 +404,26 @@ def suspend_instance(slug: str, confirm_slug: str = Form(...)) -> RedirectRespon
 @app.post("/instances/{slug}/reactivate")
 def reactivate_instance(slug: str, confirm_slug: str = Form(...)) -> RedirectResponse:
     _handle_subscription_action(slug, target_status="active", confirm_slug=confirm_slug)
+    return RedirectResponse("/", status_code=303)
+
+
+@app.post("/instances/{slug}/crm")
+def update_crm_route(
+    slug: str,
+    contact_name: str = Form(""), contact_email: str = Form(""),
+    contact_phone: str = Form(""), crm_notes: str = Form(""),
+) -> RedirectResponse:
+    """Fiche contact/notes commerciales — pas de confirmation par slug (contrairement à
+    suspendre/supprimer) : aucun impact sur les utilisateurs finaux du client, juste du suivi
+    interne pour le vendeur. Champs vidés dans le formulaire -> NULL en base plutôt que chaîne
+    vide, cohérent avec le schéma nullable (cf. db.py)."""
+    db.update_instance(
+        slug,
+        contact_name=contact_name.strip() or None,
+        contact_email=contact_email.strip() or None,
+        contact_phone=contact_phone.strip() or None,
+        crm_notes=crm_notes.strip() or None,
+    )
     return RedirectResponse("/", status_code=303)
 
 

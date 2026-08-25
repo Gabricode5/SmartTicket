@@ -32,10 +32,22 @@ CREATE TABLE IF NOT EXISTS instances (
     statut TEXT NOT NULL DEFAULT 'provisioning',
     date_creation TEXT NOT NULL DEFAULT (datetime('now')),
     date_facturation TEXT,
-    notes TEXT
+    notes TEXT,
+    contact_name TEXT,
+    contact_email TEXT,
+    contact_phone TEXT,
+    crm_notes TEXT
 );
 """
 # statut : provisioning | active | suspendue | supprimee | failed | deletion_failed
+
+# Colonnes CRM (fiche contact/notes commerciales par instance, 2026-08-25) — ajoutées après
+# la création initiale de la table. `CREATE TABLE IF NOT EXISTS` ci-dessus ne modifie pas une
+# table déjà existante sur le poste : sans ce garde-fou, un instances.db réel créé avant ce
+# changement resterait bloqué sur l'ancien schéma. Distinctes de `notes`, réservée aux
+# diagnostics techniques (IDs Render orphelins d'un provisioning/suppression en échec partiel,
+# cf. provision_client.py/delete_client.py) — jamais touchée ici.
+_CRM_COLUMNS = ("contact_name", "contact_email", "contact_phone", "crm_notes")
 
 
 @contextmanager
@@ -53,6 +65,10 @@ def get_connection():
 def init_db() -> None:
     with get_connection() as conn:
         conn.execute(_SCHEMA)
+        existing_columns = {row["name"] for row in conn.execute("PRAGMA table_info(instances)")}
+        for column in _CRM_COLUMNS:
+            if column not in existing_columns:
+                conn.execute(f"ALTER TABLE instances ADD COLUMN {column} TEXT")
 
 
 def slug_exists(slug: str) -> bool:

@@ -529,9 +529,139 @@ def test_all_action_routes_are_actually_registered_as_post():
         for route in fleet_admin.app.routes
         for method in getattr(route, "methods", set())
     }
-    for action in ("suspend", "reactivate", "delete"):
+    for action in ("suspend", "reactivate", "delete", "crm"):
         assert (f"/instances/{{slug}}/{action}", "POST") in registered, f"route POST /instances/{{slug}}/{action} manquante"
     assert ("/instances/create", "POST") in registered, "route POST /instances/create manquante"
+
+
+# --- Partie CRM : fiche contact et notes commerciales par instance ---
+
+def test_load_fleet_data_exposes_crm_fields(monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(
+        slug="acme", statut="active",
+        contact_name="Jean Dupont", contact_email="jean@acme.com",
+        contact_phone="0102030405", crm_notes="Prospect chaud, relancer en septembre",
+    )
+
+    data = fleet_admin.load_fleet_data(check_health=False, check_subscription=False)
+
+    instance = data.instances[0]
+    assert instance.contact_name == "Jean Dupont"
+    assert instance.contact_email == "jean@acme.com"
+    assert instance.contact_phone == "0102030405"
+    assert instance.crm_notes == "Prospect chaud, relancer en septembre"
+
+
+def test_load_fleet_data_crm_fields_are_none_for_a_row_without_contact(monkeypatch):
+    """Compat ascendante : une instance déjà enregistrée avant l'ajout du CRM (colonnes
+    NULL après migration, cf. test_db.py) ne doit pas faire planter load_fleet_data()."""
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(slug="old-client", statut="active")
+
+    data = fleet_admin.load_fleet_data(check_health=False, check_subscription=False)
+
+    instance = data.instances[0]
+    assert instance.contact_name is None
+    assert instance.contact_email is None
+    assert instance.contact_phone is None
+    assert instance.crm_notes is None
+
+
+def test_index_page_shows_contact_name_or_a_placeholder(monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(slug="acme", statut="active", contact_name="Jean Dupont")
+    _insert(slug="old-client", statut="active")  # pas de contact renseigné
+
+    html = TestClient(fleet_admin.app).get("/").text
+
+    assert "Jean Dupont" in html
+    assert "—" in html  # placeholder pour old-client, ne plante pas sur une valeur absente
+
+
+def test_index_page_crm_form_is_prefilled_with_existing_values(monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(
+        slug="acme", statut="active",
+        contact_name="Jean Dupont", contact_email="jean@acme.com",
+        contact_phone="0102030405", crm_notes="Notes existantes",
+    )
+
+    html = TestClient(fleet_admin.app).get("/").text
+
+    assert 'value="Jean Dupont"' in html
+    assert 'value="jean@acme.com"' in html
+    assert 'value="0102030405"' in html
+    assert "Notes existantes" in html
+
+
+def test_crm_route_persists_submitted_fields(monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(slug="acme", statut="active")
+    client = TestClient(fleet_admin.app)
+
+    client.post("/instances/acme/crm", data={
+        "contact_name": "Marie Curie", "contact_email": "marie@acme.com",
+        "contact_phone": "0102030405", "crm_notes": "Relance prevue",
+    })
+
+    row = db.get_instance("acme")
+    assert row["contact_name"] == "Marie Curie"
+    assert row["contact_email"] == "marie@acme.com"
+    assert row["contact_phone"] == "0102030405"
+    assert row["crm_notes"] == "Relance prevue"
+
+
+def test_crm_route_stores_blank_fields_as_null_not_empty_string(monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(slug="acme", statut="active", contact_name="Jean Dupont")
+    client = TestClient(fleet_admin.app)
+
+    client.post("/instances/acme/crm", data={
+        "contact_name": "", "contact_email": "", "contact_phone": "", "crm_notes": "",
+    })
+
+    row = db.get_instance("acme")
+    assert row["contact_name"] is None
+    assert row["contact_email"] is None
+
+
+def test_crm_route_does_not_require_slug_confirmation(monkeypatch):
+    """Contrairement à suspendre/supprimer (impact direct sur les utilisateurs finaux), la
+    fiche CRM n'a aucun impact client — pas de champ confirm_slug à fournir."""
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(slug="acme", statut="active")
+    client = TestClient(fleet_admin.app, follow_redirects=False)
+
+    response = client.post("/instances/acme/crm", data={"contact_name": "Jean Dupont"})
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
+
+
+def test_crm_route_returns_a_303_redirect_not_html_directly(monkeypatch):
+    """Même garde-fou POST-Redirect-GET que suspendre/réactiver/supprimer (cf. section
+    dédiée plus bas) : un F5 après la sauvegarde ne doit jamais tomber sur un 405."""
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(slug="acme", statut="active")
+    client = TestClient(fleet_admin.app, follow_redirects=False)
+
+    response = client.post("/instances/acme/crm", data={"contact_name": "Jean Dupont"})
+    assert response.status_code == 303
+    refresh = client.get(response.headers["location"])
+    assert refresh.status_code == 200
+
+
+def test_crm_route_on_unknown_slug_does_not_crash(monkeypatch):
+    """db.update_instance() sur un slug inexistant est un UPDATE sans ligne affectée — ne
+    doit ni lever, ni créer de ligne fantôme."""
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    client = TestClient(fleet_admin.app)
+
+    response = client.post("/instances/unknown-slug/crm", data={"contact_name": "Jean Dupont"})
+
+    assert response.status_code == 200  # après redirection suivie
+    assert db.get_instance("unknown-slug") is None
 
 
 # --- Partie B.3 : création d'instance via provision() en tâche de fond ---
