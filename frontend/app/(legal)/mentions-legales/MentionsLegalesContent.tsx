@@ -20,6 +20,9 @@ export default function MentionsLegalesContent() {
                     <li>{t.legal.mentions.companyName}</li>
                     <li>{t.legal.mentions.legalForm}</li>
                     <li>{t.legal.mentions.siren}</li>
+                    <li>{t.legal.mentions.rcs}</li>
+                    <li>{t.legal.mentions.capitalSocial}</li>
+                    <li>{t.legal.mentions.vatNumber}</li>
                     <li>{t.legal.mentions.address}</li>
                     <li>{t.legal.mentions.director}</li>
                     <li>{t.legal.mentions.contactItem}</li>
@@ -28,8 +31,15 @@ export default function MentionsLegalesContent() {
 
             <section className="space-y-2">
                 <h2 className="text-lg font-semibold text-slate-900">{t.legal.mentions.hostingTitle}</h2>
+                <p>{t.legal.mentions.hostingBodyPrefix}</p>
                 <p>
-                    {t.legal.mentions.hostingBodyPrefix}{" "}
+                    {t.legal.mentions.hostingIdentity}
+                    <br />
+                    {t.legal.mentions.hostingPhone}
+                </p>
+                <p>{t.legal.mentions.hostingRegion}</p>
+                <p>
+                    {t.legal.mentions.hostingMoreInfoPrefix}{" "}
                     <a href="https://render.com" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">
                         render.com
                     </a>.
