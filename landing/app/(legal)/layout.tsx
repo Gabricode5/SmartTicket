@@ -10,7 +10,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
     const { messages: t } = useLocale()
     return (
         <div className="force-light min-h-screen bg-white flex flex-col">
-            <header className="border-b border-slate-100 px-6 py-4">
+            <header className="sticky top-0 z-50 border-b border-slate-100 px-6 py-4">
                 <div className="max-w-3xl mx-auto flex items-center justify-between gap-4">
                     <Link href="/" className="flex items-center text-slate-700">
                         <Image src="/logo-Tiqia-noir.png" alt={BRAND_NAME} width={58} height={24} className="h-6 w-auto" />

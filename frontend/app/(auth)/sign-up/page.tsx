@@ -231,9 +231,7 @@ export default function SignUpPage() {
                                     className="mt-0.5 h-4 w-4 cursor-pointer accent-indigo-600 rounded"
                                 />
                                 <label htmlFor="rgpd" className="text-xs text-slate-500 leading-relaxed cursor-pointer">
-                                    {t.signUp.rgpdLabelPrefix}{" "}
-                                    <a href="/politique-confidentialite" target="_blank" rel="noopener noreferrer"
-                                        className="text-indigo-600 hover:underline">{t.signUp.rgpdLink}</a>.
+                                    {t.signUp.rgpdLabelPrefix} {t.signUp.rgpdLink}.
                                 </label>
                             </div>
 

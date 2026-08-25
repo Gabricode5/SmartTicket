@@ -252,11 +252,6 @@ export default function LandingPage() {
                         <Image src="/logo-Tiqia-noir.png" alt={BRAND_NAME} width={58} height={24} className="h-6 w-auto" />
                         <span className="text-slate-400 text-sm ml-2">{t.landing.footer.tagline}</span>
                     </div>
-                    <nav className="flex items-center gap-4 text-xs text-slate-400">
-                        <Link href="/mentions-legales" className="hover:text-slate-600 hover:underline">{t.landing.footer.legal}</Link>
-                        <Link href="/politique-confidentialite" className="hover:text-slate-600 hover:underline">{t.landing.footer.privacy}</Link>
-                        <Link href="/cgv" className="hover:text-slate-600 hover:underline">{t.landing.footer.cgv}</Link>
-                    </nav>
                     <div className="flex items-center gap-2 text-xs text-slate-400">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                         {t.landing.footer.poweredBy}

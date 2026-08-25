@@ -243,9 +243,9 @@ export default function LandingPage() {
                         <span className="text-slate-400 text-sm ml-2">{t.landing.footer.tagline}</span>
                     </div>
                     <nav className="flex items-center gap-4 text-xs text-slate-400">
-                        <Link href={`${APP_URL}/mentions-legales`} className="hover:text-slate-600 hover:underline">{t.landing.footer.legal}</Link>
-                        <Link href={`${APP_URL}/politique-confidentialite`} className="hover:text-slate-600 hover:underline">{t.landing.footer.privacy}</Link>
-                        <Link href={`${APP_URL}/cgv`} className="hover:text-slate-600 hover:underline">{t.landing.footer.cgv}</Link>
+                        <Link href="/mentions-legales" className="hover:text-slate-600 hover:underline">{t.landing.footer.legal}</Link>
+                        <Link href="/politique-confidentialite" className="hover:text-slate-600 hover:underline">{t.landing.footer.privacy}</Link>
+                        <Link href="/cgv" className="hover:text-slate-600 hover:underline">{t.landing.footer.cgv}</Link>
                     </nav>
                 </div>
             </footer>
