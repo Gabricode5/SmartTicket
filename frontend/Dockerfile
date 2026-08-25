@@ -31,6 +31,13 @@ RUN npm run build
 ENV NODE_ENV=production
 ENV PORT=3005
 
+# Exécution en utilisateur non-root (audit sécurité 2026-08-25) : node:20-slim fournit déjà
+# l'utilisateur "node" (UID 1000), pas besoin d'en créer un. chown APRÈS le build (npm ci /
+# npm run build ont besoin des droits root) pour que "node" ait accès au résultat du build
+# (.next) en plus du code source.
+RUN chown -R node:node /app
+USER node
+
 EXPOSE 3005
 
 CMD ["sh", "-c", "node_modules/.bin/next start -H 0.0.0.0 -p ${PORT:-3005}"]

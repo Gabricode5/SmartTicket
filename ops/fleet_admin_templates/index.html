@@ -87,6 +87,7 @@
     <details class="create-panel">
         <summary><strong>Créer une nouvelle instance</strong></summary>
         <form method="post" action="/instances/create" id="create-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <label>Nom de l'entreprise
                 <input type="text" name="client_name" id="create-client-name" placeholder="Martin Technologies" required autocomplete="off">
             </label>
@@ -162,6 +163,7 @@
                     <details>
                         <summary>Fiche CRM</summary>
                         <form method="post" action="/instances/{{ i.slug }}/crm">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                             <label>Nom du contact
                                 <input type="text" name="contact_name" value="{{ i.contact_name or '' }}" autocomplete="off">
                             </label>
@@ -204,6 +206,7 @@
                             <details>
                                 <summary>Suspendre</summary>
                                 <form method="post" action="/instances/{{ i.slug }}/suspend">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                     <p>Coupe l'accès à TOUS les utilisateurs finaux de ce client
                                     (402 sur /v1/*) — mais N'ARRÊTE PAS la facturation Render
                                     (le conteneur reste vivant, ~facturation habituelle par mois).
@@ -217,6 +220,7 @@
                             <details>
                                 <summary>Réactiver</summary>
                                 <form method="post" action="/instances/{{ i.slug }}/reactivate">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                     <p>Tape <code>{{ i.slug }}</code> pour confirmer :</p>
                                     <input type="text" name="confirm_slug" placeholder="{{ i.slug }}" required autocomplete="off">
                                     <button type="submit">Confirmer la réactivation</button>
@@ -229,6 +233,7 @@
                     <details class="danger-action">
                         <summary>Supprimer définitivement</summary>
                         <form method="post" action="/instances/{{ i.slug }}/delete">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                             <p><strong>IRRÉVERSIBLE.</strong> Détruit la base Postgres, le
                             service backend et le service frontend de <strong>{{ i.client_name }}</strong>
                             ({{ i.slug }}), ainsi que TOUTES les données de ses utilisateurs

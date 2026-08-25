@@ -11,6 +11,15 @@ RUN pip install --no-cache-dir .
 
 COPY . .
 
+# Exécution en utilisateur non-root (audit sécurité 2026-08-25) : python:3.11-slim, contrairement
+# aux images node:*-slim, ne fournit aucun utilisateur applicatif par défaut. chown -R sur /app
+# ENTIER (pas seulement le code) car aucun autre chemin n'est écrit au runtime ici (pas de
+# fichiers locaux — migrations et logs passent par Postgres/stdout, cf. absence de FileHandler).
+RUN groupadd --system appuser \
+    && useradd --system --gid appuser --home-dir /app --shell /usr/sbin/nologin appuser \
+    && chown -R appuser:appuser /app
+USER appuser
+
 EXPOSE 8000
 
 
