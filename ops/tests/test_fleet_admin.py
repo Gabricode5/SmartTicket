@@ -90,6 +90,14 @@ def _insert(*, slug, client_name="Client", statut="active", **extra):
     db.insert_instance(client_name=client_name, slug=slug, statut=statut, **extra)
 
 
+def _post(client, path, data=None, **kwargs):
+    """POST avec le jeton CSRF valide déjà inclus — toutes les routes POST en exigent un
+    depuis l'audit sécurité du 2026-08-25 (cf. fleet_admin._CSRF_TOKEN). Les tests qui
+    exercent spécifiquement le rejet CSRF appellent client.post(...) directement plutôt que
+    ce helper, pour omettre ou falsifier le jeton volontairement."""
+    return client.post(path, data={**(data or {}), "csrf_token": fleet_admin._CSRF_TOKEN}, **kwargs)
+
+
 class _FakeInstanceHandler(BaseHTTPRequestHandler):
     """Simule backend/routers/instance.py : GET/PUT /v1/instance/subscription-status,
     protégé par X-Vendor-Key, statut partagé via self.server.state."""
@@ -313,7 +321,7 @@ def test_suspend_route_rejects_mismatched_slug_confirmation_without_calling_the_
     _insert(slug="acme", statut="active", backend_url="https://instance.example", vendor_key="vk-1")
 
     client = TestClient(fleet_admin.app)
-    response = client.post("/instances/acme/suspend", data={"confirm_slug": "not-acme"})
+    response = _post(client,"/instances/acme/suspend", data={"confirm_slug": "not-acme"})
 
     assert response.status_code == 200
     assert "Confirmation invalide" in response.text
@@ -330,7 +338,7 @@ def test_suspend_route_disabled_when_vendor_key_missing(monkeypatch):
     index_response = client.get("/")
     assert "vendor_key absente — suspension impossible" in index_response.text
 
-    action_response = client.post("/instances/acme/suspend", data={"confirm_slug": "acme"})
+    action_response = _post(client,"/instances/acme/suspend", data={"confirm_slug": "acme"})
     assert "vendor_key ou URL backend absente" in action_response.text
     put_mock.assert_not_called()
 
@@ -360,12 +368,12 @@ def test_suspend_then_reactivate_end_to_end_over_real_http(monkeypatch, fake_ins
     before = client.get("/")
     assert "sub-active" in before.text
 
-    suspend_resp = client.post("/instances/acme/suspend", data={"confirm_slug": "acme"})
+    suspend_resp = _post(client,"/instances/acme/suspend", data={"confirm_slug": "acme"})
     assert "action réussie" in suspend_resp.text
     assert fake_instance_server.state["status"] == "suspended"
     assert "sub-suspended" in suspend_resp.text  # re-GET après action, pas supposé
 
-    reactivate_resp = client.post("/instances/acme/reactivate", data={"confirm_slug": "acme"})
+    reactivate_resp = _post(client,"/instances/acme/reactivate", data={"confirm_slug": "acme"})
     assert "action réussie" in reactivate_resp.text
     assert fake_instance_server.state["status"] == "active"
     assert "sub-active" in reactivate_resp.text
@@ -429,7 +437,7 @@ def test_delete_route_rejects_mismatched_slug_without_calling_delete_instance(de
     _insert(slug="acme", statut="active")
     client = TestClient(fleet_admin.app)
 
-    response = client.post("/instances/acme/delete", data={"confirm_slug": "not-acme", "confirm_destruction": "yes"})
+    response = _post(client,"/instances/acme/delete", data={"confirm_slug": "not-acme", "confirm_destruction": "yes"})
 
     assert "Confirmation invalide" in response.text
     delete_client_mock.delete_instance.assert_not_called()
@@ -441,7 +449,7 @@ def test_delete_route_rejects_missing_checkbox_confirmation(delete_client_mock, 
     _insert(slug="acme", statut="active")
     client = TestClient(fleet_admin.app)
 
-    response = client.post("/instances/acme/delete", data={"confirm_slug": "acme"})  # pas de confirm_destruction
+    response = _post(client,"/instances/acme/delete", data={"confirm_slug": "acme"})  # pas de confirm_destruction
 
     assert "Case de confirmation non cochée" in response.text
     delete_client_mock.delete_instance.assert_not_called()
@@ -454,7 +462,7 @@ def test_delete_route_calls_delete_instance_with_the_right_slug(delete_client_mo
     delete_client_mock.delete_instance.return_value = delete_client.DeleteResult(slug="acme", status="deleted")
 
     client = TestClient(fleet_admin.app)
-    response = client.post("/instances/acme/delete", data={"confirm_slug": "acme", "confirm_destruction": "yes"})
+    response = _post(client,"/instances/acme/delete", data={"confirm_slug": "acme", "confirm_destruction": "yes"})
 
     delete_client_mock.delete_instance.assert_called_once_with("acme")
     assert "action réussie" in response.text
@@ -475,7 +483,7 @@ def test_delete_route_removes_instance_from_list_on_real_success(render_mock, mo
         )
 
         client = TestClient(fleet_admin.app)
-        response = client.post("/instances/acme/delete", data={"confirm_slug": "acme", "confirm_destruction": "yes"})
+        response = _post(client,"/instances/acme/delete", data={"confirm_slug": "acme", "confirm_destruction": "yes"})
 
         assert "action réussie" in response.text
         assert "Acme Corp" not in response.text
@@ -497,7 +505,7 @@ def test_delete_route_reports_partial_failure_honestly(delete_client_mock, rende
     )
 
     client = TestClient(fleet_admin.app)
-    response = client.post("/instances/acme/delete", data={"confirm_slug": "acme", "confirm_destruction": "yes"})
+    response = _post(client,"/instances/acme/delete", data={"confirm_slug": "acme", "confirm_destruction": "yes"})
 
     assert "action réussie" not in response.text
     assert "pg-1" in response.text
@@ -532,6 +540,88 @@ def test_all_action_routes_are_actually_registered_as_post():
     for action in ("suspend", "reactivate", "delete", "crm"):
         assert (f"/instances/{{slug}}/{action}", "POST") in registered, f"route POST /instances/{{slug}}/{action} manquante"
     assert ("/instances/create", "POST") in registered, "route POST /instances/create manquante"
+
+
+# --- Partie sécurité : protection CSRF sur tous les formulaires POST (2026-08-25) ---
+# Console locale sans compte ni session (127.0.0.1 uniquement) -> pas de synchronizer token
+# classique lié à une session, cf. fleet_admin._CSRF_TOKEN pour le choix : un jeton unique par
+# démarrage du processus, réinjecté dans chaque formulaire, vérifié à chaque POST.
+
+def test_index_page_embeds_the_csrf_token_in_every_post_form(monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    # vendor_key + backend_url présents pour que suspendre/réactiver soient proposés aussi
+    # (pas seulement crm/delete) — requests.get mocké pour ne jamais taper le réseau, comme
+    # test_vendor_key_never_appears_in_rendered_html ci-dessus.
+    monkeypatch.setattr(fleet_admin.requests, "get", mock.Mock(side_effect=fleet_admin.requests.exceptions.ConnectionError()))
+    _insert(slug="acme", statut="active", backend_url="https://instance.example", vendor_key="vk-1")
+
+    html = TestClient(fleet_admin.app).get("/").text
+
+    expected = f'<input type="hidden" name="csrf_token" value="{fleet_admin._CSRF_TOKEN}">'
+    # create + crm + suspend + réactiver + delete = 5 formulaires POST sur cette page.
+    assert html.count(expected) >= 5
+
+
+def test_suspend_route_rejects_missing_csrf_token_without_calling_the_instance(monkeypatch):
+    put_mock = mock.Mock()
+    monkeypatch.setattr(fleet_admin.requests, "put", put_mock)
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(slug="acme", statut="active", backend_url="https://instance.example", vendor_key="vk-1")
+    client = TestClient(fleet_admin.app)
+
+    response = client.post("/instances/acme/suspend", data={"confirm_slug": "acme"})  # pas de csrf_token
+
+    assert "Jeton de sécurité invalide" in response.text
+    put_mock.assert_not_called()
+
+
+def test_delete_route_rejects_wrong_csrf_token_without_deleting(delete_client_mock, render_mock):
+    _insert(slug="acme", statut="active")
+    client = TestClient(fleet_admin.app)
+
+    response = client.post("/instances/acme/delete", data={
+        "confirm_slug": "acme", "confirm_destruction": "yes", "csrf_token": "not-the-real-token",
+    })
+
+    assert "Jeton de sécurité invalide" in response.text
+    delete_client_mock.delete_instance.assert_not_called()
+
+
+def test_crm_route_rejects_missing_csrf_token_without_saving(monkeypatch):
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(slug="acme", statut="active")
+    client = TestClient(fleet_admin.app)
+
+    client.post("/instances/acme/crm", data={"contact_name": "Attaquant"})  # pas de csrf_token
+
+    row = db.get_instance("acme")
+    assert row["contact_name"] is None
+
+
+def test_create_route_rejects_missing_csrf_token_without_launching_provisioning(provision_mock, synchronous_background_thread):
+    """La création d'instance est l'action la plus sensible de la page (ressources Render
+    RÉELLEMENT facturées) — protégée par le même jeton que les autres, même si l'énoncé
+    initial ne citait que CRM/suspend/reactivate/delete."""
+    client = TestClient(fleet_admin.app)
+
+    client.post("/instances/create", data={
+        "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com",
+        "postgres_plan": "basic_256mb", "mistral_api_key": "test-mistral-key",
+    })  # pas de csrf_token
+
+    provision_mock.provision.assert_not_called()
+
+
+def test_csrf_rejection_returns_a_303_redirect_not_html_directly(monkeypatch):
+    """Même garde-fou POST-Redirect-GET que les autres échecs (confirmation invalide, etc.)."""
+    monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
+    _insert(slug="acme", statut="active")
+    client = TestClient(fleet_admin.app, follow_redirects=False)
+
+    response = client.post("/instances/acme/crm", data={"contact_name": "Attaquant"})
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/"
 
 
 # --- Partie CRM : fiche contact et notes commerciales par instance ---
@@ -600,7 +690,7 @@ def test_crm_route_persists_submitted_fields(monkeypatch):
     _insert(slug="acme", statut="active")
     client = TestClient(fleet_admin.app)
 
-    client.post("/instances/acme/crm", data={
+    _post(client,"/instances/acme/crm", data={
         "contact_name": "Marie Curie", "contact_email": "marie@acme.com",
         "contact_phone": "0102030405", "crm_notes": "Relance prevue",
     })
@@ -617,7 +707,7 @@ def test_crm_route_stores_blank_fields_as_null_not_empty_string(monkeypatch):
     _insert(slug="acme", statut="active", contact_name="Jean Dupont")
     client = TestClient(fleet_admin.app)
 
-    client.post("/instances/acme/crm", data={
+    _post(client,"/instances/acme/crm", data={
         "contact_name": "", "contact_email": "", "contact_phone": "", "crm_notes": "",
     })
 
@@ -633,7 +723,7 @@ def test_crm_route_does_not_require_slug_confirmation(monkeypatch):
     _insert(slug="acme", statut="active")
     client = TestClient(fleet_admin.app, follow_redirects=False)
 
-    response = client.post("/instances/acme/crm", data={"contact_name": "Jean Dupont"})
+    response = _post(client,"/instances/acme/crm", data={"contact_name": "Jean Dupont"})
 
     assert response.status_code == 303
     assert response.headers["location"] == "/"
@@ -646,7 +736,7 @@ def test_crm_route_returns_a_303_redirect_not_html_directly(monkeypatch):
     _insert(slug="acme", statut="active")
     client = TestClient(fleet_admin.app, follow_redirects=False)
 
-    response = client.post("/instances/acme/crm", data={"contact_name": "Jean Dupont"})
+    response = _post(client,"/instances/acme/crm", data={"contact_name": "Jean Dupont"})
     assert response.status_code == 303
     refresh = client.get(response.headers["location"])
     assert refresh.status_code == 200
@@ -658,7 +748,7 @@ def test_crm_route_on_unknown_slug_does_not_crash(monkeypatch):
     monkeypatch.setattr(render_client, "RENDER_API_KEY", None)
     client = TestClient(fleet_admin.app)
 
-    response = client.post("/instances/unknown-slug/crm", data={"contact_name": "Jean Dupont"})
+    response = _post(client,"/instances/unknown-slug/crm", data={"contact_name": "Jean Dupont"})
 
     assert response.status_code == 200  # après redirection suivie
     assert db.get_instance("unknown-slug") is None
@@ -679,7 +769,7 @@ def test_slug_pattern_accepts_valid_and_rejects_invalid_slugs():
 def test_create_route_rejects_invalid_slug_format_without_starting_a_job(provision_mock, synchronous_background_thread):
     client = TestClient(fleet_admin.app)
 
-    response = client.post("/instances/create", data={
+    response = _post(client,"/instances/create", data={
         "client_name": "Acme", "slug": "Not A Slug!", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb", "mistral_api_key": "test-mistral-key",
     })
 
@@ -691,7 +781,7 @@ def test_create_route_rejects_invalid_slug_format_without_starting_a_job(provisi
 def test_create_route_rejects_missing_required_fields(provision_mock, synchronous_background_thread):
     client = TestClient(fleet_admin.app)
 
-    response = client.post("/instances/create", data={
+    response = _post(client,"/instances/create", data={
         "client_name": "   ", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb", "mistral_api_key": "test-mistral-key",
     })
 
@@ -705,7 +795,7 @@ def test_create_route_rejects_slug_already_in_registry(provision_mock, synchrono
     _insert(slug="acme", statut="active")
     client = TestClient(fleet_admin.app)
 
-    response = client.post("/instances/create", data={
+    response = _post(client,"/instances/create", data={
         "client_name": "Acme Bis", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb", "mistral_api_key": "test-mistral-key",
     })
 
@@ -721,7 +811,7 @@ def test_create_route_calls_provision_with_the_right_arguments(provision_mock, s
     )
     client = TestClient(fleet_admin.app)
 
-    response = client.post("/instances/create", data={
+    response = _post(client,"/instances/create", data={
         "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_1gb", "mistral_api_key": "test-mistral-key",
     })
 
@@ -744,7 +834,7 @@ def test_create_route_passes_brevo_key_through_when_provided(provision_mock, syn
     provision_mock.provision.return_value = provision_client.ProvisionResult(slug="acme", status="active")
     client = TestClient(fleet_admin.app)
 
-    client.post("/instances/create", data={
+    _post(client,"/instances/create", data={
         "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_1gb",
         "mistral_api_key": "test-mistral-key", "brevo_api_key": "test-brevo-key",
     })
@@ -760,7 +850,7 @@ def test_create_route_rejects_missing_mistral_key_without_starting_a_job(provisi
     client est requise, comme le nom du client ou l'email admin."""
     client = TestClient(fleet_admin.app)
 
-    response = client.post("/instances/create", data={
+    response = _post(client,"/instances/create", data={
         "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb",
         "mistral_api_key": "   ",
     })
@@ -778,7 +868,7 @@ def test_create_job_reports_provision_failure_honestly_never_as_success(provisio
     )
     client = TestClient(fleet_admin.app)
 
-    response = client.post("/instances/create", data={
+    response = _post(client,"/instances/create", data={
         "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb", "mistral_api_key": "test-mistral-key",
     })
 
@@ -794,7 +884,7 @@ def test_create_job_survives_an_unexpected_exception_from_provision(provision_mo
     provision_mock.provision.side_effect = RuntimeError("boom inattendu")
     client = TestClient(fleet_admin.app)
 
-    response = client.post("/instances/create", data={
+    response = _post(client,"/instances/create", data={
         "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb", "mistral_api_key": "test-mistral-key",
     })
 
@@ -809,7 +899,7 @@ def test_create_job_never_exposes_vendor_key(provision_mock, synchronous_backgro
     )
     client = TestClient(fleet_admin.app)
 
-    response = client.post("/instances/create", data={
+    response = _post(client,"/instances/create", data={
         "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb", "mistral_api_key": "test-mistral-key",
     })
 
@@ -893,7 +983,7 @@ def test_suspend_route_returns_a_303_redirect_to_root_not_html_directly(render_m
     monkeypatch.setattr(fleet_admin.requests, "put", mock.Mock(return_value=mock.Mock(ok=True, json=lambda: {"status": "suspended"})))
     client = TestClient(fleet_admin.app, follow_redirects=False)
 
-    response = client.post("/instances/acme/suspend", data={"confirm_slug": "acme"})
+    response = _post(client,"/instances/acme/suspend", data={"confirm_slug": "acme"})
 
     assert response.status_code == 303
     assert response.headers["location"] == "/"
@@ -908,7 +998,7 @@ def test_delete_route_returns_a_303_redirect_to_root_not_html_directly(delete_cl
     delete_client_mock.delete_instance.return_value = delete_client.DeleteResult(slug="acme", status="deleted")
     client = TestClient(fleet_admin.app, follow_redirects=False)
 
-    response = client.post("/instances/acme/delete", data={"confirm_slug": "acme", "confirm_destruction": "yes"})
+    response = _post(client,"/instances/acme/delete", data={"confirm_slug": "acme", "confirm_destruction": "yes"})
 
     assert response.status_code == 303
     assert response.headers["location"] == "/"
@@ -923,7 +1013,7 @@ def test_create_route_returns_a_303_redirect_to_root_not_html_directly(provision
     provision_mock.provision.return_value = provision_client.ProvisionResult(slug="acme", status="active")
     client = TestClient(fleet_admin.app, follow_redirects=False)
 
-    response = client.post("/instances/create", data={
+    response = _post(client,"/instances/create", data={
         "client_name": "Acme Corp", "slug": "acme", "admin_email": "a@acme.com", "postgres_plan": "basic_256mb", "mistral_api_key": "test-mistral-key",
     })
 
@@ -944,7 +1034,7 @@ def test_flash_message_shown_once_then_cleared_on_next_refresh(delete_client_moc
     delete_client_mock.delete_instance.return_value = delete_client.DeleteResult(slug="acme", status="deleted")
     client = TestClient(fleet_admin.app)
 
-    after_action = client.post("/instances/acme/delete", data={"confirm_slug": "acme", "confirm_destruction": "yes"})
+    after_action = _post(client,"/instances/acme/delete", data={"confirm_slug": "acme", "confirm_destruction": "yes"})
     assert "action réussie" in after_action.text
 
     after_refresh = client.get("/")
@@ -963,6 +1053,6 @@ def test_suspend_reactivate_delete_routes_all_return_a_redirect_response(monkeyp
         ("/instances/unknown-slug/reactivate", {"confirm_slug": "unknown-slug"}),
         ("/instances/unknown-slug/delete", {"confirm_slug": "unknown-slug", "confirm_destruction": "yes"}),
     ]:
-        response = client.post(path, data=data)
+        response = _post(client,path, data=data)
         assert response.status_code == 303, f"{path} : attendu 303, reçu {response.status_code}"
         assert response.headers["location"] == "/"

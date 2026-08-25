@@ -30,6 +30,7 @@ source de vérité durable.
 import dataclasses
 import logging
 import re
+import secrets
 import sys
 import threading
 from datetime import datetime, timezone
@@ -53,6 +54,39 @@ TEMPLATES_DIR = Path(__file__).parent / "fleet_admin_templates"
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 app = FastAPI(title="SmartTicket — Gestion de flotte (local)")
+
+# Protection CSRF (audit sécurité 2026-08-25) : cette console n'a ni compte ni cookie de
+# session (mono-utilisateur, 127.0.0.1 uniquement) — pas de synchronizer token classique lié
+# à une session possible. Un jeton unique généré au DÉMARRAGE DU PROCESSUS, réinjecté dans
+# CHAQUE formulaire rendu et vérifié à CHAQUE POST, suffit à empêcher un site tiers ouvert
+# dans le même navigateur de déclencher une action (suspendre/supprimer une instance,
+# provisioning payant) à l'insu de l'opérateur : un attaquant ne peut pas deviner ce jeton.
+# Conséquence assumée : un onglet resté ouvert avant un redémarrage du serveur voit ses
+# formulaires rejetés une fois (message explicite, jamais un succès supposé) — il suffit de
+# recharger la page.
+_CSRF_TOKEN = secrets.token_urlsafe(32)
+
+
+def _csrf_token_valid(token: str | None) -> bool:
+    return secrets.compare_digest((token or "").encode(), _CSRF_TOKEN.encode())
+
+
+def _reject_invalid_csrf(slug: str = "") -> RedirectResponse:
+    _set_flash(action_result={
+        "slug": slug, "ok": False,
+        "message": "Jeton de sécurité invalide ou expiré (la page a peut-être été ouverte "
+                    "avant un redémarrage du serveur) — recharge la page et réessaie.",
+    })
+    return RedirectResponse("/", status_code=303)
+
+
+def _reject_invalid_csrf_for_creation() -> RedirectResponse:
+    _set_flash(creation_result={
+        "ok": False,
+        "message": "Jeton de sécurité invalide ou expiré (la page a peut-être été ouverte "
+                    "avant un redémarrage du serveur) — recharge la page et réessaie.",
+    })
+    return RedirectResponse("/", status_code=303)
 
 
 @dataclasses.dataclass
@@ -355,6 +389,7 @@ def _render_fleet_page(request: Request) -> HTMLResponse:
         "action_result": action_result, "creation_result": creation_result,
         "provision_jobs": jobs, "any_job_running": any(j["status"] == "running" for j in jobs),
         "postgres_plans": _postgres_plans_with_total_cost(), "default_postgres_plan": render.DEFAULT_POSTGRES_PLAN,
+        "csrf_token": _CSRF_TOKEN,
     })
 
 
@@ -396,13 +431,17 @@ def _handle_subscription_action(slug: str, *, target_status: str, confirm_slug: 
 
 
 @app.post("/instances/{slug}/suspend")
-def suspend_instance(slug: str, confirm_slug: str = Form(...)) -> RedirectResponse:
+def suspend_instance(slug: str, confirm_slug: str = Form(...), csrf_token: str = Form("")) -> RedirectResponse:
+    if not _csrf_token_valid(csrf_token):
+        return _reject_invalid_csrf(slug)
     _handle_subscription_action(slug, target_status="suspended", confirm_slug=confirm_slug)
     return RedirectResponse("/", status_code=303)
 
 
 @app.post("/instances/{slug}/reactivate")
-def reactivate_instance(slug: str, confirm_slug: str = Form(...)) -> RedirectResponse:
+def reactivate_instance(slug: str, confirm_slug: str = Form(...), csrf_token: str = Form("")) -> RedirectResponse:
+    if not _csrf_token_valid(csrf_token):
+        return _reject_invalid_csrf(slug)
     _handle_subscription_action(slug, target_status="active", confirm_slug=confirm_slug)
     return RedirectResponse("/", status_code=303)
 
@@ -412,11 +451,14 @@ def update_crm_route(
     slug: str,
     contact_name: str = Form(""), contact_email: str = Form(""),
     contact_phone: str = Form(""), crm_notes: str = Form(""),
+    csrf_token: str = Form(""),
 ) -> RedirectResponse:
     """Fiche contact/notes commerciales — pas de confirmation par slug (contrairement à
     suspendre/supprimer) : aucun impact sur les utilisateurs finaux du client, juste du suivi
     interne pour le vendeur. Champs vidés dans le formulaire -> NULL en base plutôt que chaîne
     vide, cohérent avec le schéma nullable (cf. db.py)."""
+    if not _csrf_token_valid(csrf_token):
+        return _reject_invalid_csrf(slug)
     db.update_instance(
         slug,
         contact_name=contact_name.strip() or None,
@@ -456,7 +498,10 @@ def _handle_delete_action(slug: str, *, confirm_slug: str, confirm_destruction: 
 @app.post("/instances/{slug}/delete")
 def delete_instance_route(
     slug: str, confirm_slug: str = Form(...), confirm_destruction: str | None = Form(None),
+    csrf_token: str = Form(""),
 ) -> RedirectResponse:
+    if not _csrf_token_valid(csrf_token):
+        return _reject_invalid_csrf(slug)
     _handle_delete_action(slug, confirm_slug=confirm_slug, confirm_destruction=confirm_destruction)
     return RedirectResponse("/", status_code=303)
 
@@ -466,6 +511,7 @@ def create_instance_route(
     client_name: str = Form(...), slug: str = Form(...),
     admin_email: str = Form(...), postgres_plan: str = Form(render.DEFAULT_POSTGRES_PLAN),
     mistral_api_key: str = Form(...), brevo_api_key: str = Form(""),
+    csrf_token: str = Form(""),
 ) -> RedirectResponse:
     """Lance provision() en tâche de fond (cf. docstring du module) et répond IMMÉDIATEMENT
     par une redirection — jamais d'attente synchrone des ~5 minutes que prend un
@@ -476,7 +522,13 @@ def create_instance_route(
 
     mistral_api_key/brevo_api_key : clés DÉDIÉES à ce client (2026-08-19, cf. ROADMAP.md
     bloquant sécurité/RGPD n°3), créées manuellement dans les consoles Mistral/Brevo avant de
-    remplir ce formulaire — plus aucun secret partagé lu depuis l'environnement du poste."""
+    remplir ce formulaire — plus aucun secret partagé lu depuis l'environnement du poste.
+
+    Protégée par le même jeton CSRF que les autres actions (cf. _CSRF_TOKEN) — c'est même
+    l'action la plus sensible de la page : elle crée des ressources Render RÉELLEMENT
+    FACTURÉES, contrairement à la fiche CRM."""
+    if not _csrf_token_valid(csrf_token):
+        return _reject_invalid_csrf_for_creation()
     client_name = client_name.strip()
     slug = slug.strip().lower()
     admin_email = admin_email.strip()
