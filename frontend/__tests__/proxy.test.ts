@@ -17,7 +17,7 @@ describe("proxy", () => {
   // (jamais redirigée vers /login), mais peut être redirigée vers /chat pour une raison
   // ORTHOGONALE (mode de déploiement instance vs vitrine, cf. describe dédié plus bas) —
   // les deux ne doivent pas être confondues dans une même assertion générique.
-  it.each(["/login", "/sign-up", "/forgot-password", "/verify-email", "/reset-password", "/setup", "/chat", "/mentions-legales", "/politique-confidentialite", "/cgv"])(
+  it.each(["/login", "/sign-up", "/forgot-password", "/verify-email", "/reset-password", "/setup", "/chat"])(
     "allows unauthenticated access to the public path %s",
     (path) => {
       const response = proxy(makeRequest(path, false));

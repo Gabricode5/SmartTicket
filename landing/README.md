@@ -4,9 +4,12 @@ Extrait autonome de `frontend/app/page.tsx` : uniquement la landing marketing,
 exportée en HTML/CSS/JS statique (`next build` avec `output: "export"`), sans
 dépendance au backend ni au reste de l'app (auth, chat, dashboard).
 
-Les liens "Se connecter", "Essayer gratuitement", "Discuter maintenant" et les
-pages légales pointent vers l'app principale via `NEXT_PUBLIC_APP_URL`
-(défaut : `https://smartticket-frontend.onrender.com`).
+Les liens "Se connecter", "Essayer gratuitement", "Discuter maintenant" pointent
+vers l'app principale via `NEXT_PUBLIC_APP_URL` (défaut :
+`https://smartticket-frontend.onrender.com`). Les pages légales
+(`/mentions-legales`, `/politique-confidentialite`, `/cgv`) sont en revanche
+servies localement par cette landing (identifient l'entité Tiqia elle-même,
+pas une instance client — retirées de `frontend/` le 2026-08-25).
 
 ## Dev local
 

@@ -35,9 +35,6 @@ export function proxy(request: NextRequest) {
         pathname === "/reset-password" ||
         pathname === "/setup" ||
         pathname === "/chat" ||
-        pathname === "/mentions-legales" ||
-        pathname === "/politique-confidentialite" ||
-        pathname === "/cgv" ||
         pathname.startsWith("/_next") ||
         pathname.startsWith("/static")
 
