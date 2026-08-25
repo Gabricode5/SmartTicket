@@ -7,6 +7,19 @@
 > et une relecture par un avocat spécialisé RGPD/SaaS est recommandée avant signature avec
 > un premier client réel. Ce document est annexé au contrat commercial (CGV) conclu avec
 > chaque client — ce n'est pas une page publique du site.
+>
+> **Dépendance non tranchée (2026-08-25).** La qualification de Tiqia comme sous-traitant
+> au sens de l'article 28 du RGPD, ainsi que toute la répartition des obligations décrite
+> ci-dessous, reposent sur une hypothèse d'architecture qui n'est PAS encore arbitrée :
+> que Tiqia héberge lui-même la base de données du Client (hypothèse retenue dans la
+> rédaction actuelle) plutôt que le Client n'apporte sa propre base de données externe. Si
+> cette seconde option était retenue, la qualification RGPD de Tiqia (sous-traitant,
+> coresponsable de traitement, voire simple éditeur logiciel selon le degré d'accès réel
+> aux données) — et donc le périmètre entier de ce document — devrait être revue en
+> profondeur. Ce document ne doit donc pas être considéré comme stabilisé tant que ce choix
+> d'architecture n'est pas arrêté ; il n'a volontairement pas été retouché sur le fond à
+> l'occasion de la dernière passe de rédaction des pages légales publiques, précisément pour
+> cette raison.
 
 **Entre :**
 

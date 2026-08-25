@@ -75,6 +75,9 @@ export default function PolitiqueConfidentialiteContent() {
                 <p>
                     {p.retentionBody}
                 </p>
+                <p>
+                    {p.retentionBillingBody}
+                </p>
             </section>
 
             <section className="space-y-2">
@@ -100,6 +103,7 @@ export default function PolitiqueConfidentialiteContent() {
                 <ul className="list-disc list-inside space-y-1">
                     <li><strong>{p.rightAccess}</strong> — {p.rightAccessDesc}</li>
                     <li><strong>{p.rightRectification}</strong> — {p.rightRectificationDesc}</li>
+                    <li><strong>{p.rightLimitation}</strong> — {p.rightLimitationDesc}</li>
                     <li><strong>{p.rightPortability}</strong> — {p.rightPortabilityDesc}</li>
                     <li><strong>{p.rightErasure}</strong> — {p.rightErasureDesc}</li>
                     <li><strong>{p.rightObjection}</strong> — {p.rightObjectionDesc}</li>

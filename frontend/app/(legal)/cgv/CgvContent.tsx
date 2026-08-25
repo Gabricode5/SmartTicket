@@ -31,6 +31,9 @@ export default function CgvContent() {
                 <p>
                     {c.article3Body}
                 </p>
+                <p>
+                    {c.article3PenaltyBody}
+                </p>
             </section>
 
             <section className="space-y-2">
@@ -45,21 +48,27 @@ export default function CgvContent() {
                 <p>
                     {c.article5Body}
                 </p>
+                <p className="text-amber-700 font-medium">
+                    {c.article5CapFlag}
+                </p>
+                <p>
+                    {c.article5CapBody}
+                </p>
             </section>
 
             <section className="space-y-2">
                 <h2 className="text-lg font-semibold text-slate-900">{c.article6Title}</h2>
                 <p>
-                    {c.article6BodyPrefix}{" "}
-                    <a href="/politique-confidentialite" className="text-indigo-600 hover:underline">{c.article6BodyLink}</a>{" "}
-                    {c.article6BodySuffix}
+                    {c.article6Body}
                 </p>
             </section>
 
             <section className="space-y-2">
                 <h2 className="text-lg font-semibold text-slate-900">{c.article7Title}</h2>
                 <p>
-                    {c.article7Body}
+                    {c.article7BodyPrefix}{" "}
+                    <a href="/politique-confidentialite" className="text-indigo-600 hover:underline">{c.article7BodyLink}</a>{" "}
+                    {c.article7BodySuffix}
                 </p>
             </section>
 
@@ -67,6 +76,20 @@ export default function CgvContent() {
                 <h2 className="text-lg font-semibold text-slate-900">{c.article8Title}</h2>
                 <p>
                     {c.article8Body}
+                </p>
+            </section>
+
+            <section className="space-y-2">
+                <h2 className="text-lg font-semibold text-slate-900">{c.article9Title}</h2>
+                <p>
+                    {c.article9Body}
+                </p>
+            </section>
+
+            <section className="space-y-2">
+                <h2 className="text-lg font-semibold text-slate-900">{c.article10Title}</h2>
+                <p>
+                    {c.article10Body}
                 </p>
             </section>
 
