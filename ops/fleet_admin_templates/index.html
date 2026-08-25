@@ -43,7 +43,8 @@
     details summary { cursor: pointer; color: #0d6efd; font-size: 0.85rem; }
     details form { margin-top: 0.4rem; padding: 0.5rem; background: #f8f9fa; color: #212529; border-radius: 4px; }
     details form p { margin: 0 0 0.4rem; font-size: 0.8rem; }
-    details input { font-size: 0.85rem; padding: 0.2rem 0.4rem; }
+    details form label { display: block; margin-top: 0.4rem; font-size: 0.8rem; }
+    details input, details textarea { font-size: 0.85rem; padding: 0.2rem 0.4rem; width: 100%; max-width: 240px; font-family: inherit; }
     details button { font-size: 0.8rem; margin-left: 0.3rem; }
     details.danger-action summary { color: #b02a37; font-weight: 600; }
     .billing-reminder { color: #997404; font-size: 0.78rem; }
@@ -148,7 +149,7 @@
     <table>
         <thead>
             <tr>
-                <th>Client</th><th>Slug</th><th>Statut</th><th>Plan</th><th>Créée le</th>
+                <th>Client</th><th>Contact</th><th>Slug</th><th>Statut</th><th>Plan</th><th>Créée le</th>
                 <th>Santé (GET /)</th><th>Render</th><th>Abonnement</th><th>Actions</th><th>Liens</th>
             </tr>
         </thead>
@@ -156,6 +157,27 @@
         {% for i in instances %}
             <tr>
                 <td>{{ i.client_name }}</td>
+                <td>
+                    {{ i.contact_name or "—" }}
+                    <details>
+                        <summary>Fiche CRM</summary>
+                        <form method="post" action="/instances/{{ i.slug }}/crm">
+                            <label>Nom du contact
+                                <input type="text" name="contact_name" value="{{ i.contact_name or '' }}" autocomplete="off">
+                            </label>
+                            <label>Email
+                                <input type="email" name="contact_email" value="{{ i.contact_email or '' }}" autocomplete="off">
+                            </label>
+                            <label>Téléphone
+                                <input type="tel" name="contact_phone" value="{{ i.contact_phone or '' }}" autocomplete="off">
+                            </label>
+                            <label>Notes
+                                <textarea name="crm_notes" rows="3">{{ i.crm_notes or '' }}</textarea>
+                            </label>
+                            <button type="submit">Enregistrer</button>
+                        </form>
+                    </details>
+                </td>
                 <td>{{ i.slug }}</td>
                 <td><span class="badge badge-{{ i.statut }}">{{ i.statut }}</span></td>
                 <td>{{ i.plan or "—" }}</td>
@@ -232,7 +254,7 @@
                 </td>
             </tr>
         {% else %}
-            <tr><td colspan="10">Aucune instance dans instances.db.</td></tr>
+            <tr><td colspan="11">Aucune instance dans instances.db.</td></tr>
         {% endfor %}
         </tbody>
     </table>
