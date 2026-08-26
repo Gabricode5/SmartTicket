@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import {
@@ -67,6 +68,13 @@ export default function MonitoringPage() {
     const router = useRouter()
     const { messages: t, locale } = useLocale()
     const timeLocale = locale === "fr" ? "fr-FR" : "en-US"
+    // Recharts prend des couleurs littérales (pas de classes Tailwind ni de var() CSS fiables
+    // sur tous les navigateurs pour ces props SVG) — palette dupliquée ici pour les deux
+    // thèmes plutôt que codée en dur en clair uniquement (cf. audit couleurs 2026-08-26).
+    const { resolvedTheme } = useTheme()
+    const chartColors = resolvedTheme === "dark"
+        ? { grid: "#2A3153", axis: "#AAB2CC", tooltipBg: "#1B2138", tooltipBorder: "#2A3153", line: "#3D6BF0" }
+        : { grid: "#E2E8F0", axis: "#64748B", tooltipBg: "#FFFFFF", tooltipBorder: "#E2E8F0", line: "#1E4DE6" }
     const PERIODS = [
         { label: t.monitoring.periods.d7, days: 7 },
         { label: t.monitoring.periods.d30, days: 30 },
@@ -182,11 +190,11 @@ export default function MonitoringPage() {
             <div className="p-8 pb-4 bg-background border-b flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <div className="flex items-center gap-2 mb-1">
-                        <Activity className="h-5 w-5 text-indigo-500" />
+                        <Activity className="h-5 w-5 text-brand" />
                         <h1 className="text-2xl font-bold tracking-tight">{t.monitoring.title}</h1>
                         <span className="text-xs text-muted-foreground bg-muted px-2 py-0.5 rounded-full">Mistral AI</span>
                         {metrics?.model_name && (
-                            <span className="text-xs font-mono bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded-full">
+                            <span className="text-xs font-mono bg-brand/10 text-brand border border-brand/30 px-2 py-0.5 rounded-full">
                                 {metrics.model_name}
                             </span>
                         )}
@@ -254,12 +262,12 @@ export default function MonitoringPage() {
                     <KpiCard title={t.monitoring.totalCalls}
                         value={isLoading ? "…" : (metrics?.total_calls?.toLocaleString() ?? "0")}
                         trend={t.monitoring.overDays(days)} trendUp={true}
-                        icon={<Activity className="h-4 w-4 text-indigo-500" />} />
+                        icon={<Activity className="h-4 w-4 text-brand" />} />
                     <KpiCard title={t.monitoring.avgLatency}
                         value={isLoading ? "…" : fmtLatency(metrics?.avg_latency_ms ?? null)}
                         trend={metrics?.total_calls ? t.monitoring.overCalls(metrics.total_calls) : t.monitoring.noData}
                         trendUp={metrics?.avg_latency_ms == null || metrics.avg_latency_ms < 5000}
-                        icon={<Clock className="h-4 w-4 text-blue-500" />}
+                        icon={<Clock className="h-4 w-4 text-brand" />}
                         prev={metrics?.prev_latency_ms ?? null}
                         curr={metrics?.avg_latency_ms ?? null}
                         vsPreviousLabel={t.monitoring.vsPrevious}
@@ -311,15 +319,15 @@ export default function MonitoringPage() {
                                 <div className="h-[260px] w-full">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <LineChart data={metrics.latency_trend} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
-                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                                            <XAxis dataKey="name" stroke="#64748B" fontSize={12} tickLine={false} axisLine={false} />
-                                            <YAxis stroke="#64748B" fontSize={12} tickLine={false} axisLine={false} tickFormatter={v => `${v}ms`} />
+                                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartColors.grid} />
+                                            <XAxis dataKey="name" stroke={chartColors.axis} fontSize={12} tickLine={false} axisLine={false} />
+                                            <YAxis stroke={chartColors.axis} fontSize={12} tickLine={false} axisLine={false} tickFormatter={v => `${v}ms`} />
                                             <Tooltip
-                                                contentStyle={{ backgroundColor: "#fff", borderRadius: "8px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
+                                                contentStyle={{ backgroundColor: chartColors.tooltipBg, borderRadius: "8px", border: `1px solid ${chartColors.tooltipBorder}`, boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
                                                 formatter={(value: number | undefined) => [value != null ? `${value}ms` : "–", t.monitoring.latencyTooltipLabel]}
                                             />
                                             <Legend wrapperStyle={{ paddingTop: "12px" }} iconType="circle" />
-                                            <Line type="monotone" dataKey="latence_ms" name={`${t.monitoring.latencyTooltipLabel} (ms)`} stroke="#4f46e5" strokeWidth={2} dot={{ r: 3, fill: "#4f46e5" }} activeDot={{ r: 5 }} />
+                                            <Line type="monotone" dataKey="latence_ms" name={`${t.monitoring.latencyTooltipLabel} (ms)`} stroke={chartColors.line} strokeWidth={2} dot={{ r: 3, fill: chartColors.line }} activeDot={{ r: 5 }} />
                                             {metrics?.kb_events?.map((e, i) => (
                                                 <ReferenceLine key={i} x={e.date} stroke="#10b981" strokeDasharray="4 2"
                                                     label={{ value: "KB+", position: "insideTopRight", fontSize: 10, fill: "#10b981" }} />
@@ -677,7 +685,7 @@ function RecommendationsCard({ metrics, t }: { metrics: AiMetrics; t: Messages }
                                 <p className="text-sm font-medium">{r.title}</p>
                                 <p className="text-xs text-muted-foreground mt-0.5">{r.detail}</p>
                                 {r.action && (
-                                    <a href={r.action.href} className="text-xs text-indigo-600 hover:text-indigo-800 font-medium mt-1 inline-block">
+                                    <a href={r.action.href} className="text-xs text-brand hover:text-brand font-medium mt-1 inline-block">
                                         {r.action.label}
                                     </a>
                                 )}
@@ -740,7 +748,7 @@ function ImprovementHistoryCard({ metrics, days, t }: { metrics: AiMetrics; days
         <Card>
             <CardHeader className="pb-3">
                 <div className="flex items-center gap-2">
-                    <Activity className="h-4 w-4 text-indigo-500" />
+                    <Activity className="h-4 w-4 text-brand" />
                     <CardTitle className="text-base">{t.monitoring.historyTitle}</CardTitle>
                 </div>
                 <CardDescription>{t.monitoring.historySubtitle}</CardDescription>

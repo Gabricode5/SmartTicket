@@ -63,11 +63,11 @@ function VerifyEmailContent() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-white flex flex-col">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-brand/10 to-white flex flex-col">
             <header className="p-6 flex items-center justify-between">
                 <Link
                     href="/"
-                    className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 transition-colors group"
+                    className="flex items-center gap-2 text-sm text-slate-500 hover:text-brand transition-colors group"
                 >
                     <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
                     {t.login.backToHome}
@@ -79,10 +79,10 @@ function VerifyEmailContent() {
 
             <div className="flex-1 flex items-center justify-center px-4 py-12">
                 <div className="w-full max-w-md">
-                    <div className="bg-white rounded-2xl shadow-xl shadow-indigo-100/50 border border-slate-100 p-8 text-center">
+                    <div className="bg-white rounded-2xl shadow-xl shadow-brand/10 border border-slate-100 p-8 text-center">
                         {status === "loading" && (
                             <>
-                                <Loader2 className="h-12 w-12 text-indigo-600 mx-auto mb-4 animate-spin" />
+                                <Loader2 className="h-12 w-12 text-brand mx-auto mb-4 animate-spin" />
                                 <h1 className="text-xl font-bold text-slate-900">{t.verifyEmail.verifying}</h1>
                             </>
                         )}
@@ -96,7 +96,7 @@ function VerifyEmailContent() {
                                 </p>
                                 <Link
                                     href="/login"
-                                    className="inline-block w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-colors"
+                                    className="inline-block w-full py-2.5 px-4 bg-brand hover:brightness-90 text-white font-semibold text-sm rounded-xl transition-colors"
                                 >
                                     {t.verifyEmail.login}
                                 </Link>
@@ -125,12 +125,12 @@ function VerifyEmailContent() {
                                             value={resendEmail}
                                             onChange={(e) => setResendEmail(e.target.value)}
                                             placeholder="vous@exemple.com"
-                                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand focus:bg-white transition-all"
                                         />
                                         <button
                                             type="submit"
                                             disabled={isResending}
-                                            className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white font-semibold text-sm rounded-xl transition-colors"
+                                            className="w-full py-2.5 px-4 bg-brand hover:brightness-90 disabled:opacity-60 text-white font-semibold text-sm rounded-xl transition-colors"
                                         >
                                             {isResending ? t.verifyEmail.resending : t.verifyEmail.resendLink}
                                         </button>

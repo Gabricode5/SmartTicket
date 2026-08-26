@@ -54,7 +54,7 @@ function makeId(): string {
 // cette plateforme multi-tenant). Alignées sur l'exemple déjà utilisé sur la landing page.
 const SUGGESTION_ICONS = [
     <Smile key="smile" className="h-4 w-4 text-amber-500" />,
-    <FileText key="file" className="h-4 w-4 text-blue-500" />,
+    <FileText key="file" className="h-4 w-4 text-brand" />,
     <MessageCircle key="chat" className="h-4 w-4 text-emerald-500" />,
     <Zap key="zap" className="h-4 w-4 text-purple-500" />,
 ]
@@ -64,7 +64,7 @@ const TRANSFER_REASON_COLORS: Record<string, string> = {
     technique: "bg-sky-100 text-sky-700 border-sky-200 hover:bg-sky-200",
     complexe: "bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200",
     sensible: "bg-red-100 text-red-700 border-red-200 hover:bg-red-200",
-    autre: "bg-violet-100 text-violet-700 border-violet-200 hover:bg-violet-200",
+    autre: "bg-brand/15 text-brand border-brand/30 hover:bg-brand/25",
 }
 
 export default function AiAssistantPage() {
@@ -349,7 +349,7 @@ export default function AiAssistantPage() {
                 {messages.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full max-w-2xl mx-auto space-y-10">
                         <div className="text-center space-y-4">
-                            <div className="bg-indigo-600 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-xl shadow-indigo-100 mb-6">
+                            <div className="bg-brand w-16 h-16 rounded-2xl flex items-center justify-center mx-auto shadow-xl shadow-brand/15 mb-6">
                                 <Bot className="h-9 w-9 text-white" />
                             </div>
                             <h1 className="text-3xl font-black text-foreground tracking-tight">{t.chat.heroTitle}</h1>
@@ -366,12 +366,12 @@ export default function AiAssistantPage() {
                                 <Card
                                     key={i}
                                     onClick={() => { if (!isClosed) void handleSend(undefined, s.prompt) }}
-                                    className={`p-4 border-2 transition-all group bg-card ${isClosed ? "border-border opacity-50 cursor-not-allowed" : "border-border hover:border-indigo-500 hover:shadow-lg cursor-pointer"}`}
+                                    className={`p-4 border-2 transition-all group bg-card ${isClosed ? "border-border opacity-50 cursor-not-allowed" : "border-border hover:border-brand hover:shadow-lg cursor-pointer"}`}
                                 >
                                     <div className="flex items-start gap-4">
-                                        <div className="p-3 rounded-xl bg-muted group-hover:bg-indigo-50 transition-colors">{s.icon}</div>
+                                        <div className="p-3 rounded-xl bg-muted group-hover:bg-brand/10 transition-colors">{s.icon}</div>
                                         <div>
-                                            <div className="font-bold text-sm text-foreground group-hover:text-indigo-600 transition-colors">{s.title}</div>
+                                            <div className="font-bold text-sm text-foreground group-hover:text-brand transition-colors">{s.title}</div>
                                             <div className="text-[11px] text-muted-foreground">{s.desc}</div>
                                         </div>
                                     </div>
@@ -385,7 +385,7 @@ export default function AiAssistantPage() {
                             <div key={m.id} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                                 <div className={`max-w-[80%] flex flex-col ${m.role === "user" ? "items-end" : "items-start"}`}>
                                     <div className={`rounded-2xl px-5 py-3 text-sm shadow-sm ${m.role === "user"
-                                            ? "bg-indigo-600 text-white"
+                                            ? "bg-brand text-white"
                                             : m.role === "sav"
                                                 ? "bg-emerald-600 text-white"
                                                 : "bg-card border-2 border-border text-foreground"
@@ -489,7 +489,7 @@ export default function AiAssistantPage() {
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <div className="flex items-center gap-3 bg-muted px-3 py-1.5 rounded-full border border-border">
-                                    <Switch checked={aiEnabled} onCheckedChange={setAiEnabled} disabled={isClosed || isTransferred} className="data-[state=checked]:bg-indigo-600" />
+                                    <Switch checked={aiEnabled} onCheckedChange={setAiEnabled} disabled={isClosed || isTransferred} className="data-[state=checked]:bg-brand" />
                                     <span className="text-[11px] font-bold text-muted-foreground uppercase">{t.chat.aiActiveLabel}</span>
                                 </div>
                                 {!isClosed && !isTransferred && (
@@ -502,7 +502,7 @@ export default function AiAssistantPage() {
                                     </button>
                                 )}
                             </div>
-                            <Badge variant="outline" className="text-indigo-600 border-indigo-100 gap-1 text-[10px] py-1">
+                            <Badge variant="outline" className="text-brand border-brand/20 gap-1 text-[10px] py-1">
                                 <Sparkles className="h-3 w-3" /> {t.chat.encryptionActive}
                             </Badge>
                         </div>
@@ -523,10 +523,10 @@ export default function AiAssistantPage() {
                                             ? t.chat.placeholderTransferred
                                             : t.chat.placeholderActive
                                 }
-                                className="h-14 pl-6 pr-24 rounded-2xl border-2 border-border focus-visible:ring-indigo-500 bg-muted/30 transition-all text-base"
+                                className="h-14 pl-6 pr-24 rounded-2xl border-2 border-border focus-visible:ring-brand bg-muted/30 transition-all text-base"
                             />
                             <div className="absolute right-2 top-2 flex items-center gap-1">
-                                <Button type="submit" disabled={isClosed || isSending || !input.trim()} size="sm" className="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all">
+                                <Button type="submit" disabled={isClosed || isSending || !input.trim()} size="sm" className="h-10 px-4 rounded-xl bg-brand hover:brightness-90 shadow-lg shadow-brand/15 transition-all">
                                     <Send className="h-4 w-4 mr-2" /> {isSending ? t.chat.sending : t.chat.sendButton}
                                 </Button>
                             </div>

@@ -151,7 +151,7 @@ export default function SavDashboard() {
                                         className={`w-full text-left px-4 py-3 transition-colors border-b border-border ${selectedSession?.id === s.id ? "bg-emerald-50/70 border-l-2 border-l-emerald-500" : "hover:bg-muted border-l-2 border-l-transparent"}`}
                                     >
                                         <div className="flex items-center gap-3">
-                                            <div className="w-9 h-9 rounded-full bg-indigo-50 flex items-center justify-center flex-shrink-0 text-xs font-bold text-indigo-600 border-2 border-indigo-100">
+                                            <div className="w-9 h-9 rounded-full bg-brand/10 flex items-center justify-center flex-shrink-0 text-xs font-bold text-brand border-2 border-brand/20">
                                                 {s.username.charAt(0).toUpperCase()}
                                             </div>
                                             <div className="min-w-0 flex-1">
@@ -180,7 +180,7 @@ export default function SavDashboard() {
                 <header className="h-16 border-b bg-card flex items-center justify-between px-6 shrink-0 shadow-sm">
                     {selectedSession ? (
                         <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-indigo-50 flex items-center justify-center text-sm font-bold text-indigo-600 border-2 border-indigo-100">
+                            <div className="w-10 h-10 rounded-full bg-brand/10 flex items-center justify-center text-sm font-bold text-brand border-2 border-brand/20">
                                 {selectedSession.username.charAt(0).toUpperCase()}
                             </div>
                             <div>
@@ -210,7 +210,7 @@ export default function SavDashboard() {
                             <button
                                 onClick={() => void handleResolve()}
                                 disabled={isResolving}
-                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-colors text-[11px] font-bold uppercase disabled:opacity-50"
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-brand/30 bg-brand/10 text-brand hover:bg-brand/15 transition-colors text-[11px] font-bold uppercase disabled:opacity-50"
                             >
                                 <Bot className="h-3.5 w-3.5" />
                                 {isResolving ? t.sav.resolving : t.sav.resolveToAi}
@@ -252,7 +252,7 @@ export default function SavDashboard() {
                                             m.role === "sav"
                                                 ? "bg-emerald-600 text-white"
                                                 : m.role === "user"
-                                                ? "bg-indigo-600 text-white"
+                                                ? "bg-brand text-white"
                                                 : "bg-card border-2 border-border text-foreground"
                                         }`}>
                                             {m.content}

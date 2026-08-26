@@ -110,7 +110,7 @@ export default function PolitiqueConfidentialiteContent() {
                 </ul>
                 <p>
                     {p.exerciseRightsPrefix}
-                    <a href="https://www.cnil.fr" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">cnil.fr</a>).
+                    <a href="https://www.cnil.fr" target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">cnil.fr</a>).
                 </p>
             </section>
         </>

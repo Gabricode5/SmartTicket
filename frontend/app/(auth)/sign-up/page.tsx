@@ -75,13 +75,13 @@ export default function SignUpPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-white flex flex-col">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-brand/10 to-white flex flex-col">
 
             {/* Header */}
             <header className="p-6 flex items-center justify-between">
                 <Link
                     href="/"
-                    className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 transition-colors group"
+                    className="flex items-center gap-2 text-sm text-slate-500 hover:text-brand transition-colors group"
                 >
                     <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
                     {t.login.backToHome}
@@ -94,7 +94,7 @@ export default function SignUpPage() {
             {/* Form */}
             <div className="flex-1 flex items-center justify-center px-4 py-8">
                 <div className="w-full max-w-md">
-                    <div className="bg-white rounded-2xl shadow-xl shadow-indigo-100/50 border border-slate-100 p-8">
+                    <div className="bg-white rounded-2xl shadow-xl shadow-brand/10 border border-slate-100 p-8">
                     {registeredEmail ? (
                         <div className="text-center">
                             <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-100 mb-4">
@@ -106,7 +106,7 @@ export default function SignUpPage() {
                             </p>
                             <Link
                                 href="/login"
-                                className="mt-6 inline-block w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-colors"
+                                className="mt-6 inline-block w-full py-2.5 px-4 bg-brand hover:brightness-90 text-white font-semibold text-sm rounded-xl transition-colors"
                             >
                                 {t.signUp.backToLogin}
                             </Link>
@@ -137,14 +137,14 @@ export default function SignUpPage() {
                                     <label htmlFor="prenom" className="block text-sm font-medium text-slate-700">{t.signUp.firstNameLabel}</label>
                                     <input
                                         id="prenom" name="prenom" placeholder="Jean" required
-                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand focus:bg-white transition-all"
                                     />
                                 </div>
                                 <div className="space-y-1.5">
                                     <label htmlFor="nom" className="block text-sm font-medium text-slate-700">{t.signUp.lastNameLabel}</label>
                                     <input
                                         id="nom" name="nom" placeholder="Dupont" required
-                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand focus:bg-white transition-all"
                                     />
                                 </div>
                             </div>
@@ -154,7 +154,7 @@ export default function SignUpPage() {
                                 <label htmlFor="username" className="block text-sm font-medium text-slate-700">{t.signUp.usernameLabel}</label>
                                 <input
                                     id="username" name="username" placeholder="jean_dupont" required
-                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand focus:bg-white transition-all"
                                 />
                             </div>
 
@@ -163,7 +163,7 @@ export default function SignUpPage() {
                                 <label htmlFor="email" className="block text-sm font-medium text-slate-700">{t.signUp.emailLabel}</label>
                                 <input
                                     id="email" name="email" type="email" placeholder="vous@exemple.com" required
-                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand focus:bg-white transition-all"
                                 />
                             </div>
 
@@ -177,7 +177,7 @@ export default function SignUpPage() {
                                         value={password}
                                         onChange={(e) => setPassword(e.target.value)}
                                         required
-                                        className="w-full px-4 py-2.5 pr-11 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                        className="w-full px-4 py-2.5 pr-11 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand focus:bg-white transition-all"
                                     />
                                     <button type="button" onClick={() => setShowPassword(v => !v)} tabIndex={-1}
                                         className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
@@ -209,7 +209,7 @@ export default function SignUpPage() {
                                         className={`w-full px-4 py-2.5 pr-11 rounded-xl border bg-slate-50 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:bg-white transition-all ${
                                             !passwordsMatch
                                                 ? "border-red-300 focus:ring-red-500/30 focus:border-red-400"
-                                                : "border-slate-200 focus:ring-indigo-500/30 focus:border-indigo-400"
+                                                : "border-slate-200 focus:ring-brand/30 focus:border-brand"
                                         }`}
                                     />
                                     <button type="button" onClick={() => setShowConfirm(v => !v)} tabIndex={-1}
@@ -228,7 +228,7 @@ export default function SignUpPage() {
                                     id="rgpd" type="checkbox"
                                     checked={rgpdAccepted}
                                     onChange={(e) => setRgpdAccepted(e.target.checked)}
-                                    className="mt-0.5 h-4 w-4 cursor-pointer accent-indigo-600 rounded"
+                                    className="mt-0.5 h-4 w-4 cursor-pointer accent-brand rounded"
                                 />
                                 <label htmlFor="rgpd" className="text-xs text-slate-500 leading-relaxed cursor-pointer">
                                     {t.signUp.rgpdLabelPrefix} {t.signUp.rgpdLink}.
@@ -239,7 +239,7 @@ export default function SignUpPage() {
                             <button
                                 type="submit"
                                 disabled={!canSubmit || isLoading}
-                                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-2"
+                                className="w-full py-2.5 px-4 bg-brand hover:brightness-90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-brand/50 focus:ring-offset-2"
                             >
                                 {isLoading ? (
                                     <span className="flex items-center justify-center gap-2">
@@ -258,7 +258,7 @@ export default function SignUpPage() {
 
                         <p className="text-center text-sm text-slate-500">
                             {t.signUp.alreadyHaveAccount}{" "}
-                            <Link href="/login" className="text-indigo-600 font-medium hover:text-indigo-700 hover:underline">
+                            <Link href="/login" className="text-brand font-medium hover:brightness-90 hover:underline">
                                 {t.signUp.login}
                             </Link>
                         </p>

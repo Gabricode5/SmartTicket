@@ -418,7 +418,7 @@ export function AppSidebar() {
                         <p className="text-sm font-semibold leading-none truncate text-sidebar-foreground flex items-center gap-2">
                             {user.username}
                             {user.role === "admin" && <span className="text-[10px] bg-amber-100 text-amber-700 px-1 rounded">Pro</span>}
-                            {user.role === "superviseur" && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1 rounded">Superviseur</span>}
+                            {user.role === "superviseur" && <span className="text-[10px] bg-brand/10 text-brand px-1 rounded">Superviseur</span>}
                         </p>
                         <p className="text-[11px] text-sidebar-foreground/60 truncate mt-1">
                             {user.email}

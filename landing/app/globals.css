@@ -6,6 +6,12 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
+  /* Tokens de marque (2026-08-26) — mêmes valeurs que frontend/app/globals.css, source
+     unique de vérité = le logo. Constantes, cette app est mono-thème (pas de .dark). */
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-brand-accent: var(--brand-accent);
+  --color-anthracite: var(--anthracite);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -25,25 +31,33 @@
 }
 
 :root {
+  /* Tokens de marque Tiqia (2026-08-26) — échantillonnés sur le logo, identiques à
+     frontend/app/globals.css. Constantes (pas de variation de thème ici, cf. ci-dessous). */
+  --brand: oklch(0.5 0.235 264.96); /* #1E4DE6 — bleu vif, CTA/accents */
+  --brand-dark: oklch(0.213 0.055 261.61); /* #0A1832 — marine profond, dominante/autorité */
+  --brand-accent: oklch(0.703 0.147 238.92); /* #28AAF0 — bleu ciel, décoratif/dégradés uniquement (échoue le contraste AA en texte sur clair) */
+  --anthracite: oklch(0.242 0.03 269.88); /* #1A1F2E — neutre de base, remplace le slate par défaut */
+
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --primary: oklch(0.488 0.243 264.376);
+  --foreground: var(--anthracite);
+  --primary: var(--brand);
   --primary-foreground: oklch(0.97 0.014 254.604);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.967 0.006 269.88);
+  --secondary-foreground: oklch(0.21 0.01 269.88);
+  --muted: oklch(0.97 0.004 269.88);
+  --muted-foreground: oklch(0.556 0.012 269.88);
+  --accent: oklch(0.97 0.006 269.88);
+  --accent-foreground: oklch(0.205 0.01 269.88);
   --destructive: oklch(0.58 0.22 27);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.922 0.006 269.88);
+  --input: oklch(0.922 0.006 269.88);
+  --ring: var(--brand);
   --radius: 0.625rem;
 }
 
 /* La landing est volontairement toujours claire (cohérence de marque pour les
-   visiteurs déconnectés), indépendamment du thème système. */
+   visiteurs déconnectés), indépendamment du thème système — décision produit assumée,
+   pas de bloc .dark construit ici (cf. ROADMAP.md). */
 .force-light {
   color-scheme: light;
 }

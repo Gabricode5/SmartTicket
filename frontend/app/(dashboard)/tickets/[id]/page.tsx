@@ -207,7 +207,7 @@ export default function TicketDetailPage() {
         return (
             <div className="flex flex-col items-center justify-center h-full gap-3 px-8">
                 <p className="text-sm text-muted-foreground">{t.tickets.notFound}</p>
-                <Link href="/tickets" className="text-sm text-indigo-600 hover:underline">{t.tickets.backToList}</Link>
+                <Link href="/tickets" className="text-sm text-brand hover:underline">{t.tickets.backToList}</Link>
             </div>
         )
     }
@@ -294,7 +294,7 @@ export default function TicketDetailPage() {
                 {/* Différenciateur : contexte IA avant transfert */}
                 <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
                     <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-indigo-600" />
+                        <Sparkles className="h-4 w-4 text-brand" />
                         <p className="text-sm font-semibold text-foreground">{t.tickets.contextTitle}</p>
                     </div>
                     <div className="p-4 space-y-3">
@@ -333,7 +333,7 @@ export default function TicketDetailPage() {
                             <div key={m.id} className={`flex ${m.role === "sav" ? "justify-end" : "justify-start"}`}>
                                 <div className={`max-w-[80%] flex flex-col ${m.role === "sav" ? "items-end" : "items-start"}`}>
                                     <div className={`rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
-                                        m.role === "sav" ? "bg-emerald-600 text-white" : m.role === "user" ? "bg-indigo-600 text-white" : "bg-card border-2 border-border text-foreground"
+                                        m.role === "sav" ? "bg-emerald-600 text-white" : m.role === "user" ? "bg-brand text-white" : "bg-card border-2 border-border text-foreground"
                                     }`}>
                                         {m.content}
                                     </div>

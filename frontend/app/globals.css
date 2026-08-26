@@ -20,11 +20,14 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
+  /* Tokens de marque (2026-08-26) : constantes, jamais redéclarées dans .dark/.force-light
+     (contrairement aux tokens sémantiques ci-dessus) — la couleur de marque elle-même ne
+     change pas selon le thème, seul son usage sémantique (primary/ring/sidebar-primary) en
+     dérive différemment en clair et en sombre, cf. blocs :root/.dark plus bas. */
+  --color-brand: var(--brand);
+  --color-brand-dark: var(--brand-dark);
+  --color-brand-accent: var(--brand-accent);
+  --color-anthracite: var(--anthracite);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -51,38 +54,41 @@
 }
 
 :root {
+  /* Tokens de marque Tiqia (2026-08-26) — échantillonnés sur le logo (logo-T.png : dégradé
+     bleu vif -> bleu ciel ; logo-app-noir.png : fond marine), palette validée avant migration.
+     Constantes : jamais redéclarées dans .dark/.force-light. */
+  --brand: oklch(0.5 0.235 264.96); /* #1E4DE6 — bleu vif, CTA/accents */
+  --brand-dark: oklch(0.213 0.055 261.61); /* #0A1832 — marine profond, dominante/autorité */
+  --brand-accent: oklch(0.703 0.147 238.92); /* #28AAF0 — bleu ciel, décoratif/dégradés/sombre uniquement (échoue le contraste AA en texte sur clair) */
+  --anthracite: oklch(0.242 0.03 269.88); /* #1A1F2E — neutre de base, remplace le slate par défaut */
+
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: var(--anthracite);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: var(--anthracite);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.488 0.243 264.376);
+  --popover-foreground: var(--anthracite);
+  --primary: var(--brand);
   --primary-foreground: oklch(0.97 0.014 254.604);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.967 0.006 269.88);
+  --secondary-foreground: oklch(0.21 0.01 269.88);
+  --muted: oklch(0.97 0.004 269.88);
+  --muted-foreground: oklch(0.556 0.012 269.88);
+  --accent: oklch(0.97 0.006 269.88);
+  --accent-foreground: oklch(0.205 0.01 269.88);
   --destructive: oklch(0.58 0.22 27);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
+  --border: oklch(0.922 0.006 269.88);
+  --input: oklch(0.922 0.006 269.88);
+  --ring: var(--brand);
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.546 0.245 262.881);
+  --sidebar: oklch(0.985 0.004 269.88);
+  --sidebar-foreground: var(--anthracite);
+  --sidebar-primary: var(--brand);
   --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar-accent: oklch(0.97 0.006 269.88);
+  --sidebar-accent-foreground: oklch(0.205 0.01 269.88);
+  --sidebar-border: oklch(0.922 0.006 269.88);
+  --sidebar-ring: var(--brand);
 }
 
 /* Marketing/legal/auth pages are intentionally light-only (brand consistency for
@@ -93,57 +99,60 @@
 .force-light {
   color-scheme: light;
   --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --foreground: var(--anthracite);
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: var(--anthracite);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.488 0.243 264.376);
+  --popover-foreground: var(--anthracite);
+  --primary: var(--brand);
   --primary-foreground: oklch(0.97 0.014 254.604);
-  --secondary: oklch(0.967 0.001 286.375);
-  --secondary-foreground: oklch(0.21 0.006 285.885);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.967 0.006 269.88);
+  --secondary-foreground: oklch(0.21 0.01 269.88);
+  --muted: oklch(0.97 0.004 269.88);
+  --muted-foreground: oklch(0.556 0.012 269.88);
+  --accent: oklch(0.97 0.006 269.88);
+  --accent-foreground: oklch(0.205 0.01 269.88);
   --destructive: oklch(0.58 0.22 27);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  --border: oklch(0.922 0.006 269.88);
+  --input: oklch(0.922 0.006 269.88);
+  --ring: var(--brand);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.42 0.18 266);
+  /* Fond retinté marine désaturé (#12172A) plutôt qu'un gris neutre pur — la "dominante"
+     marine demandée s'applique aussi au thème sombre lui-même, pas seulement aux accents. */
+  --background: oklch(0.21 0.038 271.57); /* #12172A */
+  --foreground: oklch(0.985 0.004 269.88);
+  --card: oklch(0.254 0.044 271.82); /* #1B2138 — légèrement plus clair que le fond, layering subtil */
+  --card-foreground: oklch(0.985 0.004 269.88);
+  --popover: oklch(0.254 0.044 271.82);
+  --popover-foreground: oklch(0.985 0.004 269.88);
+  /* --brand tel quel (#1E4DE6) est trop proche du fond marine en aplat (contraste ~2.8,
+     insuffisant comme simple remplissage) — variante dérivée plus lumineuse, choisie pour
+     que le texte blanc du bouton reste AA (4.61) sans éblouir sur fond sombre. */
+  --primary: oklch(0.573 0.207 265.68); /* #3D6BF0 */
   --primary-foreground: oklch(0.97 0.014 254.604);
-  --secondary: oklch(0.274 0.006 286.033);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.371 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.274 0.02 271.57);
+  --secondary-foreground: oklch(0.985 0.004 269.88);
+  --muted: oklch(0.269 0.02 271.57);
+  --muted-foreground: oklch(0.708 0.012 269.88);
+  --accent: oklch(0.371 0.025 271.57);
+  --accent-foreground: oklch(0.985 0.004 269.88);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.809 0.105 251.813);
-  --chart-2: oklch(0.623 0.214 259.815);
-  --chart-3: oklch(0.546 0.245 262.881);
-  --chart-4: oklch(0.488 0.243 264.376);
-  --chart-5: oklch(0.424 0.199 265.638);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.623 0.214 259.815);
-  --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --ring: var(--brand-accent);
+  --sidebar: oklch(0.245 0.042 271.57);
+  --sidebar-foreground: oklch(0.985 0.004 269.88);
+  /* brand-accent est clair (L=0.7) : en aplat sombre il doit rester réservé aux textes/rings,
+     jamais en fond avec un texte clair par-dessus (blanc sur accent échoue, 2.59) — pairé ici
+     avec brand-dark en texte, qui passe large (6.81). */
+  --sidebar-primary: var(--brand-accent);
+  --sidebar-primary-foreground: var(--brand-dark);
+  --sidebar-accent: oklch(0.3 0.025 271.57);
+  --sidebar-accent-foreground: oklch(0.985 0.004 269.88);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: var(--brand-accent);
 }
 
 @layer base {

@@ -75,7 +75,7 @@ export default function SupervisorDashboard() {
         <div className="flex flex-col min-h-full bg-muted/50">
             <header className="flex items-center justify-between px-8 py-5 bg-card border-b shadow-sm">
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-600 shadow-sm">
+                    <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-brand shadow-sm">
                         <ShieldCheck className="h-5 w-5 text-white" />
                     </div>
                     <div>
@@ -98,15 +98,15 @@ export default function SupervisorDashboard() {
                     <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
                         <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                             <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                                    <Users className="h-4 w-4 text-blue-600" />
+                                <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center">
+                                    <Users className="h-4 w-4 text-brand" />
                                 </div>
                                 <div>
                                     <p className="text-sm font-semibold text-foreground">{t.supervisor.usersTitle}</p>
                                     <p className="text-xs text-muted-foreground">{t.supervisor.usersSubtitle}</p>
                                 </div>
                             </div>
-                            <Badge className="bg-blue-50 text-blue-600 border-blue-100 text-xs font-semibold">{users.length}</Badge>
+                            <Badge className="bg-brand/10 text-brand border-brand/20 text-xs font-semibold">{users.length}</Badge>
                         </div>
                         <div className="divide-y divide-slate-50">
                             {isLoading ? (
@@ -116,8 +116,8 @@ export default function SupervisorDashboard() {
                             ) : users.slice((usersPage - 1) * PAGE_SIZE, usersPage * PAGE_SIZE).map((u) => (
                                 <div key={u.id} className="px-4 py-3 flex items-center justify-between hover:bg-muted/80">
                                     <div className="flex items-center gap-3 min-w-0">
-                                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                                            <span className="text-xs font-bold text-blue-600">{u.username.charAt(0).toUpperCase()}</span>
+                                        <div className="w-8 h-8 rounded-full bg-brand/15 flex items-center justify-center flex-shrink-0">
+                                            <span className="text-xs font-bold text-brand">{u.username.charAt(0).toUpperCase()}</span>
                                         </div>
                                         <div className="min-w-0">
                                             <div className="text-sm font-medium text-foreground truncate">{u.username}</div>

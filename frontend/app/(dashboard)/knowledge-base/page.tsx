@@ -510,8 +510,8 @@ export default function KnowledgeBasePage() {
 
                     {/* Progression du scraping en temps réel */}
                     {isIngesting && urlsTotal !== null && urlsTotal > 0 && (
-                        <div className="rounded-lg border bg-indigo-50/60 p-3 space-y-2">
-                            <div className="flex items-center justify-between text-sm font-medium text-indigo-800">
+                        <div className="rounded-lg border bg-brand/10 p-3 space-y-2">
+                            <div className="flex items-center justify-between text-sm font-medium text-brand">
                                 <span className="flex items-center gap-1.5">
                                     <Loader2 className="h-4 w-4 animate-spin" />
                                     {t.knowledgeBase.scrapingInProgress}
@@ -550,12 +550,12 @@ export default function KnowledgeBasePage() {
                         label={t.knowledgeBase.sourcesIndexed}
                     />
                     <MetricCard
-                        icon={<Cpu className="h-6 w-6 text-indigo-500" />}
+                        icon={<Cpu className="h-6 w-6 text-brand" />}
                         value={`${kbSources.reduce((s, r) => s + r.chunks, 0)}`}
                         label={t.knowledgeBase.aiChunks}
                     />
                     <MetricCard
-                        icon={<FileText className="h-6 w-6 text-blue-500" />}
+                        icon={<FileText className="h-6 w-6 text-brand" />}
                         value={`${uniqueCategories.length}`}
                         label={t.knowledgeBase.categories}
                     />
@@ -576,10 +576,10 @@ export default function KnowledgeBasePage() {
                             return (
                                 <Card key={i} className="hover:shadow-md transition-shadow group">
                                     <CardContent className="p-4 flex items-start gap-3">
-                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isFile ? "bg-indigo-50" : "bg-blue-50"}`}>
+                                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${isFile ? "bg-brand/10" : "bg-brand/10"}`}>
                                             {isFile
-                                                ? <FileText className={`h-5 w-5 ${ext === "pdf" ? "text-red-500" : ext === "docx" ? "text-blue-600" : "text-muted-foreground"}`} />
-                                                : <Globe className="h-5 w-5 text-blue-500" />
+                                                ? <FileText className={`h-5 w-5 ${ext === "pdf" ? "text-red-500" : ext === "docx" ? "text-brand" : "text-muted-foreground"}`} />
+                                                : <Globe className="h-5 w-5 text-brand" />
                                             }
                                         </div>
                                         <div className="min-w-0 flex-1">

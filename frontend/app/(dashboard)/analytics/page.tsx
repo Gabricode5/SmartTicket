@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import { useTheme } from "next-themes"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -40,6 +41,13 @@ const PERIODS = [
 
 export default function AnalyticsPage() {
     const router = useRouter()
+    // Recharts prend des couleurs littérales (pas de classes Tailwind ni de var() CSS fiables
+    // sur tous les navigateurs pour ces props SVG) — palette dupliquée ici pour les deux
+    // thèmes plutôt que codée en dur en clair uniquement (cf. audit couleurs 2026-08-26).
+    const { resolvedTheme } = useTheme()
+    const chartColors = resolvedTheme === "dark"
+        ? { grid: "#2A3153", axis: "#AAB2CC", tooltipBg: "#1B2138", tooltipBorder: "#2A3153", tooltipCursor: "#1F2745", brand: "#3D6BF0", neutral: "#3A4066" }
+        : { grid: "#E2E8F0", axis: "#64748B", tooltipBg: "#FFFFFF", tooltipBorder: "#E2E8F0", tooltipCursor: "#F1F5F9", brand: "#1E4DE6", neutral: "#CBD5E1" }
     const [days, setDays] = useState(30)
     const [data, setData] = useState<AnalyticsData | null>(null)
     const [exportingPdf, setExportingPdf] = useState(false)
@@ -193,13 +201,13 @@ export default function AnalyticsPage() {
                             <div className="h-[300px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
-                                        <XAxis dataKey="name" stroke="#64748B" fontSize={12} tickLine={false} axisLine={false} />
-                                        <YAxis stroke="#64748B" fontSize={12} tickLine={false} axisLine={false} />
-                                        <Tooltip cursor={{ fill: "#F1F5F9" }} contentStyle={{ backgroundColor: "#fff", borderRadius: "8px", border: "1px solid #e2e8f0", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }} />
+                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartColors.grid} />
+                                        <XAxis dataKey="name" stroke={chartColors.axis} fontSize={12} tickLine={false} axisLine={false} />
+                                        <YAxis stroke={chartColors.axis} fontSize={12} tickLine={false} axisLine={false} />
+                                        <Tooltip cursor={{ fill: chartColors.tooltipCursor }} contentStyle={{ backgroundColor: chartColors.tooltipBg, borderRadius: "8px", border: `1px solid ${chartColors.tooltipBorder}`, boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }} />
                                         <Legend wrapperStyle={{ paddingTop: "20px" }} iconType="circle" />
-                                        <Bar dataKey="IA" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={30} />
-                                        <Bar dataKey="Humain" fill="#cbd5e1" radius={[4, 4, 0, 0]} barSize={30} />
+                                        <Bar dataKey="IA" fill={chartColors.brand} radius={[4, 4, 0, 0]} barSize={30} />
+                                        <Bar dataKey="Humain" fill={chartColors.neutral} radius={[4, 4, 0, 0]} barSize={30} />
                                     </BarChart>
                                 </ResponsiveContainer>
                             </div>

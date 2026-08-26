@@ -67,7 +67,7 @@ export default function CgvContent() {
                 <h2 className="text-lg font-semibold text-slate-900">{c.article7Title}</h2>
                 <p>
                     {c.article7BodyPrefix}{" "}
-                    <a href="/politique-confidentialite" className="text-indigo-600 hover:underline">{c.article7BodyLink}</a>{" "}
+                    <a href="/politique-confidentialite" className="text-brand hover:underline">{c.article7BodyLink}</a>{" "}
                     {c.article7BodySuffix}
                 </p>
             </section>
