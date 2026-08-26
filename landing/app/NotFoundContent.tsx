@@ -26,8 +26,8 @@ export default function NotFoundContent() {
                         404
                     </p>
                     <h1 className="text-2xl font-bold text-slate-900 mb-2">{t.notFound.title}</h1>
-                    <p className="text-slate-500 mb-8">{t.notFound.subtitle}</p>
-                    <Button size="lg" className="bg-brand hover:brightness-90 text-white" asChild>
+                    <p className="text-anthracite/80 mb-8">{t.notFound.subtitle}</p>
+                    <Button size="lg" className="bg-brand hover:bg-brand hover:brightness-90 text-white" asChild>
                         <Link href="/">
                             <ArrowLeft className="mr-2 h-4 w-4" />
                             {t.notFound.backHome}
