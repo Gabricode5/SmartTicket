@@ -188,6 +188,11 @@ const fr = {
             contactBody: "Pour toute question relative aux présentes CGV : [EMAIL DE CONTACT À COMPLÉTER].",
         },
     },
+    notFound: {
+        title: "Page introuvable",
+        subtitle: "Oups, cette page n'existe pas ou a été déplacée.",
+        backHome: "Retour à l'accueil",
+    },
 }
 
 const en: typeof fr = {
@@ -377,6 +382,11 @@ const en: typeof fr = {
             contactTitle: "Contact",
             contactBody: "For any question regarding these T&Cs: [CONTACT EMAIL TO BE COMPLETED].",
         },
+    },
+    notFound: {
+        title: "Page not found",
+        subtitle: "Oops, this page doesn't exist or has moved.",
+        backHome: "Back to home",
     },
 }
 

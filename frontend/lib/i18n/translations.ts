@@ -190,6 +190,12 @@ const fr = {
             token_expired: "Ce lien a expiré. Contactez votre fournisseur Tiqia pour en recevoir un nouveau.",
         },
     },
+    notFound: {
+        title: "Page introuvable",
+        subtitle: "Oups, cette page n'existe pas ou a été déplacée.",
+        backHome: "Retour à l'accueil",
+        backLogin: "Se connecter",
+    },
     common: {
         dateGroups: {
             today: "Aujourd'hui",
@@ -876,6 +882,12 @@ const en: typeof fr = {
             token_already_used: "This link has already been used to set up the account. If this wasn't you, contact your Tiqia provider immediately.",
             token_expired: "This link has expired. Contact your Tiqia provider to get a new one.",
         },
+    },
+    notFound: {
+        title: "Page not found",
+        subtitle: "Oops, this page doesn't exist or has moved.",
+        backHome: "Back to home",
+        backLogin: "Log in",
     },
     common: {
         dateGroups: {
