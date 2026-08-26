@@ -17,7 +17,7 @@ export default function LegalLayout({ children }: { children: React.ReactNode })
                     </Link>
                     <div className="flex items-center gap-4">
                         <LanguageToggle />
-                        <Link href="/" className="text-sm text-indigo-600 hover:underline">
+                        <Link href="/" className="text-sm text-brand hover:underline">
                             {t.legal.backToHome}
                         </Link>
                     </div>

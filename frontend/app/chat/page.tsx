@@ -37,18 +37,18 @@ export default function StartChatPage() {
     }, [router])
 
     return (
-        <div className="force-light bg-background min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-white flex flex-col items-center justify-center px-4">
+        <div className="force-light bg-background min-h-screen bg-gradient-to-br from-slate-50 via-brand/10 to-white flex flex-col items-center justify-center px-4">
             {error ? (
                 <div className="text-center space-y-4">
                     <p className="text-sm text-red-600">{error}</p>
-                    <Link href="/" className="inline-flex items-center gap-2 text-sm text-indigo-600 hover:underline">
+                    <Link href="/" className="inline-flex items-center gap-2 text-sm text-brand hover:underline">
                         <ArrowLeft className="h-4 w-4" />
                         Retour à l&apos;accueil
                     </Link>
                 </div>
             ) : (
                 <div className="flex flex-col items-center gap-3 text-slate-500 text-sm">
-                    <div className="h-8 w-8 border-2 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
+                    <div className="h-8 w-8 border-2 border-brand/20 border-t-brand rounded-full animate-spin" />
                     Démarrage de la conversation…
                 </div>
             )}

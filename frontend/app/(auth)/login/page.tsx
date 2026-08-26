@@ -82,13 +82,13 @@ function LoginForm() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-white flex flex-col">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-brand/10 to-white flex flex-col">
 
             {/* Header */}
             <header className="p-6 flex items-center justify-between">
                 <Link
                     href="/"
-                    className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 transition-colors group"
+                    className="flex items-center gap-2 text-sm text-slate-500 hover:text-brand transition-colors group"
                 >
                     <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
                     {t.login.backToHome}
@@ -106,7 +106,7 @@ function LoginForm() {
                 <div className="w-full max-w-md">
 
                     {/* Card */}
-                    <div className="bg-white rounded-2xl shadow-xl shadow-indigo-100/50 border border-slate-100 p-8">
+                    <div className="bg-white rounded-2xl shadow-xl shadow-brand/10 border border-slate-100 p-8">
 
                         {/* Logo + Title */}
                         <div className="text-center mb-8">
@@ -135,7 +135,7 @@ function LoginForm() {
                                                 type="button"
                                                 onClick={handleResendVerification}
                                                 disabled={isResending}
-                                                className="text-xs font-medium text-indigo-600 hover:text-indigo-700 hover:underline disabled:opacity-60"
+                                                className="text-xs font-medium text-brand hover:brightness-90 hover:underline disabled:opacity-60"
                                             >
                                                 {isResending ? t.login.resending : t.login.resendVerification}
                                             </button>
@@ -155,7 +155,7 @@ function LoginForm() {
                                     type="email"
                                     placeholder={t.login.emailPlaceholder}
                                     required
-                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand focus:bg-white transition-all"
                                 />
                             </div>
 
@@ -167,7 +167,7 @@ function LoginForm() {
                                     </label>
                                     <Link
                                         href="/forgot-password"
-                                        className="text-xs text-indigo-600 hover:text-indigo-700 hover:underline"
+                                        className="text-xs text-brand hover:brightness-90 hover:underline"
                                     >
                                         {t.login.forgotPassword}
                                     </Link>
@@ -178,7 +178,7 @@ function LoginForm() {
                                         name="password"
                                         type={showPassword ? "text" : "password"}
                                         required
-                                        className="w-full px-4 py-2.5 pr-11 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                        className="w-full px-4 py-2.5 pr-11 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand focus:bg-white transition-all"
                                     />
                                     <button
                                         type="button"
@@ -197,7 +197,7 @@ function LoginForm() {
                             <button
                                 type="submit"
                                 disabled={isLoading}
-                                className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:ring-offset-2"
+                                className="w-full py-2.5 px-4 bg-brand hover:brightness-90 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-brand/50 focus:ring-offset-2"
                             >
                                 {isLoading ? (
                                     <span className="flex items-center justify-center gap-2">
@@ -218,7 +218,7 @@ function LoginForm() {
                         {/* Sign up */}
                         <p className="text-center text-sm text-slate-500">
                             {t.login.noAccount}{" "}
-                            <Link href="/sign-up" className="text-indigo-600 font-medium hover:text-indigo-700 hover:underline">
+                            <Link href="/sign-up" className="text-brand font-medium hover:brightness-90 hover:underline">
                                 {t.login.createAccount}
                             </Link>
                         </p>

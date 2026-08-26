@@ -40,11 +40,11 @@ export default function ForgotPasswordPage() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-white flex flex-col">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-brand/10 to-white flex flex-col">
             <header className="p-6 flex items-center justify-between">
                 <Link
                     href="/"
-                    className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 transition-colors group"
+                    className="flex items-center gap-2 text-sm text-slate-500 hover:text-brand transition-colors group"
                 >
                     <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
                     {t.login.backToHome}
@@ -56,7 +56,7 @@ export default function ForgotPasswordPage() {
 
             <div className="flex-1 flex items-center justify-center px-4 py-12">
                 <div className="w-full max-w-md">
-                    <div className="bg-white rounded-2xl shadow-xl shadow-indigo-100/50 border border-slate-100 p-8">
+                    <div className="bg-white rounded-2xl shadow-xl shadow-brand/10 border border-slate-100 p-8">
                         {sent ? (
                             <div className="text-center">
                                 <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-emerald-100 mb-4">
@@ -68,7 +68,7 @@ export default function ForgotPasswordPage() {
                                 </p>
                                 <Link
                                     href="/login"
-                                    className="mt-6 inline-block w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-colors"
+                                    className="mt-6 inline-block w-full py-2.5 px-4 bg-brand hover:brightness-90 text-white font-semibold text-sm rounded-xl transition-colors"
                                 >
                                     {t.forgotPassword.backToLogin}
                                 </Link>
@@ -95,21 +95,21 @@ export default function ForgotPasswordPage() {
                                         <label htmlFor="email" className="block text-sm font-medium text-slate-700">{t.forgotPassword.emailLabel}</label>
                                         <input
                                             id="email" name="email" type="email" placeholder="vous@exemple.com" required
-                                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand focus:bg-white transition-all"
                                         />
                                     </div>
 
                                     <button
                                         type="submit"
                                         disabled={isLoading}
-                                        className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors"
+                                        className="w-full py-2.5 px-4 bg-brand hover:brightness-90 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors"
                                     >
                                         {isLoading ? t.forgotPassword.sending : t.forgotPassword.sendLink}
                                     </button>
                                 </form>
 
                                 <p className="text-center text-sm text-slate-500 mt-6">
-                                    <Link href="/login" className="text-indigo-600 font-medium hover:text-indigo-700 hover:underline inline-flex items-center gap-1">
+                                    <Link href="/login" className="text-brand font-medium hover:brightness-90 hover:underline inline-flex items-center gap-1">
                                         <ArrowLeft className="h-3.5 w-3.5" />
                                         {t.forgotPassword.backToLogin}
                                     </Link>

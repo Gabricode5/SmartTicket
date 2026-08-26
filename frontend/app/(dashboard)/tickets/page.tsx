@@ -27,7 +27,7 @@ const isGuestUsername = (username: string | null | undefined) => Boolean(usernam
 // "Nouveau" doit sauter aux yeux (demande explicite) : badge plein plutôt que pastel, à
 // l'inverse des autres statuts qui restent discrets tant qu'ils n'appellent pas d'action.
 const STATUS_STYLES: Record<string, string> = {
-    new: "bg-indigo-600 text-white border-indigo-600 font-bold",
+    new: "bg-brand text-white border-brand font-bold",
     in_progress: "bg-amber-100 text-amber-700 border-amber-200",
     resolved: "bg-emerald-100 text-emerald-700 border-emerald-200",
     closed: "bg-slate-100 text-slate-600 border-slate-200",
@@ -74,7 +74,7 @@ function TicketRow({ ticket, t, dateLocale }: { ticket: Ticket; t: Messages; dat
             className="flex items-center gap-4 px-5 py-3 hover:bg-muted/80 transition-colors"
         >
             {isNewAndUnassigned && (
-                <span className="h-2 w-2 rounded-full bg-indigo-600 flex-shrink-0 animate-pulse" title={t.tickets.statusNew} />
+                <span className="h-2 w-2 rounded-full bg-brand flex-shrink-0 animate-pulse" title={t.tickets.statusNew} />
             )}
             <span className="text-xs font-mono text-muted-foreground w-14 flex-shrink-0">#{ticket.ticket_number}</span>
             <span className="text-sm font-medium text-foreground flex-1 min-w-0 truncate">{clientLabel}</span>
@@ -218,7 +218,7 @@ export default function TicketsListPage() {
         <div className="flex flex-col min-h-full bg-muted/50">
             <header className="flex items-center justify-between px-8 py-5 bg-card border-b shadow-sm">
                 <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-600 shadow-sm">
+                    <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-brand shadow-sm">
                         <TicketIcon className="h-5 w-5 text-white" />
                     </div>
                     <div>

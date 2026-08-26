@@ -62,11 +62,11 @@ function SetupContent() {
     }
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-indigo-50/40 to-white flex flex-col">
+        <div className="min-h-screen bg-gradient-to-br from-slate-50 via-brand/10 to-white flex flex-col">
             <header className="p-6 flex items-center justify-between">
                 <Link
                     href="/"
-                    className="flex items-center gap-2 text-sm text-slate-500 hover:text-indigo-600 transition-colors group"
+                    className="flex items-center gap-2 text-sm text-slate-500 hover:text-brand transition-colors group"
                 >
                     <ArrowLeft className="h-4 w-4 group-hover:-translate-x-0.5 transition-transform" />
                     {t.login.backToHome}
@@ -78,7 +78,7 @@ function SetupContent() {
 
             <div className="flex-1 flex items-center justify-center px-4 py-12">
                 <div className="w-full max-w-md">
-                    <div className="bg-white rounded-2xl shadow-xl shadow-indigo-100/50 border border-slate-100 p-8">
+                    <div className="bg-white rounded-2xl shadow-xl shadow-brand/10 border border-slate-100 p-8">
                         {success ? (
                             <div className="text-center">
                                 <CheckCircle2 className="h-12 w-12 text-emerald-600 mx-auto mb-4" />
@@ -88,7 +88,7 @@ function SetupContent() {
                                 </p>
                                 <Link
                                     href="/login"
-                                    className="inline-block w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-colors"
+                                    className="inline-block w-full py-2.5 px-4 bg-brand hover:brightness-90 text-white font-semibold text-sm rounded-xl transition-colors"
                                 >
                                     {t.setup.login}
                                 </Link>
@@ -127,7 +127,7 @@ function SetupContent() {
                                             value={username}
                                             onChange={(e) => setUsername(e.target.value)}
                                             required
-                                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand focus:bg-white transition-all"
                                         />
                                     </div>
 
@@ -139,7 +139,7 @@ function SetupContent() {
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
                                             required
-                                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand focus:bg-white transition-all"
                                         />
                                     </div>
 
@@ -153,7 +153,7 @@ function SetupContent() {
                                                 value={password}
                                                 onChange={(e) => setPassword(e.target.value)}
                                                 required
-                                                className="w-full px-4 py-2.5 pr-11 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-400 focus:bg-white transition-all"
+                                                className="w-full px-4 py-2.5 pr-11 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand focus:bg-white transition-all"
                                             />
                                             <button type="button" onClick={() => setShowPassword(v => !v)} tabIndex={-1}
                                                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
@@ -173,7 +173,7 @@ function SetupContent() {
                                             className={`w-full px-4 py-2.5 rounded-xl border bg-slate-50 text-slate-900 text-sm focus:outline-none focus:ring-2 focus:bg-white transition-all ${
                                                 !passwordsMatch
                                                     ? "border-red-300 focus:ring-red-500/30 focus:border-red-400"
-                                                    : "border-slate-200 focus:ring-indigo-500/30 focus:border-indigo-400"
+                                                    : "border-slate-200 focus:ring-brand/30 focus:border-brand"
                                             }`}
                                         />
                                         {!passwordsMatch && (
@@ -184,7 +184,7 @@ function SetupContent() {
                                     <button
                                         type="submit"
                                         disabled={isLoading}
-                                        className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors"
+                                        className="w-full py-2.5 px-4 bg-brand hover:brightness-90 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold text-sm rounded-xl transition-colors"
                                     >
                                         {isLoading ? t.setup.configuring : t.setup.configureAccount}
                                     </button>

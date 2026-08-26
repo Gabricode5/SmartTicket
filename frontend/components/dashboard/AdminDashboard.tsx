@@ -239,22 +239,24 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
         }
     }
 
-    const userColumnClass = (selected: boolean, color: string) =>
-        `px-4 py-3 transition-colors ${selected ? `bg-${color}-50/60` : "hover:bg-muted/80"}`
+    // Classe complète plutôt qu'un nom de couleur interpolé : `brand` est un token plat (pas de
+    // rampe -50/-100/...), l'ancienne interpolation `bg-${color}-50/60` ne peut pas s'y appliquer.
+    const userColumnClass = (selected: boolean, activeBg: string) =>
+        `px-4 py-3 transition-colors ${selected ? activeBg : "hover:bg-muted/80"}`
 
     return (
         <>
             <div className="flex flex-col min-h-full bg-muted/50">
                 <header className="flex items-center justify-between px-8 py-5 bg-card border-b sticky top-0 z-10 shadow-sm">
                     <div className="flex items-center gap-3">
-                        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-indigo-600 shadow-sm">
+                        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-brand shadow-sm">
                             <UserCog className="h-5 w-5 text-white" />
                         </div>
                         <div>
                             <h1 className="text-xl font-bold tracking-tight text-foreground">{t.admin.title}</h1>
                             <p className="text-xs text-muted-foreground">{t.admin.subtitle}</p>
                         </div>
-                        <Badge className="bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border border-indigo-200 gap-1 ml-2">
+                        <Badge className="bg-brand/10 text-brand hover:bg-brand/10 border border-brand/30 gap-1 ml-2">
                             <Shield className="h-3 w-3" /> {t.admin.administrator}
                         </Badge>
                     </div>
@@ -281,15 +283,15 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                         <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
                             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center">
-                                        <Users className="h-4 w-4 text-blue-600" />
+                                    <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center">
+                                        <Users className="h-4 w-4 text-brand" />
                                     </div>
                                     <div>
                                         <p className="text-sm font-semibold text-foreground">{t.admin.usersPanel.title}</p>
                                         <p className="text-xs text-muted-foreground">{t.admin.usersPanel.subtitle}</p>
                                     </div>
                                 </div>
-                                <Badge className="bg-blue-50 text-blue-600 border-blue-100 text-xs font-semibold">{users.length}</Badge>
+                                <Badge className="bg-brand/10 text-brand border-brand/20 text-xs font-semibold">{users.length}</Badge>
                             </div>
                             <div className="divide-y divide-slate-50">
                                 {isLoading ? (
@@ -297,16 +299,16 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 ) : users.length === 0 ? (
                                     <div className="px-5 py-8 text-center text-sm text-muted-foreground">{t.admin.usersPanel.empty}</div>
                                 ) : users.slice((usersPage - 1) * PAGE_SIZE, usersPage * PAGE_SIZE).map((u) => (
-                                    <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "blue")}>
+                                    <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "bg-brand/10")}>
                                         <button onClick={() => handleSelectUser(u)} className="w-full text-left flex items-center gap-3 mb-2.5">
-                                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                                                <span className="text-xs font-bold text-blue-600">{u.username.charAt(0).toUpperCase()}</span>
+                                            <div className="w-8 h-8 rounded-full bg-brand/15 flex items-center justify-center flex-shrink-0">
+                                                <span className="text-xs font-bold text-brand">{u.username.charAt(0).toUpperCase()}</span>
                                             </div>
                                             <div className="min-w-0">
                                                 <div className="text-sm font-medium text-foreground truncate">{u.username}</div>
                                                 <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                                             </div>
-                                            {selectedUser?.id === u.id && <ChevronRight className="h-4 w-4 text-blue-400 ml-auto flex-shrink-0" />}
+                                            {selectedUser?.id === u.id && <ChevronRight className="h-4 w-4 text-brand ml-auto flex-shrink-0" />}
                                         </button>
                                         <div className="flex items-center gap-1.5 pl-11">
                                             <button onClick={() => handleChangeRole(u, "sav")} disabled={updatingRoleUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 transition-colors disabled:opacity-50">
@@ -356,7 +358,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 ) : savUsers.length === 0 ? (
                                     <div className="px-5 py-8 text-center text-sm text-muted-foreground">{t.admin.savPanel.empty}</div>
                                 ) : savUsers.slice((savPage - 1) * PAGE_SIZE, savPage * PAGE_SIZE).map((u) => (
-                                    <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "emerald")}>
+                                    <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "bg-emerald-50/60")}>
                                         <button onClick={() => handleSelectUser(u)} className="w-full text-left flex items-center gap-3 mb-2.5">
                                             <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
                                                 <span className="text-xs font-bold text-emerald-600">{u.username.charAt(0).toUpperCase()}</span>
@@ -399,15 +401,15 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                         <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
                             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
-                                        <Shield className="h-4 w-4 text-violet-600" />
+                                    <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center">
+                                        <Shield className="h-4 w-4 text-brand" />
                                     </div>
                                     <div>
                                         <p className="text-sm font-semibold text-foreground">{t.admin.supervisorPanel.title}</p>
                                         <p className="text-xs text-muted-foreground">{t.admin.supervisorPanel.subtitle}</p>
                                     </div>
                                 </div>
-                                <Badge className="bg-violet-50 text-violet-600 border-violet-100 text-xs font-semibold">{superviseurUsers.length}</Badge>
+                                <Badge className="bg-brand/10 text-brand border-brand/20 text-xs font-semibold">{superviseurUsers.length}</Badge>
                             </div>
                             <div className="divide-y divide-slate-50">
                                 {isLoading ? (
@@ -415,16 +417,16 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 ) : superviseurUsers.length === 0 ? (
                                     <div className="px-5 py-8 text-center text-sm text-muted-foreground">{t.admin.supervisorPanel.empty}</div>
                                 ) : superviseurUsers.slice((superviseurPage - 1) * PAGE_SIZE, superviseurPage * PAGE_SIZE).map((u) => (
-                                    <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "violet")}>
+                                    <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "bg-brand/10")}>
                                         <button onClick={() => handleSelectUser(u)} className="w-full text-left flex items-center gap-3 mb-2.5">
-                                            <div className="w-8 h-8 rounded-full bg-violet-100 flex items-center justify-center flex-shrink-0">
-                                                <span className="text-xs font-bold text-violet-600">{u.username.charAt(0).toUpperCase()}</span>
+                                            <div className="w-8 h-8 rounded-full bg-brand/15 flex items-center justify-center flex-shrink-0">
+                                                <span className="text-xs font-bold text-brand">{u.username.charAt(0).toUpperCase()}</span>
                                             </div>
                                             <div className="min-w-0">
                                                 <div className="text-sm font-medium text-foreground truncate">{u.username}</div>
                                                 <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                                             </div>
-                                            {selectedUser?.id === u.id && <ChevronRight className="h-4 w-4 text-violet-400 ml-auto flex-shrink-0" />}
+                                            {selectedUser?.id === u.id && <ChevronRight className="h-4 w-4 text-brand ml-auto flex-shrink-0" />}
                                         </button>
                                         <div className="flex items-center gap-1.5 pl-11">
                                             <button onClick={() => handleChangeRole(u, "sav")} disabled={updatingRoleUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-200 transition-colors disabled:opacity-50">
@@ -458,15 +460,15 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                         <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
                             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center">
-                                        <Crown className="h-4 w-4 text-indigo-600" />
+                                    <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center">
+                                        <Crown className="h-4 w-4 text-brand" />
                                     </div>
                                     <div>
                                         <p className="text-sm font-semibold text-foreground">{t.admin.adminPanel.title}</p>
                                         <p className="text-xs text-muted-foreground">{t.admin.adminPanel.subtitle}</p>
                                     </div>
                                 </div>
-                                <Badge className="bg-indigo-50 text-indigo-600 border-indigo-100 text-xs font-semibold">{adminUsers.length}</Badge>
+                                <Badge className="bg-brand/10 text-brand border-brand/20 text-xs font-semibold">{adminUsers.length}</Badge>
                             </div>
                             <div className="divide-y divide-slate-50">
                                 {isLoading ? (
@@ -474,16 +476,16 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 ) : adminUsers.length === 0 ? (
                                     <div className="px-5 py-8 text-center text-sm text-muted-foreground">{t.admin.adminPanel.empty}</div>
                                 ) : adminUsers.slice((adminPage - 1) * PAGE_SIZE, adminPage * PAGE_SIZE).map((u) => (
-                                    <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "indigo")}>
+                                    <div key={u.id} className={userColumnClass(selectedUser?.id === u.id, "bg-brand/10")}>
                                         <button onClick={() => handleSelectUser(u)} className="w-full text-left flex items-center gap-3 mb-2.5">
-                                            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center flex-shrink-0">
-                                                <span className="text-xs font-bold text-indigo-600">{u.username.charAt(0).toUpperCase()}</span>
+                                            <div className="w-8 h-8 rounded-full bg-brand/15 flex items-center justify-center flex-shrink-0">
+                                                <span className="text-xs font-bold text-brand">{u.username.charAt(0).toUpperCase()}</span>
                                             </div>
                                             <div className="min-w-0">
                                                 <div className="text-sm font-medium text-foreground truncate">{u.username}</div>
                                                 <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                                             </div>
-                                            {selectedUser?.id === u.id && <ChevronRight className="h-4 w-4 text-indigo-400 ml-auto flex-shrink-0" />}
+                                            {selectedUser?.id === u.id && <ChevronRight className="h-4 w-4 text-brand ml-auto flex-shrink-0" />}
                                         </button>
                                         <div className="flex items-center gap-1.5 pl-11">
                                             <button onClick={() => handleEditUser(u)} disabled={updatingUserId === u.id} className="flex items-center gap-1 text-xs px-2 py-1 rounded-md bg-muted text-muted-foreground hover:bg-muted border border-border transition-colors disabled:opacity-50">
@@ -513,8 +515,8 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                         <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
                             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
-                                    <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center">
-                                        <MessageCircle className="h-4 w-4 text-violet-600" />
+                                    <div className="w-8 h-8 rounded-lg bg-brand/10 flex items-center justify-center">
+                                        <MessageCircle className="h-4 w-4 text-brand" />
                                     </div>
                                     <div>
                                         <p className="text-sm font-semibold text-foreground">{t.admin.conversationsTitle}</p>
@@ -522,7 +524,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                     </div>
                                 </div>
                                 {sessions.length > 0 && (
-                                    <Badge className="bg-violet-50 text-violet-600 border-violet-100 text-xs font-semibold">{sessions.length}</Badge>
+                                    <Badge className="bg-brand/10 text-brand border-brand/20 text-xs font-semibold">{sessions.length}</Badge>
                                 )}
                             </div>
                             {selectedUser && (
@@ -559,7 +561,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                                         setSelectedSession(s)
                                                     }
                                                 }}
-                                                className={`w-full text-left px-4 py-3 transition-colors cursor-pointer ${selectedSession?.id === s.id ? "bg-violet-50/70" : "hover:bg-muted/80"}`}
+                                                className={`w-full text-left px-4 py-3 transition-colors cursor-pointer ${selectedSession?.id === s.id ? "bg-brand/15" : "hover:bg-muted/80"}`}
                                             >
                                                 <div className="flex items-start justify-between gap-2">
                                                     <div className="min-w-0">
@@ -593,7 +595,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                                 setSelectedSession(s)
                                             }
                                         }}
-                                        className={`w-full text-left px-4 py-3 transition-colors cursor-pointer ${selectedSession?.id === s.id ? "bg-violet-50/70" : "hover:bg-muted/80"}`}
+                                        className={`w-full text-left px-4 py-3 transition-colors cursor-pointer ${selectedSession?.id === s.id ? "bg-brand/15" : "hover:bg-muted/80"}`}
                                     >
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0">
@@ -658,7 +660,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                     </div>
                                 ) : transferredSessions.slice((transfersPage - 1) * PAGE_SIZE, transfersPage * PAGE_SIZE).map((s) => (
                                     <div key={s.id} className="px-5 py-3 flex items-center gap-3">
-                                        <div className="w-9 h-9 rounded-full bg-indigo-50 flex items-center justify-center flex-shrink-0 text-xs font-bold text-indigo-600 border-2 border-indigo-100">
+                                        <div className="w-9 h-9 rounded-full bg-brand/10 flex items-center justify-center flex-shrink-0 text-xs font-bold text-brand border-2 border-brand/20">
                                             {s.username.charAt(0).toUpperCase()}
                                         </div>
                                         <div className="min-w-0 flex-1">
@@ -689,16 +691,16 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
 
                         <div className="space-y-5">
                             <Link href="/analytics" className="block group">
-                                <div className="bg-card rounded-xl border border-border shadow-sm p-5 hover:border-indigo-200 hover:shadow-md transition-all">
+                                <div className="bg-card rounded-xl border border-border shadow-sm p-5 hover:border-brand/30 hover:shadow-md transition-all">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center group-hover:bg-indigo-100 transition-colors">
-                                            <BarChart2 className="h-5 w-5 text-indigo-600" />
+                                        <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center group-hover:bg-brand/15 transition-colors">
+                                            <BarChart2 className="h-5 w-5 text-brand" />
                                         </div>
                                         <div className="flex-1">
                                             <p className="text-sm font-semibold text-foreground">{t.admin.analyticsTitle}</p>
                                             <p className="text-xs text-muted-foreground">{t.admin.analyticsSubtitle}</p>
                                         </div>
-                                        <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-indigo-500 transition-colors" />
+                                        <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-brand transition-colors" />
                                     </div>
                                 </div>
                             </Link>
@@ -718,8 +720,8 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                             </Link>
                             <div className="bg-card rounded-xl border border-border shadow-sm p-5">
                                 <div className="flex items-center gap-3 mb-4">
-                                    <div className="w-10 h-10 rounded-xl bg-violet-50 flex items-center justify-center">
-                                        <TrendingUp className="h-5 w-5 text-violet-600" />
+                                    <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center">
+                                        <TrendingUp className="h-5 w-5 text-brand" />
                                     </div>
                                     <p className="text-sm font-semibold text-foreground">{t.admin.summaryTitle}</p>
                                 </div>
@@ -786,7 +788,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                     </div>
                     <DialogFooter className="gap-2">
                         <Button variant="outline" onClick={() => setEditDialogOpen(false)}>{t.admin.cancel}</Button>
-                        <Button onClick={handleEditSubmit} disabled={updatingUserId === editingUser?.id || !editForm.username.trim() || !editForm.email.trim()} className="bg-indigo-600 hover:bg-indigo-700 text-white">
+                        <Button onClick={handleEditSubmit} disabled={updatingUserId === editingUser?.id || !editForm.username.trim() || !editForm.email.trim()} className="bg-brand hover:brightness-90 text-white">
                             {updatingUserId === editingUser?.id ? t.admin.saving : t.admin.save}
                         </Button>
                     </DialogFooter>

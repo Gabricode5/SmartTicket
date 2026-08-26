@@ -45,8 +45,8 @@ export function GuestClaimBanner() {
     }
 
     return (
-        <div className="border-b border-indigo-100 bg-indigo-50/60">
-            <div className="flex items-center justify-between gap-3 px-6 py-2.5 text-sm text-indigo-700">
+        <div className="border-b border-brand/20 bg-brand/10">
+            <div className="flex items-center justify-between gap-3 px-6 py-2.5 text-sm text-brand">
                 <span>Conversation anonyme — créez un compte pour suivre votre ticket et être notifié des réponses.</span>
                 <button
                     type="button"
@@ -60,31 +60,31 @@ export function GuestClaimBanner() {
                 <form onSubmit={handleSubmit} className="px-6 pb-3 flex flex-wrap items-end gap-2">
                     {error && <p className="w-full text-xs text-red-600">{error}</p>}
                     <div className="flex flex-col gap-1">
-                        <label htmlFor="guest-claim-email" className="text-[11px] text-indigo-600 font-medium">Email</label>
+                        <label htmlFor="guest-claim-email" className="text-[11px] text-brand font-medium">Email</label>
                         <input
                             id="guest-claim-email"
                             type="email"
                             required
                             value={email}
                             onChange={(e) => setEmail(e.target.value)}
-                            className="h-9 px-3 rounded-lg border border-indigo-200 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                            className="h-9 px-3 rounded-lg border border-brand/20 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
                         />
                     </div>
                     <div className="flex flex-col gap-1">
-                        <label htmlFor="guest-claim-password" className="text-[11px] text-indigo-600 font-medium">Mot de passe</label>
+                        <label htmlFor="guest-claim-password" className="text-[11px] text-brand font-medium">Mot de passe</label>
                         <input
                             id="guest-claim-password"
                             type="password"
                             required
                             value={password}
                             onChange={(e) => setPassword(e.target.value)}
-                            className="h-9 px-3 rounded-lg border border-indigo-200 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/30"
+                            className="h-9 px-3 rounded-lg border border-brand/20 bg-background text-sm focus:outline-none focus:ring-2 focus:ring-brand/30"
                         />
                     </div>
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className="h-9 px-4 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white text-sm font-semibold"
+                        className="h-9 px-4 rounded-lg bg-brand hover:brightness-90 disabled:opacity-60 text-white text-sm font-semibold"
                     >
                         {isLoading ? "Création…" : "Valider"}
                     </button>

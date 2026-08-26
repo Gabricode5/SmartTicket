@@ -40,7 +40,7 @@ export default function MentionsLegalesContent() {
                 <p>{t.legal.mentions.hostingRegion}</p>
                 <p>
                     {t.legal.mentions.hostingMoreInfoPrefix}{" "}
-                    <a href="https://render.com" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">
+                    <a href="https://render.com" target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">
                         render.com
                     </a>.
                 </p>
