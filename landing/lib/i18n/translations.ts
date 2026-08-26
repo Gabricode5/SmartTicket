@@ -66,7 +66,7 @@ const fr = {
             secondary: "Se connecter",
         },
         footer: {
-            tagline: "— Support client intelligent",
+            tagline: "Support client intelligent",
             legal: "Mentions légales",
             privacy: "Confidentialité",
             cgv: "CGV",
@@ -261,7 +261,7 @@ const en: typeof fr = {
             secondary: "Log in",
         },
         footer: {
-            tagline: "— Intelligent customer support",
+            tagline: "Intelligent customer support",
             legal: "Legal notice",
             privacy: "Privacy",
             cgv: "Terms",

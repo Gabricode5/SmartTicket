@@ -57,7 +57,9 @@ export default function LandingPage() {
                         <Button variant="ghost" size="sm" asChild>
                             <Link href={`${APP_URL}/login`}>{t.landing.nav.login}</Link>
                         </Button>
-                        <Button size="sm" className="bg-brand hover:brightness-90 text-white" asChild>
+                        {/* hover:bg-brand répété volontairement : le variant "default" du Button pose déjà
+                            hover:bg-primary/80 (délavé au survol), qu'il faut annuler avant hover:brightness-90 */}
+                        <Button size="sm" className="bg-brand hover:bg-brand hover:brightness-90 text-white" asChild>
                             <Link href="mailto:contact@tiqia.fr?subject=Demande%20de%20d%C3%A9mo">{t.landing.nav.tryFree}</Link>
                         </Button>
                     </div>
@@ -75,11 +77,11 @@ export default function LandingPage() {
                         </span>
                         <br />{t.landing.hero.titleEnd}
                     </h1>
-                    <p className="text-xl text-slate-500 max-w-2xl mx-auto mb-10 leading-relaxed">
+                    <p className="text-xl text-anthracite/80 max-w-2xl mx-auto mb-10 leading-relaxed">
                         {t.landing.hero.subtitle}
                     </p>
                     <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                        <Button size="lg" className="bg-brand hover:brightness-90 text-white px-8 h-12 text-base" asChild>
+                        <Button size="lg" className="bg-brand hover:bg-brand hover:brightness-90 text-white px-8 h-12 text-base" asChild>
                             <Link href="mailto:contact@tiqia.fr?subject=Demande%20de%20d%C3%A9mo">
                                 {t.landing.hero.ctaPrimary}
                                 <ArrowRight className="ml-2 h-4 w-4" />
@@ -129,7 +131,7 @@ export default function LandingPage() {
                     {t.landing.stats.map((stat) => (
                         <div key={stat.label}>
                             <div className="text-3xl font-extrabold text-brand mb-1">{stat.value}</div>
-                            <div className="text-sm text-slate-500">{stat.label}</div>
+                            <div className="text-sm text-anthracite/80">{stat.label}</div>
                         </div>
                     ))}
                 </div>
@@ -142,7 +144,7 @@ export default function LandingPage() {
                         <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
                             {t.landing.features.title}
                         </h2>
-                        <p className="text-slate-500 text-lg max-w-2xl mx-auto">
+                        <p className="text-anthracite/80 text-lg max-w-2xl mx-auto">
                             {t.landing.features.subtitle}
                         </p>
                     </div>
@@ -153,7 +155,7 @@ export default function LandingPage() {
                                     {FEATURE_ICONS[i]}
                                 </div>
                                 <h3 className="font-semibold text-slate-900 mb-2">{f.title}</h3>
-                                <p className="text-sm text-slate-500 leading-relaxed">{f.desc}</p>
+                                <p className="text-sm text-anthracite/80 leading-relaxed">{f.desc}</p>
                             </div>
                         ))}
                     </div>
@@ -167,7 +169,7 @@ export default function LandingPage() {
                         <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
                             {t.landing.how.title}
                         </h2>
-                        <p className="text-slate-500 text-lg">{t.landing.how.subtitle}</p>
+                        <p className="text-anthracite/80 text-lg">{t.landing.how.subtitle}</p>
                     </div>
                     <div className="grid md:grid-cols-3 gap-8">
                         {t.landing.how.steps.map((s, i) => (
@@ -176,7 +178,7 @@ export default function LandingPage() {
                                     {String(i + 1).padStart(2, "0")}
                                 </div>
                                 <h3 className="font-semibold text-slate-900 mb-2">{s.title}</h3>
-                                <p className="text-sm text-slate-500 leading-relaxed">{s.desc}</p>
+                                <p className="text-sm text-anthracite/80 leading-relaxed">{s.desc}</p>
                             </div>
                         ))}
                     </div>
@@ -194,7 +196,7 @@ export default function LandingPage() {
                         <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
                             {t.landing.enterprise.title}
                         </h2>
-                        <p className="text-slate-500 text-lg max-w-2xl mx-auto">
+                        <p className="text-anthracite/80 text-lg max-w-2xl mx-auto">
                             {t.landing.enterprise.subtitle}
                         </p>
                     </div>
@@ -205,7 +207,7 @@ export default function LandingPage() {
                                     {ENTERPRISE_ICONS[i]}
                                 </div>
                                 <h3 className="font-semibold text-slate-900 mb-2">{f.title}</h3>
-                                <p className="text-sm text-slate-500 leading-relaxed">{f.desc}</p>
+                                <p className="text-sm text-anthracite/80 leading-relaxed">{f.desc}</p>
                             </div>
                         ))}
                     </div>
@@ -228,7 +230,7 @@ export default function LandingPage() {
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Link>
                         </Button>
-                        <Button size="lg" variant="outline" className="bg-transparent border-white/40 text-white hover:bg-white/10 h-12 px-8 text-base" asChild>
+                        <Button size="lg" variant="outline" className="bg-transparent border-2 border-white/70 text-white hover:bg-white/15 hover:text-white hover:border-white h-12 px-8 text-base" asChild>
                             <Link href={`${APP_URL}/login`}>{t.landing.cta.secondary}</Link>
                         </Button>
                     </div>
