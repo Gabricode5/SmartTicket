@@ -9,3 +9,9 @@ export const BRAND_NAME = process.env.NEXT_PUBLIC_BRAND_NAME || "Tiqia";
 export const APP_URL = (
   process.env.NEXT_PUBLIC_APP_URL || "https://smartticket-frontend.onrender.com"
 ).replace(/\/$/, "");
+
+// Domaine propre de CETTE landing (tiqia.fr), contrairement à APP_URL ci-dessus qui vise
+// l'app cliente. Pas de variable d'env ici : à la différence de frontend/ (une instance par
+// client, domaine variable), cette landing est un site unique avec un seul domaine réel —
+// utilisé par robots.ts/sitemap.ts pour construire des URLs absolues correctes.
+export const SITE_URL = "https://tiqia.fr";
