@@ -1,5 +1,6 @@
 "use client"
 
+import { useState } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
@@ -9,7 +10,7 @@ import { BRAND_NAME, APP_URL } from "@/lib/brand"
 import {
     MessageSquare, Zap, BookOpen, BarChart2, ArrowRight,
     ShieldCheck, Users, Activity, Building2,
-    Lock, TrendingUp, Headset,
+    Lock, TrendingUp, Headset, Menu, X,
 } from "lucide-react"
 
 const FEATURE_ICONS = [
@@ -38,6 +39,7 @@ const ENTERPRISE_BG = ["bg-brand/10", "bg-brand/10", "bg-emerald-50", "bg-amber-
 
 export default function LandingPage() {
     const { messages: t } = useLocale()
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
     return (
         <div className="force-light min-h-screen bg-white flex flex-col">
 
@@ -53,24 +55,60 @@ export default function LandingPage() {
                         <a href="#entreprises" className="hover:text-brand transition-colors">{t.landing.nav.entreprises}</a>
                     </nav>
                     <div className="flex items-center gap-3">
-                        <LanguageToggle className="hidden sm:inline-flex" />
-                        <Button variant="ghost" size="sm" asChild>
+                        {/* Nav ancre + langue + "Se connecter" vivent uniquement ici (md+) ou dans le
+                            tiroir mobile ci-dessous — jamais les deux en même temps. */}
+                        <LanguageToggle className="hidden md:inline-flex" />
+                        <Button variant="ghost" size="sm" className="hidden md:inline-flex" asChild>
                             <Link href={`${APP_URL}/login`}>{t.landing.nav.login}</Link>
                         </Button>
                         {/* hover:bg-brand répété volontairement : le variant "default" du Button pose déjà
-                            hover:bg-primary/80 (délavé au survol), qu'il faut annuler avant hover:brightness-90 */}
-                        <Button size="sm" className="bg-brand hover:bg-brand hover:brightness-90 text-white" asChild>
-                            <Link href="mailto:contact@tiqia.fr?subject=Demande%20de%20d%C3%A9mo">{t.landing.nav.tryFree}</Link>
+                            hover:bg-primary/80 (délavé au survol), qu'il faut annuler avant hover:brightness-90.
+                            h-11 (44px, seuil tactile) sous md, ré-alignée sur la taille d'origine (32px) à
+                            partir de md où l'espace ne manque plus. Libellé raccourci sous sm (< 640px) pour
+                            garantir qu'aucune largeur de police estimée ne fasse déborder le header à 320px. */}
+                        <Button size="sm" className="bg-brand hover:bg-brand hover:brightness-90 text-white h-11 md:h-8" asChild>
+                            <Link href="mailto:contact@tiqia.fr?subject=Demande%20de%20d%C3%A9mo">
+                                <span className="sm:hidden">{t.landing.nav.tryFreeShort}</span>
+                                <span className="hidden sm:inline">{t.landing.nav.tryFree}</span>
+                            </Link>
                         </Button>
+                        <button
+                            type="button"
+                            onClick={() => setMobileMenuOpen((v) => !v)}
+                            aria-expanded={mobileMenuOpen}
+                            aria-controls="mobile-menu"
+                            aria-label={mobileMenuOpen ? t.landing.nav.closeMenu : t.landing.nav.openMenu}
+                            className="md:hidden inline-flex items-center justify-center h-11 w-11 rounded-md text-slate-600 hover:bg-slate-100 transition-colors"
+                        >
+                            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+                        </button>
                     </div>
                 </div>
+
+                {/* Tiroir mobile : nav ancre + langue + "Se connecter", rangés ici sous md pour que
+                    "Demander une démo" reste seul CTA visible et dominant dans le header compact. */}
+                {mobileMenuOpen && (
+                    <div id="mobile-menu" className="md:hidden border-t border-slate-100 bg-white px-6 py-4">
+                        <nav className="flex flex-col gap-1 text-sm text-slate-600">
+                            <a href="#features" onClick={() => setMobileMenuOpen(false)} className="py-2 hover:text-brand transition-colors">{t.landing.nav.features}</a>
+                            <a href="#how" onClick={() => setMobileMenuOpen(false)} className="py-2 hover:text-brand transition-colors">{t.landing.nav.how}</a>
+                            <a href="#entreprises" onClick={() => setMobileMenuOpen(false)} className="py-2 hover:text-brand transition-colors">{t.landing.nav.entreprises}</a>
+                        </nav>
+                        <div className="flex flex-wrap items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-100">
+                            <LanguageToggle />
+                            <Button variant="ghost" size="sm" asChild>
+                                <Link href={`${APP_URL}/login`} onClick={() => setMobileMenuOpen(false)}>{t.landing.nav.login}</Link>
+                            </Button>
+                        </div>
+                    </div>
+                )}
             </header>
 
             {/* ── Hero ── */}
             <section className="relative overflow-hidden bg-gradient-to-br from-slate-50 via-brand/10 to-white pt-20 pb-24 px-6">
                 <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-brand/15 via-transparent to-transparent pointer-events-none" />
                 <div className="max-w-4xl mx-auto text-center relative">
-                    <h1 className="text-5xl md:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight mb-6">
+                    <h1 className="text-4xl sm:text-5xl md:text-6xl font-extrabold text-slate-900 tracking-tight leading-tight mb-6">
                         {t.landing.hero.titleStart}{" "}
                         <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-dark to-brand">
                             {t.landing.hero.titleHighlight}
