@@ -8,6 +8,9 @@ const fr = {
             entreprises: "Entreprises",
             login: "Se connecter",
             tryFree: "Demander une démo",
+            tryFreeShort: "Démo",
+            openMenu: "Ouvrir le menu",
+            closeMenu: "Fermer le menu",
         },
         hero: {
             titleStart: "Le support client",
@@ -203,6 +206,9 @@ const en: typeof fr = {
             entreprises: "Enterprises",
             login: "Log in",
             tryFree: "Request a demo",
+            tryFreeShort: "Demo",
+            openMenu: "Open menu",
+            closeMenu: "Close menu",
         },
         hero: {
             titleStart: "Intelligent",
