@@ -6,7 +6,7 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { LanguageToggle } from "@/components/LanguageToggle"
 import { useLocale } from "@/lib/i18n/LocaleContext"
-import { BRAND_NAME, APP_URL } from "@/lib/brand"
+import { BRAND_NAME } from "@/lib/brand"
 import {
     MessageSquare, Zap, BookOpen, BarChart2, ArrowRight,
     ShieldCheck, Users, Activity, Building2,
@@ -46,21 +46,18 @@ export default function LandingPage() {
             {/* ── Navbar ── */}
             <header className="sticky top-0 z-50 border-b border-slate-100 bg-white/80 backdrop-blur-sm">
                 <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
-                    <div className="flex items-center">
+                    <Link href="/" className="flex items-center">
                         <Image src="/logo-Tiqia-noir.png" alt={BRAND_NAME} width={77} height={32} className="h-8 w-auto" priority />
-                    </div>
+                    </Link>
                     <nav className="hidden md:flex items-center gap-8 text-sm text-slate-600">
                         <a href="#features" className="hover:text-brand transition-colors">{t.landing.nav.features}</a>
                         <a href="#how" className="hover:text-brand transition-colors">{t.landing.nav.how}</a>
                         <a href="#entreprises" className="hover:text-brand transition-colors">{t.landing.nav.entreprises}</a>
                     </nav>
                     <div className="flex items-center gap-3">
-                        {/* Nav ancre + langue + "Se connecter" vivent uniquement ici (md+) ou dans le
-                            tiroir mobile ci-dessous — jamais les deux en même temps. */}
+                        {/* Nav ancre + langue vivent uniquement ici (md+) ou dans le tiroir mobile
+                            ci-dessous — jamais les deux en même temps. */}
                         <LanguageToggle className="hidden md:inline-flex" />
-                        <Button variant="ghost" size="sm" className="hidden md:inline-flex" asChild>
-                            <Link href={`${APP_URL}/login`}>{t.landing.nav.login}</Link>
-                        </Button>
                         {/* hover:bg-brand répété volontairement : le variant "default" du Button pose déjà
                             hover:bg-primary/80 (délavé au survol), qu'il faut annuler avant hover:brightness-90.
                             h-11 (44px, seuil tactile) sous md, ré-alignée sur la taille d'origine (32px) à
@@ -85,7 +82,7 @@ export default function LandingPage() {
                     </div>
                 </div>
 
-                {/* Tiroir mobile : nav ancre + langue + "Se connecter", rangés ici sous md pour que
+                {/* Tiroir mobile : nav ancre + langue, rangés ici sous md pour que
                     "Demander une démo" reste seul CTA visible et dominant dans le header compact. */}
                 {mobileMenuOpen && (
                     <div id="mobile-menu" className="md:hidden border-t border-slate-100 bg-white px-6 py-4">
@@ -94,11 +91,8 @@ export default function LandingPage() {
                             <a href="#how" onClick={() => setMobileMenuOpen(false)} className="py-2 hover:text-brand transition-colors">{t.landing.nav.how}</a>
                             <a href="#entreprises" onClick={() => setMobileMenuOpen(false)} className="py-2 hover:text-brand transition-colors">{t.landing.nav.entreprises}</a>
                         </nav>
-                        <div className="flex flex-wrap items-center justify-between gap-3 mt-3 pt-3 border-t border-slate-100">
+                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-slate-100">
                             <LanguageToggle />
-                            <Button variant="ghost" size="sm" asChild>
-                                <Link href={`${APP_URL}/login`} onClick={() => setMobileMenuOpen(false)}>{t.landing.nav.login}</Link>
-                            </Button>
                         </div>
                     </div>
                 )}
@@ -118,15 +112,12 @@ export default function LandingPage() {
                     <p className="text-xl text-anthracite/80 max-w-2xl mx-auto mb-10 leading-relaxed">
                         {t.landing.hero.subtitle}
                     </p>
-                    <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+                    <div className="flex justify-center">
                         <Button size="lg" className="bg-brand hover:bg-brand hover:brightness-90 text-white px-8 h-12 text-base" asChild>
                             <Link href="mailto:contact@tiqia.fr?subject=Demande%20de%20d%C3%A9mo">
                                 {t.landing.hero.ctaPrimary}
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Link>
-                        </Button>
-                        <Button size="lg" variant="outline" className="h-12 px-8 text-base border-slate-200" asChild>
-                            <Link href={`${APP_URL}/login`}>{t.landing.hero.ctaSecondary}</Link>
                         </Button>
                     </div>
                 </div>
@@ -261,15 +252,12 @@ export default function LandingPage() {
                     <p className="text-white/80 mb-8 text-lg">
                         {t.landing.cta.subtitle}
                     </p>
-                    <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                    <div className="flex justify-center">
                         <Button size="lg" className="bg-white text-brand hover:bg-brand/10 h-12 px-8 text-base font-semibold" asChild>
                             <Link href="mailto:contact@tiqia.fr?subject=Demande%20de%20d%C3%A9mo">
                                 {t.landing.cta.primary}
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </Link>
-                        </Button>
-                        <Button size="lg" variant="outline" className="bg-transparent border-2 border-white/70 text-white hover:bg-white/15 hover:text-white hover:border-white h-12 px-8 text-base" asChild>
-                            <Link href={`${APP_URL}/login`}>{t.landing.cta.secondary}</Link>
                         </Button>
                     </div>
                 </div>
@@ -279,7 +267,9 @@ export default function LandingPage() {
             <footer className="border-t border-slate-100 py-8 px-6 bg-white">
                 <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-2 text-slate-600">
-                        <Image src="/logo-Tiqia-noir.png" alt={BRAND_NAME} width={58} height={24} className="h-6 w-auto" />
+                        <Link href="/" className="flex items-center">
+                            <Image src="/logo-Tiqia-noir.png" alt={BRAND_NAME} width={58} height={24} className="h-6 w-auto" />
+                        </Link>
                         <span className="text-slate-400 text-sm ml-2">{t.landing.footer.tagline}</span>
                     </div>
                     <nav className="flex items-center gap-4 text-xs text-slate-400">
