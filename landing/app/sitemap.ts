@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next"
 import { SITE_URL } from "@/lib/brand"
 
 // Pages publiques uniquement — /chat, /login etc. n'existent pas sur cette landing statique
-// (cf. lib/brand.ts::APP_URL, ils vivent sur l'instance frontend/ du client).
+// (ils vivent sur l'instance frontend/ du client).
 //
 // export const dynamic = "force-static" est OBLIGATOIRE ici avec output: "export" (2026-08-27) :
 // contrairement à ce qu'on pouvait attendre de la présence de `force-static` dans le loader

@@ -5,9 +5,6 @@ services:
     rootDir: landing
     buildCommand: npm install && npm run build
     staticPublishPath: ./out
-    envVars:
-      - key: NEXT_PUBLIC_APP_URL
-        value: "https://smartticket-frontend.onrender.com"
     routes:
       - type: rewrite
         source: /*
