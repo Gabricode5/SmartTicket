@@ -45,6 +45,18 @@ RERANK_QUARANTINE_THRESHOLD = int(os.getenv("RERANK_QUARANTINE_THRESHOLD", "-3")
 # pas suggerer, ou de suggerer avec un avertissement). Point de depart, non calibre.
 RAG_LOW_CONFIDENCE_DISTANCE = float(os.getenv("RAG_LOW_CONFIDENCE_DISTANCE", "0.4"))
 
+# --- Ingestion (rag_core/ingest.py) -- memes defauts que backend/ingest_postgres.py ----
+INGEST_CHUNK_SIZE = int(os.getenv("INGEST_CHUNK_SIZE", "1000"))
+INGEST_CHUNK_OVERLAP = int(os.getenv("INGEST_CHUNK_OVERLAP", "100"))
+INGEST_MIN_TEXT_LENGTH = int(os.getenv("MIN_TEXT_LENGTH", "80"))
+INGEST_CHUNK_QUALITY_THRESHOLD = float(os.getenv("CHUNK_QUALITY_THRESHOLD", "0.4"))
+# 0 = pas de plafond ; >0 = on tronque a ce nombre de chunks (garde-fou cout d'embedding).
+INGEST_MAX_CHUNKS = int(os.getenv("MAX_KB_CHUNKS", "80"))
+INGEST_EMBED_BATCH_SIZE = int(os.getenv("EMBED_BATCH_SIZE", "8"))
+INGEST_SCRAPE_TIMEOUT = int(os.getenv("SCRAPE_TIMEOUT", "10"))
+INGEST_USER_AGENT = os.getenv("INGEST_USER_AGENT", "Mozilla/5.0")
+INGEST_DEFAULT_CATEGORY = os.getenv("RAG_INGEST_DEFAULT_CATEGORY", "documentation")
+
 # --- Prompt : surcouche client (couche 2) ---------------------------------------------
 # Personnalisation par installation (ton, langue, formules, perimetre). NE PEUT JAMAIS
 # ecraser les garde-fous de la couche 1 -- cf. rag_core/prompt.py pour l'ordre impose et

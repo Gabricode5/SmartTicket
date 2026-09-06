@@ -19,6 +19,7 @@ class FakeEmbedder:
 
     def __init__(self, mapping: dict[str, list[float]] | None = None):
         self._mapping = mapping or {}
+        self.batch_sizes: list[int] = []  # une entree par appel a embed()
 
     def _one(self, text: str) -> list[float]:
         if text in self._mapping:
@@ -26,6 +27,7 @@ class FakeEmbedder:
         return unit_vector(abs(hash(text)))
 
     def embed(self, texts: list[str]) -> list[list[float]]:
+        self.batch_sizes.append(len(texts))
         return [self._one(t) for t in texts]
 
     def embed_one(self, text: str) -> list[float]:

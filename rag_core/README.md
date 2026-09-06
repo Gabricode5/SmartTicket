@@ -22,6 +22,23 @@ answer(db, question) ->
 Non streamé : produit une **suggestion complète** relue par un agent humain. La passerelle
 ajoute en aval le préfixe `[Suggestion IA – à valider]` et la mention AI Act.
 
+## Ingestion — `rag_core.ingest`
+
+Alimente la table `knowledge_chunk`. Logique reprise de `backend/ingest_postgres.py`
+(chunking `RecursiveCharacterTextSplitter` 1000/100, nettoyage + score qualité via
+`rag_core.text`, `MIN_TEXT_LENGTH`, plafond `MAX_KB_CHUNKS`, embeddings par batch).
+
+```
+ingest_text(db, contenu, *, source, category=None)   primitive : split → filtres → embed → INSERT
+ingest_file(db, bytes, filename, *, category=None)    .txt / .docx / .pdf → ingest_text
+ingest_url (db, url, *, respect_robots=True,          UNE page (robots.txt respecté) → ingest_text
+           fetcher=None)
+-> IngestResult(source, inserted, chunks_rejected, truncated)
+```
+
+Le crawl récursif de sitemap n'est **pas** repris (le backend l'a si besoin plus tard).
+`embedder` / `fetcher` sont injectables pour les tests (aucun appel réseau).
+
 ## Abstraction LLM — `rag_core.llm`
 
 | Élément | Rôle |
