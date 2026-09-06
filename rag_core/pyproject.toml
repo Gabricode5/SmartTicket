@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rag-core"
+version = "0.1.0"
+description = "Bibliotheque RAG autonome (retrieval pgvector + reranking + prompt a deux couches + LLM abstrait). Aucune dependance a l'app Tiqia (backend/)."
+requires-python = ">=3.11"
+dependencies = [
+  # Coeur RAG (versions alignees sur backend/pyproject.toml pour une parite de comportement)
+  "requests==2.34.2",
+  "sqlalchemy==2.0.51",
+  "pgvector==0.5.0",
+  "psycopg2-binary==2.9.12",
+  "python-dotenv==1.2.2",
+  # Ingestion (rag_core/ingest.py, etape 2) -- epingle des maintenant pour figer la stack
+  "langchain-community==0.4.2",
+  "langchain-text-splitters==1.1.2",
+  "beautifulsoup4==4.15.0",
+  "lxml==6.0.2",
+  "pypdf==6.9.2",
+  "python-docx==1.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==9.1.1",
+  "pytest-cov==7.1.0",
+  "ruff==0.6.9",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I"]
+ignore = ["E501"]
