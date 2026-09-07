@@ -1,0 +1,57 @@
+# Blueprint Render pour MON environnement de DEV/TEST uniquement (GLPI Docker local).
+# La cible de production du connecteur est ON-PREMISE chez le client (Docker Compose sur
+# leur infra), pas Render. Le render.yaml RACINE du repo n'est pas concerné.
+#
+# Blueprint path à pointer sur : connectors/glpi/render.yaml
+
+databases:
+  - name: glpi-connector-db          # état processed_tickets + base vectorielle rag_core (dev)
+    plan: free
+    region: frankfurt
+
+services:
+  - type: web
+    name: glpi-connector-web
+    runtime: docker
+    dockerfilePath: ./connectors/glpi/Dockerfile
+    dockerContext: .                  # racine du repo
+    region: frankfurt
+    healthCheckPath: /health
+    envVars:
+      - key: CONNECTOR_DATABASE_URL
+        fromDatabase: { name: glpi-connector-db, property: connectionString }
+      - key: RAG_DATABASE_URL
+        fromDatabase: { name: glpi-connector-db, property: connectionString }
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: GLPI_URL
+        sync: false
+      - key: GLPI_APP_TOKEN
+        sync: false
+      - key: GLPI_USER_TOKEN
+        sync: false
+      - key: DRY_RUN
+        value: "true"                 # dev : on n'écrit rien dans GLPI
+
+  - type: worker
+    name: glpi-connector-worker
+    runtime: docker
+    dockerfilePath: ./connectors/glpi/Dockerfile
+    dockerContext: .
+    region: frankfurt
+    startCommand: python -m glpi_connector.worker
+    envVars:
+      - key: CONNECTOR_DATABASE_URL
+        fromDatabase: { name: glpi-connector-db, property: connectionString }
+      - key: RAG_DATABASE_URL
+        fromDatabase: { name: glpi-connector-db, property: connectionString }
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: GLPI_URL
+        sync: false
+      - key: GLPI_APP_TOKEN
+        sync: false
+      - key: GLPI_USER_TOKEN
+        sync: false
+      - key: DRY_RUN
+        value: "true"
