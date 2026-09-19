@@ -5,7 +5,7 @@ import { LocaleProvider } from "@/lib/i18n/LocaleContext";
 
 function fillRequiredFields() {
   fireEvent.change(screen.getByLabelText(/prénom/i), { target: { value: "Jean" } });
-  fireEvent.change(screen.getByLabelText(/^nom$/i), { target: { value: "Dupont" } });
+  fireEvent.change(screen.getByLabelText(/^nom \(optionnel\)$/i), { target: { value: "Dupont" } });
   fireEvent.change(screen.getByLabelText(/nom d'utilisateur/i), { target: { value: "jean_dupont" } });
   fireEvent.change(screen.getByLabelText(/adresse email/i), { target: { value: "jean@example.com" } });
   fireEvent.change(screen.getByLabelText(/^mot de passe$/i), { target: { value: "password123" } });
@@ -37,5 +37,23 @@ describe("SignUpPage", () => {
       expect(screen.getByText("Cet email est déjà utilisé.")).toBeInTheDocument();
     });
     expect(screen.queryByText(/vérifiez votre boîte mail/i)).not.toBeInTheDocument();
+  });
+
+  it("registers successfully when prénom and nom are left empty", async () => {
+    const fetchMock = mockFetch(() => jsonResponse({ id: 1, email: "jean@example.com", email_verified: false }, 201));
+
+    render(<SignUpPage />, { wrapper: LocaleProvider });
+    fireEvent.change(screen.getByLabelText(/nom d'utilisateur/i), { target: { value: "jean_dupont" } });
+    fireEvent.change(screen.getByLabelText(/adresse email/i), { target: { value: "jean@example.com" } });
+    fireEvent.change(screen.getByLabelText(/^mot de passe$/i), { target: { value: "password123" } });
+    fireEvent.change(screen.getByLabelText(/confirmer le mot de passe/i), { target: { value: "password123" } });
+    fireEvent.click(screen.getByLabelText(/j'accepte/i));
+    fireEvent.click(screen.getByRole("button", { name: /créer mon compte/i }));
+
+    expect(await screen.findByText(/vérifiez votre boîte mail/i)).toBeInTheDocument();
+    const [, init] = fetchMock.mock.calls[0];
+    const payload = JSON.parse(init.body as string);
+    expect(payload.prenom).toBeNull();
+    expect(payload.nom).toBeNull();
   });
 });

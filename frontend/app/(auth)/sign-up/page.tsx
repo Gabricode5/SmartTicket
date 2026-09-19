@@ -52,7 +52,9 @@ export default function SignUpPage() {
         setIsLoading(true)
         const formData = new FormData(event.currentTarget)
         const data = Object.fromEntries(formData)
-        const payload = { username: data.username, email: data.email, password, prenom: data.prenom, nom: data.nom }
+        const prenom = String(data.prenom ?? "").trim()
+        const nom = String(data.nom ?? "").trim()
+        const payload = { username: data.username, email: data.email, password, prenom: prenom || null, nom: nom || null }
 
         try {
             const response = await fetch("/api/register", {
@@ -134,16 +136,16 @@ export default function SignUpPage() {
                             {/* Prénom + Nom */}
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
-                                    <label htmlFor="prenom" className="block text-sm font-medium text-slate-700">{t.signUp.firstNameLabel}</label>
+                                    <label htmlFor="prenom" className="block text-sm font-medium text-slate-700">{t.signUp.firstNameLabel} <span className="font-normal text-slate-500">({t.signUp.optionalHint})</span></label>
                                     <input
-                                        id="prenom" name="prenom" placeholder="Jean" required
+                                        id="prenom" name="prenom" placeholder="Jean"
                                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand focus:bg-white transition-all"
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label htmlFor="nom" className="block text-sm font-medium text-slate-700">{t.signUp.lastNameLabel}</label>
+                                    <label htmlFor="nom" className="block text-sm font-medium text-slate-700">{t.signUp.lastNameLabel} <span className="font-normal text-slate-500">({t.signUp.optionalHint})</span></label>
                                     <input
-                                        id="nom" name="nom" placeholder="Dupont" required
+                                        id="nom" name="nom" placeholder="Dupont"
                                         className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand focus:bg-white transition-all"
                                     />
                                 </div>
