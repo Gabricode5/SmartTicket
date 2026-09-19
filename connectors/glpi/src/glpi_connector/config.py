@@ -7,6 +7,7 @@ Defaults PRUDENTS (décision étape 3), en config jamais en dur :
 import os
 
 from dotenv import load_dotenv
+from rag_core.prompt import AI_ASSISTANCE_DISCLOSURE_FR
 
 load_dotenv()
 
@@ -50,10 +51,11 @@ if RESPONSE_MODE != "suggested":
 
 POLL_INTERVAL_SECONDS = int(os.getenv("POLL_INTERVAL_SECONDS", "60"))
 
-# Mention AI Act (art. 50) apposée à la suggestion. Vide = aucune.
-AI_DISCLOSURE = os.getenv(
-    "AI_DISCLOSURE", "Cette réponse a été rédigée avec l'assistance d'une IA."
-)
+# Mention AI Act (art. 50) apposée à la suggestion, jointe au texte que l'agent relaie au
+# client (cf. poller._compose_followup). Source unique de vérité = rag_core.prompt, pour
+# ne pas dupliquer ce texte entre les deux packages. Vide = aucune (override par le client
+# via AI_DISCLOSURE, ex. traduction ou formulation propre à l'installation).
+AI_DISCLOSURE = os.getenv("AI_DISCLOSURE", AI_ASSISTANCE_DISCLOSURE_FR)
 
 # --- Base d'état du connecteur (processed_tickets) -------------------------------
 # Distincte de la base vectorielle rag_core (RAG_DATABASE_URL) et de celle de Tiqia.
