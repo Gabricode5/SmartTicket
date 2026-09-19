@@ -93,7 +93,7 @@ export default function LandingPage() {
                             <Link href="/login">{t.landing.hero.ctaSecondary}</Link>
                         </Button>
                     </div>
-                    <p className="mt-5 text-sm text-slate-400">
+                    <p className="mt-5 text-sm text-slate-500">
                         {t.landing.hero.guestPrompt}{" "}
                         <Link href="/chat" className="text-brand font-medium hover:underline">
                             {t.landing.hero.guestLink}
@@ -108,7 +108,7 @@ export default function LandingPage() {
                             <div className="w-3 h-3 rounded-full bg-red-400" />
                             <div className="w-3 h-3 rounded-full bg-amber-400" />
                             <div className="w-3 h-3 rounded-full bg-emerald-400" />
-                            <span className="ml-2 text-xs text-slate-400 font-mono">{t.landing.hero.previewTitle}</span>
+                            <span className="ml-2 text-xs text-slate-500 font-mono">{t.landing.hero.previewTitle}</span>
                         </div>
                         <div className="p-6 space-y-4">
                             <div className="flex justify-end">
@@ -126,7 +126,7 @@ export default function LandingPage() {
                             </div>
                             <div className="flex items-center gap-2 pt-1">
                                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                <span className="text-xs text-slate-400">{t.landing.hero.previewActive}</span>
+                                <span className="text-xs text-slate-500">{t.landing.hero.previewActive}</span>
                             </div>
                         </div>
                     </div>
@@ -250,9 +250,9 @@ export default function LandingPage() {
                 <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-2 text-slate-600">
                         <Image src="/logo-Tiqia-noir.png" alt={BRAND_NAME} width={58} height={24} className="h-6 w-auto" />
-                        <span className="text-slate-400 text-sm ml-2">{t.landing.footer.tagline}</span>
+                        <span className="text-slate-500 text-sm ml-2">{t.landing.footer.tagline}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                    <div className="flex items-center gap-2 text-xs text-slate-500">
                         <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
                         {t.landing.footer.poweredBy}
                     </div>

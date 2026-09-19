@@ -250,7 +250,7 @@ export default function SavDashboard() {
                                     <div className={`max-w-[80%] flex flex-col ${m.role === "sav" ? "items-end" : "items-start"}`}>
                                         <div className={`rounded-2xl px-5 py-3 text-sm shadow-sm ${
                                             m.role === "sav"
-                                                ? "bg-emerald-600 text-white"
+                                                ? "bg-emerald-700 text-white"
                                                 : m.role === "user"
                                                 ? "bg-brand text-white"
                                                 : "bg-card border-2 border-border text-foreground"

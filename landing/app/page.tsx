@@ -129,7 +129,7 @@ export default function LandingPage() {
                             <div className="w-3 h-3 rounded-full bg-red-400" />
                             <div className="w-3 h-3 rounded-full bg-amber-400" />
                             <div className="w-3 h-3 rounded-full bg-emerald-400" />
-                            <span className="ml-2 text-xs text-slate-400 font-mono">{t.landing.hero.previewTitle}</span>
+                            <span className="ml-2 text-xs text-slate-500 font-mono">{t.landing.hero.previewTitle}</span>
                         </div>
                         <div className="p-6 space-y-4">
                             <div className="flex justify-end">
@@ -147,7 +147,7 @@ export default function LandingPage() {
                             </div>
                             <div className="flex items-center gap-2 pt-1">
                                 <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                <span className="text-xs text-slate-400">{t.landing.hero.previewActive}</span>
+                                <span className="text-xs text-slate-500">{t.landing.hero.previewActive}</span>
                             </div>
                         </div>
                     </div>
@@ -270,9 +270,9 @@ export default function LandingPage() {
                         <Link href="/" className="flex items-center">
                             <Image src="/logo-Tiqia-noir.png" alt={BRAND_NAME} width={58} height={24} className="h-6 w-auto" />
                         </Link>
-                        <span className="text-slate-400 text-sm ml-2">{t.landing.footer.tagline}</span>
+                        <span className="text-slate-500 text-sm ml-2">{t.landing.footer.tagline}</span>
                     </div>
-                    <nav className="flex items-center gap-4 text-xs text-slate-400">
+                    <nav className="flex items-center gap-4 text-xs text-slate-500">
                         <Link href="/mentions-legales" className="hover:text-slate-600 hover:underline">{t.landing.footer.legal}</Link>
                         <Link href="/politique-confidentialite" className="hover:text-slate-600 hover:underline">{t.landing.footer.privacy}</Link>
                         <Link href="/cgv" className="hover:text-slate-600 hover:underline">{t.landing.footer.cgv}</Link>

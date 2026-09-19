@@ -333,7 +333,7 @@ export default function TicketDetailPage() {
                             <div key={m.id} className={`flex ${m.role === "sav" ? "justify-end" : "justify-start"}`}>
                                 <div className={`max-w-[80%] flex flex-col ${m.role === "sav" ? "items-end" : "items-start"}`}>
                                     <div className={`rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
-                                        m.role === "sav" ? "bg-emerald-600 text-white" : m.role === "user" ? "bg-brand text-white" : "bg-card border-2 border-border text-foreground"
+                                        m.role === "sav" ? "bg-emerald-700 text-white" : m.role === "user" ? "bg-brand text-white" : "bg-card border-2 border-border text-foreground"
                                     }`}>
                                         {m.content}
                                     </div>

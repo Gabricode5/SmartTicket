@@ -45,7 +45,7 @@
   --secondary: oklch(0.967 0.006 269.88);
   --secondary-foreground: oklch(0.21 0.01 269.88);
   --muted: oklch(0.97 0.004 269.88);
-  --muted-foreground: oklch(0.556 0.012 269.88);
+  --muted-foreground: oklch(0.5 0.012 269.88); /* #60636A — durci depuis L=0.556 (#70737B, ratio 4.35) pour passer AA (5.52) sur --muted, cf. frontend/app/globals.css */
   --accent: oklch(0.97 0.006 269.88);
   --accent-foreground: oklch(0.205 0.01 269.88);
   --destructive: oklch(0.58 0.22 27);
