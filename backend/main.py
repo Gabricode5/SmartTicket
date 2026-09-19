@@ -33,6 +33,18 @@ if not os.getenv("SECRET_KEY"):
 
 PURGE_RETENTION_DAYS = int(os.getenv("PURGE_RETENTION_DAYS", "30"))
 
+# Minimisation RGPD sur le contenu des messages de chat (indépendant de la suppression de
+# compte/session, cf. purge_soft_deleted ci-dessus) : au-delà de MESSAGE_RETENTION_DAYS, le
+# contenu d'un message est supprimé même si sa session reste active. La session/le ticket
+# eux-mêmes sont conservés (historique, stats) — seul `contenu` (ChatMessage) est purgé.
+# Défaut prudent (12 mois) : assez long pour couvrir un usage support/légal courant, assez
+# court pour rester une minimisation réelle.
+MESSAGE_RETENTION_DAYS = int(os.getenv("MESSAGE_RETENTION_DAYS", "365"))
+# Purge désactivée par défaut : activer explicitement (après avoir vérifié la valeur de
+# MESSAGE_RETENTION_DAYS pour l'historique déjà en base) plutôt que de supprimer des messages
+# existants dès le premier déploiement de ce mécanisme.
+MESSAGE_RETENTION_PURGE_ENABLED = os.getenv("MESSAGE_RETENTION_PURGE_ENABLED", "false").strip().lower() == "true"
+
 
 def purge_soft_deleted(retention_days: int = PURGE_RETENTION_DAYS) -> None:
     """Hard-delete rows soft-deleted more than retention_days ago (RGPD)."""
@@ -90,6 +102,27 @@ def purge_unclaimed_guests(ttl_days: int = GUEST_ACCOUNT_TTL_DAYS) -> None:
                 )
     except Exception as exc:
         _log.error("Guest purge failed: %s", exc, exc_info=True)
+
+
+def purge_old_messages(retention_days: int = MESSAGE_RETENTION_DAYS) -> None:
+    """Hard-delete le contenu des messages de chat plus vieux que retention_days, que leur
+    session soit encore active ou non (minimisation RGPD, indépendante de la suppression de
+    compte). La session/le ticket ne sont pas touchés."""
+    from database import SessionLocal as _SessionLocal
+    cutoff = datetime.utcnow() - timedelta(days=retention_days)
+    try:
+        with _SessionLocal() as db:
+            deleted = db.query(models.ChatMessage).filter(
+                models.ChatMessage.date_creation < cutoff,
+            ).delete(synchronize_session=False)
+            db.commit()
+            if deleted:
+                _log.info(
+                    "Purge messages: %d message(s) supprimé(s) définitivement (rétention %d j)",
+                    deleted, retention_days,
+                )
+    except Exception as exc:
+        _log.error("Message purge failed: %s", exc, exc_info=True)
 
 
 def run_migrations() -> None:
@@ -272,6 +305,24 @@ def start_purge_scheduler():
         # Purge immédiate au démarrage pour traiter les enregistrements déjà expirés
         purge_soft_deleted()
         purge_unclaimed_guests()
+
+        if MESSAGE_RETENTION_PURGE_ENABLED:
+            # Cron uniquement, PAS de purge immédiate au démarrage (contrairement aux deux
+            # jobs ci-dessus) : le volume potentiellement concerné (tout l'historique de
+            # messages déjà au-delà de MESSAGE_RETENTION_DAYS) est bien plus important qu'un
+            # compte soft-deleted isolé — on laisse le créneau de nuit s'en charger plutôt que
+            # de déclencher une suppression massive à chaque redémarrage du service.
+            scheduler.add_job(purge_old_messages, "cron", hour=3, minute=30, id="message_retention_purge")
+            _log.info(
+                "Purge des messages par rétention activée — nuit à 03:30 UTC (rétention %d j)",
+                MESSAGE_RETENTION_DAYS,
+            )
+        else:
+            _log.info(
+                "Purge des messages par rétention désactivée (MESSAGE_RETENTION_PURGE_ENABLED=false) "
+                "— rétention configurée à %d j mais non appliquée",
+                MESSAGE_RETENTION_DAYS,
+            )
         return scheduler
     except Exception as exc:
         _log.error("Scheduler startup failed: %s", exc, exc_info=True)
