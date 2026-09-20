@@ -3,7 +3,7 @@ import io
 import secrets
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel, EmailStr, ValidationError
 from sqlalchemy.orm import Session
 
@@ -12,9 +12,9 @@ import models
 import schemas
 from database import get_db
 from dependencies import (
-    GUEST_EMAIL_DOMAIN, MAX_CSV_IMPORT_ROWS, can_manage_sav_team,
-    create_password_reset_token, get_current_user, get_user_by_email,
-    is_admin_or_sav, pwd_context,
+    GUEST_EMAIL_DOMAIN, MAX_CSV_IMPORT_ROWS, POLES_ENABLED, PoleIngestionError,
+    can_manage_sav_team, create_password_reset_token, get_current_user, get_user_by_email,
+    is_admin_or_sav, is_manager, is_super_admin, pwd_context, resolve_ingestion_pole_id,
 )
 from email_utils import send_account_invitation_email
 
@@ -48,11 +48,21 @@ def list_users(role: str | None = None, current_user: str = Depends(get_current_
              "role": u.role.nom_role if u.role else "user"} for u in query.all()]
 
 
-@router.post("/users/import-csv", response_model=schemas.CsvImportResponse, summary="Importer des utilisateurs depuis un fichier CSV (admin)")
-async def import_users_csv(file: UploadFile = File(...), current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+@router.post("/users/import-csv", response_model=schemas.CsvImportResponse, summary="Importer des utilisateurs depuis un fichier CSV (admin, ou manager dans ses pôles)")
+async def import_users_csv(file: UploadFile = File(...), pole_id: int = Form(None), current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
     requester = get_user_by_email(db, current_user)
-    if not requester or not requester.role or requester.role.nom_role != "admin":
+    # Un manager (superviseur + manager_poles, feature/poles) peut créer des utilisateurs
+    # dans ses propres pôles -- pas seulement l'admin. Hors POLES_ENABLED, aucun superviseur
+    # n'est jamais "manager" (is_manager renvoie toujours false), donc ce chemin reste
+    # strictement réservé à l'admin, comportement actuel inchangé.
+    requester_is_manager = bool(requester) and POLES_ENABLED and is_manager(db, requester)
+    if not requester or not (is_super_admin(requester) or requester_is_manager):
         raise HTTPException(status_code=403, detail="Accès refusé")
+
+    try:
+        resolved_pole_id = resolve_ingestion_pole_id(db, requester, pole_id)
+    except PoleIngestionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
 
     filename = file.filename or ""
     if not filename.lower().endswith(".csv"):
@@ -136,6 +146,7 @@ async def import_users_csv(file: UploadFile = File(...), current_user: str = Dep
                 prenom=parsed.prenom,
                 nom=parsed.nom,
                 id_role=default_role.id,
+                pole_id=resolved_pole_id,
                 # Import vetté par un admin depuis les données internes de l'entreprise (ERP)
                 # — pas de boucle de vérification d'email classique nécessaire, contrairement
                 # à une inscription publique.

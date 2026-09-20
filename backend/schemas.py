@@ -62,6 +62,20 @@ class UserListResponse(BaseModel):
 class UserRoleUpdateRequest(BaseModel):
     role: str
 
+class PoleCreate(BaseModel):
+    nom: str
+
+class PoleUpdate(BaseModel):
+    nom: str
+
+class PoleResponse(BaseModel):
+    id: int
+    nom: str
+    is_global: bool
+
+class ManagerPoleAssignRequest(BaseModel):
+    pole_ids: list[int]
+
 class CsvImportSkippedRow(BaseModel):
     row: int
     email: str

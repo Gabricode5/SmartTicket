@@ -20,7 +20,7 @@ from sqlalchemy import text as _text
 import models
 from database import engine as _engine
 from dependencies import ADMIN_SETUP_TOKEN_EXPIRE_HOURS, GUEST_ACCOUNT_TTL_DAYS, GUEST_EMAIL_DOMAIN, POLES_ENABLED, limiter
-from routers import ai, analytics, auth, instance, knowledge, messages, notifications, sessions, tickets, users
+from routers import ai, analytics, auth, instance, knowledge, messages, notifications, poles, sessions, tickets, users
 
 logging.basicConfig(
     level=logging.INFO,
@@ -433,7 +433,7 @@ async def enforce_subscription_status(request: Request, call_next):
     return await call_next(request)
 
 
-for _router in [auth.router, sessions.router, messages.router, ai.router, knowledge.router, users.router, analytics.router, notifications.router, instance.router, tickets.router]:
+for _router in [auth.router, sessions.router, messages.router, ai.router, knowledge.router, users.router, analytics.router, notifications.router, instance.router, tickets.router, poles.router]:
     app.include_router(_router, prefix="/v1")
 
 
