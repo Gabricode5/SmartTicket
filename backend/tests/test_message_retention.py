@@ -45,11 +45,12 @@ class TestMessageRetentionPurge:
         user = _make_user(db_session, email="retention-old@example.com")
         session = _make_session(db_session, user)
         old = _make_message(db_session, session, age_days=400, contenu="vieux message")
+        old_id = old.id  # capturé avant purge : la ligne va être supprimée par une autre session
 
         purge_old_messages(retention_days=365)
 
         db_session.expire_all()
-        assert db_session.query(models.ChatMessage).filter_by(id=old.id).first() is None
+        assert db_session.query(models.ChatMessage).filter_by(id=old_id).first() is None
 
     def test_recent_message_is_kept(self, db_session):
         user = _make_user(db_session, email="retention-recent@example.com")
