@@ -30,6 +30,7 @@ import {
     Sun,
     Moon,
     Ticket as TicketIcon,
+    Building2,
 } from "lucide-react"
 
 interface Conversation {
@@ -398,6 +399,26 @@ export function AppSidebar() {
                                 <Link href="/monitoring">
                                     <Activity className="mr-3 h-4 w-4" />
                                     {t.sidebar.monitoring}
+                                </Link>
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {/* Système de pôles (feature/poles) : caché tant que la feature n'est pas
+                    activée sur l'instance (poles_enabled=false) ou pour tout rôle autre
+                    qu'admin -- seul le super admin gère les pôles (décision étape 4). */}
+                {apiUser?.poles_enabled && user.role === "admin" && (
+                    <div>
+                        <div className="space-y-1">
+                            <Button
+                                variant={isActive("/poles") ? "secondary" : "ghost"}
+                                asChild
+                                className={cn("w-full justify-start", isActive("/poles") && "bg-sidebar-accent")}
+                            >
+                                <Link href="/poles">
+                                    <Building2 className="mr-3 h-4 w-4" />
+                                    {t.sidebar.poles}
                                 </Link>
                             </Button>
                         </div>

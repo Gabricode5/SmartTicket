@@ -5,12 +5,16 @@ import { Badge } from "@/components/ui/badge"
 import { Users, Headphones, UserCheck, UserX, ChevronLeft, ChevronRight, ShieldCheck } from "lucide-react"
 import type { UserItem } from "./types"
 import SavDashboard from "./SavDashboard"
+import { CsvImportDialog } from "./CsvImportDialog"
 import { useLocale } from "@/lib/i18n/LocaleContext"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
+import { isManager } from "@/lib/poles"
 
 const PAGE_SIZE = 8
 
 export default function SupervisorDashboard() {
     const { messages: t } = useLocale()
+    const { user: currentUser } = useCurrentUser()
     const [users, setUsers] = useState<UserItem[]>([])
     const [savUsers, setSavUsers] = useState<UserItem[]>([])
     const [error, setError] = useState<string | null>(null)
@@ -83,6 +87,10 @@ export default function SupervisorDashboard() {
                         <p className="text-xs text-muted-foreground">{t.supervisor.subtitle}</p>
                     </div>
                 </div>
+                {/* Création scopée au pôle (feature/poles, étape 4) : uniquement visible pour
+                    un manager (superviseur avec des pôles assignés) -- un superviseur simple
+                    n'a pas ce droit (inchangé depuis avant les pôles), l'appel serait 403. */}
+                {isManager(currentUser) && <CsvImportDialog onImported={loadTeam} />}
             </header>
 
             <div className="p-8 space-y-6 max-w-7xl mx-auto w-full">

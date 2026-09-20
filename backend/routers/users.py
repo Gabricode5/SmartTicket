@@ -45,7 +45,8 @@ def list_users(role: str | None = None, current_user: str = Depends(get_current_
     if role:
         query = query.filter(models.Role.nom_role == role)
     return [{"id": u.id, "username": u.username, "email": u.email, "prenom": u.prenom, "nom": u.nom,
-             "role": u.role.nom_role if u.role else "user"} for u in query.all()]
+             "role": u.role.nom_role if u.role else "user",
+             "pole_id": u.pole_id, "pole_nom": u.pole.nom if u.pole else None} for u in query.all()]
 
 
 @router.post("/users/import-csv", response_model=schemas.CsvImportResponse, summary="Importer des utilisateurs depuis un fichier CSV (admin, ou manager dans ses pôles)")

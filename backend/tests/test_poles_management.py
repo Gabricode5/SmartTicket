@@ -14,12 +14,14 @@ _TEST_PASSWORD = secrets.token_urlsafe(16)
 
 @contextlib.contextmanager
 def _poles_enabled():
-    """POLES_ENABLED est importé par valeur dans dependencies.py (source), routers/poles.py
-    et routers/users.py -- les trois doivent être patchés ensemble pour un scénario
-    cohérent "flag actif", même pattern que routers.ai.POLES_ENABLED aux étapes 2-3."""
+    """POLES_ENABLED est importé par valeur dans dependencies.py (source), routers/poles.py,
+    routers/users.py et routers/auth.py (/me) -- les quatre doivent être patchés ensemble
+    pour un scénario cohérent "flag actif", même pattern que routers.ai.POLES_ENABLED aux
+    étapes 2-3."""
     with patch("dependencies.POLES_ENABLED", True), \
          patch("routers.poles.POLES_ENABLED", True), \
-         patch("routers.users.POLES_ENABLED", True):
+         patch("routers.users.POLES_ENABLED", True), \
+         patch("routers.auth.POLES_ENABLED", True):
         yield
 
 
@@ -32,8 +34,12 @@ def _make_pole(db_session, *, nom: str, is_global: bool = False) -> models.Pole:
 
 
 def _make_admin_client(client, *, email: str = "poles_mgmt_admin@example.com"):
+    # username dérivé de l'email (pas une constante) : setup-admin refuse un username déjà
+    # pris par un AUTRE email (contrainte UNIQUE), ce qui casserait tout test appelant ce
+    # helper deux fois avec des emails différents pour obtenir deux admins distincts.
+    username = email.split("@")[0]
     client.post("/v1/setup-admin", json={
-        "username": "poles_mgmt_admin", "email": email, "password": _TEST_PASSWORD,
+        "username": username, "email": email, "password": _TEST_PASSWORD,
     }, headers={"X-Setup-Key": os.environ["ADMIN_SETUP_KEY"]})
     token = client.post("/v1/login", json={"email": email, "password": _TEST_PASSWORD}).json()["access_token"]
     client.headers.update({"Authorization": f"Bearer {token}"})
@@ -124,6 +130,46 @@ class TestPoleCrudAuthorization:
         assert db_session.query(models.Pole).filter_by(id=pole_id).first() is None
 
 
+class TestListPolesReadAccess:
+    """GET /poles est volontairement moins restrictif que la gestion (create/rename/
+    delete/assign, toujours super admin) : is_pole_unrestricted couvre aussi le
+    superviseur non-manager, qui a besoin de connaître les pôles existants pour
+    l'ingestion/création d'utilisateur (resolve_ingestion_pole_id le laisse déjà tout
+    choisir)."""
+
+    def test_admin_can_list_poles(self, client, db_session):
+        _make_pole(db_session, nom="Pôle listable admin")
+        _make_admin_client(client)
+        with _poles_enabled():
+            resp = client.get("/v1/poles")
+        assert resp.status_code == 200
+        assert len(resp.json()) == 1
+
+    def test_unmanaged_superviseur_can_list_poles(self, client, mark_verified, db_session):
+        _make_pole(db_session, nom="Pôle listable superviseur")
+        _register_and_login(client, mark_verified, db_session, email="list-sup@example.com", role="superviseur")
+        with _poles_enabled():
+            resp = client.get("/v1/poles")
+        assert resp.status_code == 200
+        assert len(resp.json()) == 1
+
+    def test_manager_cannot_list_all_poles(self, client, db_session):
+        """Un manager consulte ses pôles via /me (managed_poles), pas via GET /poles --
+        il n'est pas is_pole_unrestricted."""
+        pole = _make_pole(db_session, nom="Pôle géré par manager list")
+        _make_manager(db_session, email="list-manager@example.com", pole_ids=[pole.id])
+        _login_as(client, "list-manager@example.com")
+        with _poles_enabled():
+            resp = client.get("/v1/poles")
+        assert resp.status_code == 403
+
+    def test_plain_sav_cannot_list_poles(self, client, mark_verified, db_session):
+        _register_and_login(client, mark_verified, db_session, email="list-sav@example.com", role="sav")
+        with _poles_enabled():
+            resp = client.get("/v1/poles")
+        assert resp.status_code == 403
+
+
 class TestGeneralPoleCannotBeDeleted:
     def test_deleting_the_global_pole_is_rejected(self, client, db_session):
         general = _make_pole(db_session, nom="Général", is_global=True)
@@ -164,6 +210,39 @@ class TestGeneralPoleCannotBeDeleted:
 # --------------------------------------------------------------------------------------
 # 2. Assignation manager <-> pôles
 # --------------------------------------------------------------------------------------
+
+class TestListManagers:
+    def test_lists_superviseurs_with_at_least_one_pole(self, client, db_session):
+        pole_a = _make_pole(db_session, nom="Pôle A list managers")
+        pole_b = _make_pole(db_session, nom="Pôle B list managers")
+        _make_manager(db_session, email="listed-manager@example.com", pole_ids=[pole_a.id, pole_b.id])
+        _make_admin_client(client)
+
+        with _poles_enabled():
+            resp = client.get("/v1/managers")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body) == 1
+        assert body[0]["email"] == "listed-manager@example.com"
+        assert {p["nom"] for p in body[0]["poles"]} == {"Pôle A list managers", "Pôle B list managers"}
+
+    def test_unmanaged_superviseur_is_not_listed(self, client, mark_verified, db_session):
+        _register_and_login(client, mark_verified, db_session, email="unmanaged-list@example.com", role="superviseur")
+        _make_admin_client(client)
+
+        with _poles_enabled():
+            resp = client.get("/v1/managers")
+
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    def test_non_admin_cannot_list_managers(self, client, mark_verified, db_session):
+        _register_and_login(client, mark_verified, db_session, email="regular-list-managers@example.com")
+        with _poles_enabled():
+            resp = client.get("/v1/managers")
+        assert resp.status_code == 403
+
 
 class TestManagerPoleAssignment:
     def test_admin_can_assign_a_superviseur_to_multiple_poles(self, client, mark_verified, db_session):
@@ -206,6 +285,59 @@ class TestManagerPoleAssignment:
 
         with _poles_enabled():
             resp = client.put(f"/v1/users/{superviseur_id}/manager-poles", json={"pole_ids": [pole.id]})
+
+        assert resp.status_code == 403
+
+
+class TestUserPoleAssignment:
+    """PUT /users/{id}/pole -- distinct de manager-poles : réaffecte le pole_id d'un
+    utilisateur quelconque déjà existant (édition, pas création)."""
+
+    def test_admin_can_assign_a_pole_to_a_user(self, client, mark_verified, db_session):
+        pole = _make_pole(db_session, nom="Pôle assign user")
+        user_id = _register_and_login(client, mark_verified, db_session, email="assign-target@example.com", role="sav")
+        _make_admin_client(client)
+
+        with _poles_enabled():
+            resp = client.put(f"/v1/users/{user_id}/pole", json={"pole_id": pole.id})
+
+        assert resp.status_code == 200
+        db_session.expire_all()
+        assert db_session.query(models.Utilisateur).filter_by(id=user_id).first().pole_id == pole.id
+
+    def test_admin_can_clear_a_users_pole(self, client, mark_verified, db_session):
+        pole = _make_pole(db_session, nom="Pôle à retirer")
+        user_id = _register_and_login(client, mark_verified, db_session, email="clear-target@example.com", role="sav")
+        target = db_session.query(models.Utilisateur).filter_by(id=user_id).first()
+        target.pole_id = pole.id
+        db_session.commit()
+        _make_admin_client(client)
+
+        with _poles_enabled():
+            resp = client.put(f"/v1/users/{user_id}/pole", json={"pole_id": None})
+
+        assert resp.status_code == 200
+        db_session.expire_all()
+        assert db_session.query(models.Utilisateur).filter_by(id=user_id).first().pole_id is None
+
+    def test_cannot_assign_a_pole_to_an_admin(self, client, db_session):
+        pole = _make_pole(db_session, nom="Pôle admin refusé")
+        _make_admin_client(client, email="target-admin@example.com")
+        admin_id = db_session.query(models.Utilisateur).filter_by(email="target-admin@example.com").first().id
+        _make_admin_client(client, email="acting-admin@example.com")
+
+        with _poles_enabled():
+            resp = client.put(f"/v1/users/{admin_id}/pole", json={"pole_id": pole.id})
+
+        assert resp.status_code == 400
+
+    def test_non_admin_cannot_assign_a_users_pole(self, client, mark_verified, db_session):
+        pole = _make_pole(db_session, nom="Pôle non-admin user assign")
+        user_id = _register_and_login(client, mark_verified, db_session, email="assign-target-2@example.com", role="sav")
+        _register_and_login(client, mark_verified, db_session, email="regular-assigner-2@example.com")
+
+        with _poles_enabled():
+            resp = client.put(f"/v1/users/{user_id}/pole", json={"pole_id": pole.id})
 
         assert resp.status_code == 403
 
@@ -329,3 +461,72 @@ class TestManagementRetroCompat:
         created = db_session.query(models.Utilisateur).filter_by(email="newbie@example.com").first()
         assert created is not None
         assert created.pole_id is None
+
+
+# --------------------------------------------------------------------------------------
+# 5. /me expose ce qu'il faut à l'UI (étape 5) sans fuite ni champ manquant
+# --------------------------------------------------------------------------------------
+
+class TestMeExposesPoleInfo:
+    def test_flag_off_me_reports_disabled_and_no_pole_fields(self, client):
+        _make_admin_client(client)
+        resp = client.get("/v1/me")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["poles_enabled"] is False
+        assert body["pole_id"] is None
+        assert body["managed_poles"] == []
+
+    def test_sav_sees_their_own_pole(self, client, mark_verified, db_session):
+        pole = _make_pole(db_session, nom="Pôle du sav /me")
+        role_row = db_session.query(models.Role).filter_by(nom_role="sav").first()
+        sav = models.Utilisateur(
+            username="sav_me", email="sav-me@example.com", password_hash=pwd_context.hash(_TEST_PASSWORD),
+            id_role=role_row.id, email_verified=True, pole_id=pole.id,
+        )
+        db_session.add(sav)
+        db_session.commit()
+        _login_as(client, "sav-me@example.com")
+
+        with _poles_enabled():
+            resp = client.get("/v1/me")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["poles_enabled"] is True
+        assert body["pole_id"] == pole.id
+        assert body["pole_nom"] == "Pôle du sav /me"
+        assert body["managed_poles"] == []
+
+    def test_admin_and_unmanaged_superviseur_have_no_pole_without_error(self, client, mark_verified, db_session):
+        """Ni bug ni donnée manquante : l'absence de pôle est légitime pour ces deux rôles
+        (règle 4, décision B) -- /me doit rester silencieux (null), pas planter."""
+        _register_and_login(client, mark_verified, db_session, email="unmanaged-me@example.com", role="superviseur")
+        with _poles_enabled():
+            resp = client.get("/v1/me")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["pole_id"] is None
+        assert body["pole_nom"] is None
+        assert body["managed_poles"] == []
+
+        _make_admin_client(client, email="admin-me@example.com")
+        with _poles_enabled():
+            resp = client.get("/v1/me")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["pole_id"] is None
+        assert body["managed_poles"] == []
+
+    def test_manager_sees_their_managed_poles_with_names(self, client, db_session):
+        pole_a = _make_pole(db_session, nom="Pôle A /me")
+        pole_b = _make_pole(db_session, nom="Pôle B /me")
+        _make_manager(db_session, email="manager-me@example.com", pole_ids=[pole_a.id, pole_b.id])
+        _login_as(client, "manager-me@example.com")
+
+        with _poles_enabled():
+            resp = client.get("/v1/me")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert {p["nom"] for p in body["managed_poles"]} == {"Pôle A /me", "Pôle B /me"}

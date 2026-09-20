@@ -14,6 +14,7 @@ from dependencies import (
     ADMIN_SETUP_RATE_LIMIT,
     FORGOT_PASSWORD_RATE_LIMIT,
     LOGIN_RATE_LIMIT,
+    POLES_ENABLED,
     REGISTER_RATE_LIMIT,
     RESEND_VERIFICATION_RATE_LIMIT,
     create_access_token,
@@ -22,6 +23,7 @@ from dependencies import (
     decode_email_verification_token,
     decode_password_reset_token,
     get_current_user,
+    get_manager_pole_ids,
     get_user_by_email,
     is_guest_email,
     limiter,
@@ -301,7 +303,14 @@ def read_me(current_user: str = Depends(get_current_user), db: Session = Depends
     return {"id": user.id, "username": user.username, "email": user.email,
             "prenom": user.prenom, "nom": user.nom, "role": role_name,
             "email_verified": user.email_verified, "is_guest": is_guest_email(user.email),
-            "date_creation": user.date_creation}
+            "date_creation": user.date_creation,
+            "poles_enabled": POLES_ENABLED,
+            "pole_id": user.pole_id,
+            "pole_nom": user.pole.nom if user.pole else None,
+            "managed_poles": (
+                db.query(models.Pole).filter(models.Pole.id.in_(get_manager_pole_ids(db, user))).order_by(models.Pole.nom).all()
+                if POLES_ENABLED else []
+            )}
 
 
 @router.put("/me", response_model=schemas.MeResponse, summary="Mettre à jour son profil")

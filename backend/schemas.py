@@ -55,6 +55,8 @@ class UserListResponse(BaseModel):
     prenom: Optional[str] = None
     nom: Optional[str] = None
     role: str
+    pole_id: Optional[int] = None
+    pole_nom: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -75,6 +77,15 @@ class PoleResponse(BaseModel):
 
 class ManagerPoleAssignRequest(BaseModel):
     pole_ids: list[int]
+
+class UserPoleAssignRequest(BaseModel):
+    pole_id: Optional[int] = None
+
+class ManagerResponse(BaseModel):
+    id: int
+    username: str
+    email: str
+    poles: list[PoleResponse]
 
 class CsvImportSkippedRow(BaseModel):
     row: int
@@ -204,6 +215,13 @@ class MeResponse(BaseModel):
     email_verified: bool = False
     is_guest: bool = False
     date_creation: datetime
+    poles_enabled: bool = False
+    pole_id: Optional[int] = None
+    pole_nom: Optional[str] = None
+    # Objets complets (pas seulement des ids) : un manager n'a pas accès à GET /poles
+    # (réservé au super admin) et a pourtant besoin des noms de SES pôles pour peupler un
+    # sélecteur côté UI -- /me reste la seule source à laquelle il a droit.
+    managed_poles: list[PoleResponse] = []
 
 class ClaimAccountRequest(BaseModel):
     email: EmailStr

@@ -5,6 +5,10 @@ export type UserItem = {
     prenom?: string | null
     nom?: string | null
     role: string
+    // Système de pôles (feature/poles) : absents/null sur une instance qui n'utilise pas
+    // la feature, ou pour un admin/superviseur non-manager (pas de pôle, légitimement).
+    pole_id?: number | null
+    pole_nom?: string | null
 }
 
 export type SessionItem = {

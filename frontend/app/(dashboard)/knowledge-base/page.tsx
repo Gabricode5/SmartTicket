@@ -48,9 +48,43 @@ import {
 } from "lucide-react"
 import { Progress } from "@/components/ui/progress"
 import { useLocale } from "@/lib/i18n/LocaleContext"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
+import { isManager, isPoleUnrestricted, type Pole } from "@/lib/poles"
 
 export default function KnowledgeBasePage() {
     const { messages: t, locale } = useLocale()
+    const { user: currentUser } = useCurrentUser()
+
+    // Système de pôles (feature/poles, étape 5) : un manager choisit parmi SES pôles
+    // (déjà connus via /me) ; un compte pole-unrestricted (admin, ou superviseur
+    // non-manager) choisit parmi tous les pôles existants. Un seul sélecteur, partagé
+    // entre l'ingestion URL et fichier -- même personne, même session d'ingestion.
+    const unrestricted = isPoleUnrestricted(currentUser)
+    const manager = isManager(currentUser)
+    const [allPoles, setAllPoles] = useState<Pole[]>([])
+    const [selectedPoleId, setSelectedPoleId] = useState<string>("")
+
+    useEffect(() => {
+        if (!currentUser?.poles_enabled || !unrestricted) return
+        fetch("/api/poles", { credentials: "include" })
+            .then((res) => (res.ok ? res.json() : []))
+            .then((data: Pole[]) => {
+                setAllPoles(data)
+                const general = data.find((p) => p.is_global)
+                setSelectedPoleId(general ? String(general.id) : "")
+            })
+            .catch(() => {})
+    }, [currentUser?.poles_enabled, unrestricted])
+
+    const managerPoles = currentUser?.managed_poles ?? []
+    const managerPoleCount = managerPoles.length
+    useEffect(() => {
+        if (manager && managerPoleCount === 1) setSelectedPoleId(String(managerPoles[0].id))
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- managerPoles est un nouveau tableau à chaque rendu (dérivé de currentUser), managerPoleCount (primitif) est la dépendance stable qui capture réellement ce dont cet effet a besoin
+    }, [manager, managerPoleCount])
+
+    const poleOptions = unrestricted ? allPoles : managerPoles
+    const showPoleSelector = !!currentUser?.poles_enabled && poleOptions.length > 1
     const dateLocale = locale === "fr" ? "fr-FR" : "en-US"
     const INGEST_POLL_FAST_MS = 5000
     const INGEST_POLL_SLOW_MS = 15000
@@ -233,7 +267,10 @@ export default function KnowledgeBasePage() {
                 headers: {
                     "Content-Type": "application/json"
                 },
-                body: JSON.stringify({ url: sourceUrl }),
+                body: JSON.stringify({
+                    url: sourceUrl,
+                    ...(currentUser?.poles_enabled && selectedPoleId ? { pole_id: Number(selectedPoleId) } : {}),
+                }),
             })
 
             const data = await response.json()
@@ -286,6 +323,7 @@ export default function KnowledgeBasePage() {
         const formData = new FormData()
         formData.append("file", selectedFile)
         if (newArticle.category) formData.append("category", newArticle.category)
+        if (currentUser?.poles_enabled && selectedPoleId) formData.append("pole_id", selectedPoleId)
 
         setIsUploadingFile(true)
         setIngestMessage(null)
@@ -384,6 +422,21 @@ export default function KnowledgeBasePage() {
                                         </SelectContent>
                                     </Select>
                                 </div>
+                                {showPoleSelector && (
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="pole-file">{t.admin.pole}</Label>
+                                        <Select value={selectedPoleId} onValueChange={setSelectedPoleId}>
+                                            <SelectTrigger id="pole-file"><SelectValue placeholder={t.admin.choosePole} /></SelectTrigger>
+                                            <SelectContent>
+                                                {poleOptions.map((p) => (
+                                                    <SelectItem key={p.id} value={String(p.id)}>
+                                                        {p.nom}{p.is_global ? ` (${t.admin.globalPole})` : ""}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
                                 <div className="grid gap-2">
                                     <Label htmlFor="tags">{t.knowledgeBase.tagsLabel}</Label>
                                     <Input
@@ -421,7 +474,7 @@ export default function KnowledgeBasePage() {
                             </div>
 
                             <DialogFooter>
-                                <Button onClick={handleAddArticle} disabled={isUploadingFile || !selectedFile}>
+                                <Button onClick={handleAddArticle} disabled={isUploadingFile || !selectedFile || (showPoleSelector && !selectedPoleId)}>
                                     {isUploadingFile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                                     {isUploadingFile ? t.knowledgeBase.sending : t.knowledgeBase.importAndIndex}
                                 </Button>
@@ -459,11 +512,26 @@ export default function KnowledgeBasePage() {
                                 : <ShieldCheck className="mr-2 h-4 w-4" />}
                             {isCheckingRobots ? t.knowledgeBase.checkingRobots : t.knowledgeBase.checkRobots}
                         </Button>
-                        <Button onClick={handleIngestUrl} disabled={isIngesting || !sourceUrl.trim()}>
+                        <Button onClick={handleIngestUrl} disabled={isIngesting || !sourceUrl.trim() || (showPoleSelector && !selectedPoleId)}>
                             {isIngesting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                             {isIngesting ? t.knowledgeBase.indexing : t.knowledgeBase.indexUrl}
                         </Button>
                     </div>
+                    {showPoleSelector && (
+                        <div className="max-w-xs space-y-1.5">
+                            <Label htmlFor="pole-url">{t.admin.pole}</Label>
+                            <Select value={selectedPoleId} onValueChange={setSelectedPoleId}>
+                                <SelectTrigger id="pole-url"><SelectValue placeholder={t.admin.choosePole} /></SelectTrigger>
+                                <SelectContent>
+                                    {poleOptions.map((p) => (
+                                        <SelectItem key={p.id} value={String(p.id)}>
+                                            {p.nom}{p.is_global ? ` (${t.admin.globalPole})` : ""}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
 
                     {/* Résultat robots.txt */}
                     {robotsError && (

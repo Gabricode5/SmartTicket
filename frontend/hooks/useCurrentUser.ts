@@ -11,6 +11,17 @@ export type CurrentUser = {
     nom?: string | null
     role: string
     is_guest?: boolean
+    // Système de pôles (feature/poles) : poles_enabled reflète POLES_ENABLED côté backend
+    // (false sur une instance qui n'utilise pas la feature — tout ce qui en dépend doit
+    // rester caché). pole_id/pole_nom sont absents pour l'admin et un superviseur qui
+    // n'est pas devenu manager (ni bug ni donnée manquante : ces rôles n'ont légitimement
+    // pas de pôle). managed_poles est non-vide seulement pour un manager (superviseur avec
+    // des pôles assignés) — objets complets (pas juste des ids) car un manager n'a pas
+    // accès à GET /poles (réservé au super admin), /me est sa seule source pour ces noms.
+    poles_enabled?: boolean
+    pole_id?: number | null
+    pole_nom?: string | null
+    managed_poles?: { id: number; nom: string; is_global: boolean }[]
 }
 
 export function useCurrentUser() {

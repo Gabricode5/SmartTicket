@@ -9,23 +9,40 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from database import get_db
-from dependencies import POLES_ENABLED, get_current_user, get_user_by_email, is_super_admin
+from dependencies import (
+    POLES_ENABLED, get_current_user, get_manager_pole_ids, get_user_by_email,
+    is_pole_unrestricted, is_super_admin,
+)
 
 router = APIRouter(tags=["Pôles"])
 
 
-def _require_super_admin_with_poles_enabled(db: Session, current_user: str) -> models.Utilisateur:
+def _require_poles_enabled(db: Session, current_user: str) -> models.Utilisateur:
     if not POLES_ENABLED:
         raise HTTPException(status_code=403, detail="Le système de pôles n'est pas activé sur cette instance.")
     requester = get_user_by_email(db, current_user)
+    if not requester:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé.")
+    return requester
+
+
+def _require_super_admin_with_poles_enabled(db: Session, current_user: str) -> models.Utilisateur:
+    requester = _require_poles_enabled(db, current_user)
     if not is_super_admin(requester):
         raise HTTPException(status_code=403, detail="Accès refusé — réservé au super admin.")
     return requester
 
 
-@router.get("/poles", response_model=list[schemas.PoleResponse], summary="Lister les pôles (super admin)")
+@router.get("/poles", response_model=list[schemas.PoleResponse], summary="Lister les pôles (super admin, ou tout compte pole-unrestricted)")
 def list_poles(current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
-    _require_super_admin_with_poles_enabled(db, current_user)
+    # Lecture seule, volontairement moins restrictive que la gestion (create/rename/delete/
+    # assign, toujours super admin uniquement) : un superviseur non-manager est
+    # is_pole_unrestricted pour l'ingestion/création d'utilisateur (peut choisir n'importe
+    # quel pôle, cf. resolve_ingestion_pole_id) -- sans cette liste, il n'aurait aucun moyen
+    # de connaître les pôles parmi lesquels choisir.
+    requester = _require_poles_enabled(db, current_user)
+    if not is_pole_unrestricted(db, requester):
+        raise HTTPException(status_code=403, detail="Accès refusé.")
     return db.query(models.Pole).order_by(models.Pole.nom).all()
 
 
@@ -128,3 +145,47 @@ def assign_manager_poles(user_id: int, payload: schemas.ManagerPoleAssignRequest
     db.commit()
 
     return db.query(models.Pole).filter(models.Pole.id.in_(pole_ids)).order_by(models.Pole.nom).all()
+
+
+@router.put("/users/{user_id}/pole", response_model=schemas.PoleResponse | None, summary="Assigner (ou retirer) le pôle d'un utilisateur (super admin)")
+def assign_user_pole(user_id: int, payload: schemas.UserPoleAssignRequest, current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Réservé au super admin (comme le reste de la gestion des pôles) -- distinct de la
+    création scopée d'un manager (étape 4, PoleIngestionError sur import-csv) : ici on
+    réaffecte un compte DÉJÀ existant, n'importe lequel, à n'importe quel pôle. pole_id=None
+    retire l'utilisateur de tout pôle (cas légitime pour un superviseur qu'on ne veut pas
+    voir devenir manager, ou pour corriger une affectation)."""
+    _require_super_admin_with_poles_enabled(db, current_user)
+    target = db.query(models.Utilisateur).filter(models.Utilisateur.id == user_id, models.Utilisateur.deleted_at.is_(None)).first()
+    if not target:
+        raise HTTPException(status_code=404, detail="Utilisateur non trouvé.")
+    if payload.pole_id is not None and target.role and target.role.nom_role == "admin":
+        raise HTTPException(status_code=400, detail="Un super admin ne relève d'aucun pôle (règle 4).")
+    if payload.pole_id is None:
+        target.pole_id = None
+        db.commit()
+        return None
+    pole = db.query(models.Pole).filter(models.Pole.id == payload.pole_id).first()
+    if not pole:
+        raise HTTPException(status_code=404, detail="Pôle introuvable.")
+    target.pole_id = pole.id
+    db.commit()
+    return pole
+
+
+@router.get("/managers", response_model=list[schemas.ManagerResponse], summary="Lister les managers actuels et leurs pôles (super admin)")
+def list_managers(current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Seuls les superviseurs avec au moins une ligne manager_poles apparaissent ici --
+    "manager" n'est pas un rôle séparé (option 3, décision B), donc un superviseur simple
+    (pas encore manager) n'y figure pas tant qu'aucun pôle ne lui est assigné."""
+    _require_super_admin_with_poles_enabled(db, current_user)
+    superviseurs = db.query(models.Utilisateur).join(models.Role).filter(
+        models.Role.nom_role == "superviseur", models.Utilisateur.deleted_at.is_(None),
+    ).order_by(models.Utilisateur.username).all()
+    result = []
+    for s in superviseurs:
+        pole_ids = get_manager_pole_ids(db, s)
+        if not pole_ids:
+            continue
+        poles = db.query(models.Pole).filter(models.Pole.id.in_(pole_ids)).order_by(models.Pole.nom).all()
+        result.append({"id": s.id, "username": s.username, "email": s.email, "poles": poles})
+    return result

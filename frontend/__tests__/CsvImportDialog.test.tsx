@@ -2,6 +2,12 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { CsvImportDialog } from "@/components/dashboard/CsvImportDialog";
 import { mockFetch, jsonResponse } from "../test-utils/fetchMock";
 
+// CsvImportDialog appelle désormais useCurrentUser() (feature/poles, étape 5) pour savoir
+// si un sélecteur de pôle doit apparaître -- useRouter() plante sans app-router sous jsdom.
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
+}));
+
 function makeCsvFile() {
   return new File(["email,username,prenom,nom\na@example.com,a_user,A,A\n"], "import.csv", { type: "text/csv" });
 }

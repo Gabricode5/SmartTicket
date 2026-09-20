@@ -3,6 +3,12 @@ import SupervisorDashboard from "@/components/dashboard/SupervisorDashboard";
 import { mockFetch, jsonResponse } from "../test-utils/fetchMock";
 import { LocaleProvider } from "@/lib/i18n/LocaleContext";
 
+// SupervisorDashboard appelle désormais useCurrentUser() (feature/poles, étape 5) pour
+// savoir si l'utilisateur est manager -- useRouter() plante sans app-router sous jsdom.
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
+}));
+
 const usersByRole: Record<string, unknown[]> = {
   user: [{ id: 1, username: "alice", email: "alice@test.com", role: "user" }],
   sav: [{ id: 2, username: "bob", email: "bob@test.com", role: "sav" }],

@@ -1,6 +1,6 @@
 "use client"
 
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
     Dialog,
@@ -11,7 +11,11 @@ import {
     DialogTitle,
     DialogTrigger,
 } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Upload, Loader2 } from "lucide-react"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
+import { isManager, isPoleUnrestricted, type Pole } from "@/lib/poles"
 
 type ImportResult = {
     total_rows: number
@@ -20,12 +24,44 @@ type ImportResult = {
 }
 
 export function CsvImportDialog({ onImported }: { onImported: () => void }) {
+    const { user } = useCurrentUser()
     const [open, setOpen] = useState(false)
     const [file, setFile] = useState<File | null>(null)
     const [isImporting, setIsImporting] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [result, setResult] = useState<ImportResult | null>(null)
     const fileInputRef = useRef<HTMLInputElement | null>(null)
+
+    // Système de pôles (feature/poles, étape 5) : un manager choisit parmi SES pôles
+    // (déjà connus via /me, pas d'appel réseau requis) ; un compte pole-unrestricted
+    // (admin, ou superviseur non-manager) choisit parmi tous les pôles existants. Aucun
+    // champ n'apparaît si la feature est désactivée -- comportement actuel identique.
+    const unrestricted = isPoleUnrestricted(user)
+    const manager = isManager(user)
+    const [allPoles, setAllPoles] = useState<Pole[]>([])
+    const [selectedPoleId, setSelectedPoleId] = useState<string>("")
+
+    useEffect(() => {
+        if (!user?.poles_enabled || !unrestricted) return
+        fetch("/api/poles", { credentials: "include" })
+            .then((res) => (res.ok ? res.json() : []))
+            .then((data: Pole[]) => {
+                setAllPoles(data)
+                const general = data.find((p) => p.is_global)
+                setSelectedPoleId(general ? String(general.id) : "")
+            })
+            .catch(() => {})
+    }, [user?.poles_enabled, unrestricted])
+
+    const managerPoles = user?.managed_poles ?? []
+    const managerPoleCount = managerPoles.length
+    useEffect(() => {
+        if (manager && managerPoleCount === 1) setSelectedPoleId(String(managerPoles[0].id))
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- managerPoles est un nouveau tableau à chaque rendu (dérivé de user), managerPoleCount (primitif) est la dépendance stable qui capture réellement ce dont cet effet a besoin
+    }, [manager, managerPoleCount])
+
+    const poleOptions = unrestricted ? allPoles : managerPoles
+    const showPoleSelector = !!user?.poles_enabled && poleOptions.length > 1
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setError(null)
@@ -42,6 +78,7 @@ export function CsvImportDialog({ onImported }: { onImported: () => void }) {
         try {
             const formData = new FormData()
             formData.append("file", file)
+            if (user?.poles_enabled && selectedPoleId) formData.append("pole_id", selectedPoleId)
             const response = await fetch("/api/users/import-csv", {
                 method: "POST",
                 credentials: "include",
@@ -105,6 +142,22 @@ export function CsvImportDialog({ onImported }: { onImported: () => void }) {
                         />
                     </div>
 
+                    {showPoleSelector && (
+                        <div className="space-y-1.5">
+                            <Label htmlFor="csv-import-pole">Pôle</Label>
+                            <Select value={selectedPoleId} onValueChange={setSelectedPoleId}>
+                                <SelectTrigger id="csv-import-pole"><SelectValue placeholder="Choisir un pôle" /></SelectTrigger>
+                                <SelectContent>
+                                    {poleOptions.map((p) => (
+                                        <SelectItem key={p.id} value={String(p.id)}>
+                                            {p.nom}{p.is_global ? " (commun)" : ""}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+
                     {error && <p className="text-sm text-red-600">{error}</p>}
 
                     {result && (
@@ -129,7 +182,7 @@ export function CsvImportDialog({ onImported }: { onImported: () => void }) {
                 </div>
 
                 <DialogFooter>
-                    <Button onClick={handleImport} disabled={!file || isImporting}>
+                    <Button onClick={handleImport} disabled={!file || isImporting || (showPoleSelector && !selectedPoleId)}>
                         {isImporting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                         {isImporting ? "Import..." : "Importer"}
                     </Button>

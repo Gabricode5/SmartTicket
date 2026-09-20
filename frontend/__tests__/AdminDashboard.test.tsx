@@ -13,6 +13,12 @@ jest.mock("next/link", () => ({
   ),
 }));
 
+// AdminDashboard appelle désormais useCurrentUser() (feature/poles, étape 5) pour savoir
+// si le système de pôles est actif -- useRouter() plante sans app-router monté sous jsdom.
+jest.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: jest.fn(), push: jest.fn() }),
+}));
+
 const usersByRole: Record<string, unknown[]> = {
   user: [{ id: 1, username: "alice", email: "alice@test.com", role: "user" }],
   sav: [{ id: 2, username: "bob", email: "bob@test.com", role: "sav" }],

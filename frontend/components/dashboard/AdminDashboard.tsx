@@ -18,9 +18,15 @@ import { REASON_STYLES, type SessionItem, type SessionSearchResult, type Transfe
 import { renderSnippet } from "./searchSnippet"
 import { CsvImportDialog } from "./CsvImportDialog"
 import { useLocale } from "@/lib/i18n/LocaleContext"
+import { useCurrentUser } from "@/hooks/useCurrentUser"
+import type { Pole } from "@/lib/poles"
+
+const NO_POLE_VALUE = "__no_pole__"
 
 export default function AdminDashboard({ currentUserId }: { currentUserId: number }) {
     const { messages: t } = useLocale()
+    const { user: currentUser } = useCurrentUser()
+    const [poles, setPoles] = useState<Pole[]>([])
     const reasonLabel = (reason: string | null | undefined) => (reason ? t.common.reasons[reason as keyof typeof t.common.reasons] ?? reason : reason)
     const [users, setUsers] = useState<UserItem[]>([])
     const [savUsers, setSavUsers] = useState<UserItem[]>([])
@@ -37,7 +43,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
     const [updatingUserId, setUpdatingUserId] = useState<number | null>(null)
     const [editDialogOpen, setEditDialogOpen] = useState(false)
     const [editingUser, setEditingUser] = useState<UserItem | null>(null)
-    const [editForm, setEditForm] = useState({ username: "", email: "", prenom: "", nom: "", role: "" })
+    const [editForm, setEditForm] = useState({ username: "", email: "", prenom: "", nom: "", role: "", pole_id: null as number | null })
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
     const [deletingUser, setDeletingUser] = useState<UserItem | null>(null)
     const [sessionQuery, setSessionQuery] = useState("")
@@ -56,6 +62,16 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
         loadAll()
         // eslint-disable-next-line react-hooks/exhaustive-deps -- chargement initial, ne doit pas se relancer au changement de langue
     }, [])
+
+    // Système de pôles (feature/poles) : liste chargée seulement si la feature est active
+    // -- sur une instance qui ne l'utilise pas, aucun appel réseau superflu.
+    useEffect(() => {
+        if (!currentUser?.poles_enabled) return
+        fetch("/api/poles", { credentials: "include" })
+            .then((res) => (res.ok ? res.json() : []))
+            .then((data) => setPoles(Array.isArray(data) ? data : []))
+            .catch(() => {})
+    }, [currentUser?.poles_enabled])
 
     // Full-text search (débounced) sur le contenu des messages + titres de l'utilisateur sélectionné.
     useEffect(() => {
@@ -152,7 +168,7 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
 
     const handleEditUser = (u: UserItem) => {
         setEditingUser(u)
-        setEditForm({ username: u.username, email: u.email, prenom: u.prenom || "", nom: u.nom || "", role: u.role })
+        setEditForm({ username: u.username, email: u.email, prenom: u.prenom || "", nom: u.nom || "", role: u.role, pole_id: u.pole_id ?? null })
         setEditDialogOpen(true)
     }
 
@@ -183,6 +199,21 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
             if (!res.ok) {
                 setError(res.status === 401 ? t.admin.sessionExpiredShort : data?.detail || t.admin.editUserError)
                 return
+            }
+            // Pôle : endpoint dédié (PUT /users/{id}/pole), séparé de la mise à jour
+            // générale ci-dessus -- seulement si la feature est active et que la cible
+            // n'est pas admin (règle 4 : aucun pôle pour le super admin).
+            if (currentUser?.poles_enabled && editForm.role.trim().toLowerCase() !== "admin") {
+                const poleRes = await fetch(`/api/users/${editingUser.id}/pole`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ pole_id: editForm.pole_id }),
+                })
+                if (!poleRes.ok) {
+                    const poleData = await poleRes.json().catch(() => ({}))
+                    setError(poleData?.detail || t.admin.editUserError)
+                    return
+                }
             }
             if (selectedUser?.id === editingUser.id) setSelectedUser(data)
             setEditDialogOpen(false)
@@ -785,6 +816,27 @@ export default function AdminDashboard({ currentUserId }: { currentUserId: numbe
                                 </SelectContent>
                             </Select>
                         </div>
+                        {/* Pôle : masqué si la feature n'est pas active, ou pour une cible
+                            admin (règle 4 -- aucun pôle légitime pour le super admin). */}
+                        {currentUser?.poles_enabled && editForm.role.trim().toLowerCase() !== "admin" && (
+                            <div className="space-y-1.5">
+                                <Label htmlFor="edit-pole">{t.admin.pole}</Label>
+                                <Select
+                                    value={editForm.pole_id === null ? NO_POLE_VALUE : String(editForm.pole_id)}
+                                    onValueChange={(v) => setEditForm((f) => ({ ...f, pole_id: v === NO_POLE_VALUE ? null : Number(v) }))}
+                                >
+                                    <SelectTrigger id="edit-pole"><SelectValue placeholder={t.admin.choosePole} /></SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value={NO_POLE_VALUE}>{t.admin.noPole}</SelectItem>
+                                        {poles.map((p) => (
+                                            <SelectItem key={p.id} value={String(p.id)}>
+                                                {p.nom}{p.is_global ? ` (${t.admin.globalPole})` : ""}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                     </div>
                     <DialogFooter className="gap-2">
                         <Button variant="outline" onClick={() => setEditDialogOpen(false)}>{t.admin.cancel}</Button>
