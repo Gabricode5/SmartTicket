@@ -20,6 +20,34 @@ class Role(Base):
     nom_role = Column(String(20), unique=True, nullable=False)
 
 
+class Pole(Base):
+    """Cloisonnement de données par service au sein d'une même entreprise cliente
+    (feature POLES_ENABLED, cf. backend/dependencies.py). Un seul pôle par instance a
+    is_global=true : c'est à la fois le pôle "commun" (visible par tous, règle 3) et le
+    pôle "Général" de rattachement par défaut à la migration (règle 5) -- les deux
+    concepts sont fusionnés en une seule ligne pour qu'aucune donnée pré-existante ne
+    devienne invisible pour un utilisateur d'un autre pôle."""
+    __tablename__ = "poles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nom = Column(String(100), unique=True, nullable=False)
+    is_global = Column(Boolean, nullable=False, server_default="false")
+    tenant_id = _tenant_id_column()
+    date_creation = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class ManagerPole(Base):
+    """Liaison N..N manager<->pôles (règle 2). Un superviseur sans ligne ici garde son
+    comportement actuel (pas de cloisonnement) -- "manager" n'est pas un rôle DB séparé,
+    c'est un superviseur qui possède au moins une ligne dans cette table."""
+    __tablename__ = "manager_poles"
+
+    manager_id = Column(Integer, ForeignKey("utilisateur.id", ondelete="CASCADE"), primary_key=True)
+    pole_id = Column(Integer, ForeignKey("poles.id", ondelete="CASCADE"), primary_key=True)
+    tenant_id = _tenant_id_column()
+    date_creation = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class Utilisateur(Base):
     __tablename__ = "utilisateur"
 
@@ -31,6 +59,10 @@ class Utilisateur(Base):
     nom = Column(String(50))
     id_role = Column(Integer, ForeignKey("roles.id"), server_default="1")
     email_verified = Column(Boolean, nullable=False, server_default="false")
+    # Pôle d'appartenance (règle 1 : obligatoire en pratique pour user/sav, imposé côté
+    # applicatif -- pas de CHECK constraint DB pour rester compatible avec le rôle admin,
+    # qui n'a pas de pôle -- règle 4, il voit tout). NULL tant que POLES_ENABLED=false.
+    pole_id = Column(Integer, ForeignKey("poles.id", ondelete="SET NULL"), nullable=True)
     # Amorçage admin sans mot de passe transmis en clair (flotte d'instances, cf.
     # ops/provision_client.py) : posé uniquement à la création du compte quand
     # ADMIN_SETUP_TOKEN est fourni (main.py::run_migrations), jamais régénéré ensuite.
@@ -43,6 +75,7 @@ class Utilisateur(Base):
     date_creation = Column(DateTime(timezone=True), server_default=func.now())
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     role = relationship("Role")
+    pole = relationship("Pole", foreign_keys=[pole_id])
 
 class ChatSession(Base):
     __tablename__ = "chat_sessions"
@@ -184,5 +217,11 @@ class KnowledgeBase(Base):
     # documents ingérés normalement (ingest_postgres.py), jamais concernés par ces mécanismes.
     source_user_id = Column(Integer, ForeignKey("utilisateur.id", ondelete="CASCADE"), nullable=True)
     source_session_id = Column(Integer, ForeignKey("chat_sessions.id", ondelete="CASCADE"), nullable=True)
+    # Pôle propriétaire (règle 3). Nullable en étape 1 -- reste nullable tant que l'étape 3
+    # (ingestion pole-aware) n'a pas encore été livrée : passer cette colonne en NOT NULL
+    # avant que les 3 chemins d'ingestion sachent la renseigner casserait tout insert dès
+    # que POLES_ENABLED=true. Le filtre RAG (étape 2) traite pole_id IS NULL comme "Général"
+    # (visible par tous), donc aucune donnée n'est perdue entre-temps.
+    pole_id = Column(Integer, ForeignKey("poles.id", ondelete="SET NULL"), nullable=True)
     tenant_id = _tenant_id_column()
     date_creation = Column(DateTime(timezone=True), server_default=func.now())

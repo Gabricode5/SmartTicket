@@ -48,7 +48,7 @@ engine = create_engine(TEST_DB_URL)
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 _TRUNCATE_SQL = text(
-    "TRUNCATE TABLE knowledge_base, chat_messages, chat_sessions, utilisateur, instance_subscription RESTART IDENTITY CASCADE"
+    "TRUNCATE TABLE knowledge_base, chat_messages, chat_sessions, utilisateur, instance_subscription, poles RESTART IDENTITY CASCADE"
 )
 
 

@@ -92,6 +92,67 @@ def purge_unclaimed_guests(ttl_days: int = GUEST_ACCOUNT_TTL_DAYS) -> None:
         _log.error("Guest purge failed: %s", exc, exc_info=True)
 
 
+# Cloisonnement des données par service (feature/poles). false par défaut : posé mais
+# non consommé ailleurs qu'ici en étape 1 (le filtre RAG, l'ingestion pole-aware et la
+# gestion manager arrivent aux étapes suivantes). À false, aucune ligne n'est jamais
+# créée/modifiée par run_poles_migration() -- comportement actuel strictement identique.
+POLES_ENABLED = os.getenv("POLES_ENABLED", "false").strip().lower() == "true"
+
+
+def run_poles_migration(enabled: bool | None = None) -> None:
+    """Crée le pôle "Général" (is_global=true -- fusion des règles 3 et 5, cf. plan
+    feature/poles : un seul pôle sert à la fois de pôle commun visible par tous et de
+    rattachement par défaut à la migration) puis y rattache toute donnée/utilisateur
+    existant sans pôle. No-op tant que POLES_ENABLED=false.
+
+    Ordre STRICT, à ne jamais changer : créer "Général" -> backfill knowledge_base ->
+    backfill utilisateur (user/sav uniquement -- admin n'a pas de pôle, règle 4).
+
+    Ne pose PAS de contrainte NOT NULL : tant que les chemins d'ingestion et de création
+    d'utilisateur ne renseignent pas encore pole_id (étapes 3-4 du plan), l'imposer
+    casserait tout insert dès que POLES_ENABLED passe à true. Idempotent : ré-exécutable
+    à chaque démarrage sans dupliquer le pôle ni re-toucher les lignes déjà rattachées.
+
+    `enabled` (par défaut POLES_ENABLED) permet aux tests de forcer true/false sans
+    dépendre de la variable d'env figée au chargement du module, comme retention_days
+    sur purge_soft_deleted ci-dessus.
+    """
+    if enabled is None:
+        enabled = POLES_ENABLED
+    if not enabled:
+        return
+    from database import SessionLocal as _SessionLocal
+    try:
+        with _SessionLocal() as db:
+            general = db.query(models.Pole).filter_by(is_global=True).first()
+            if not general:
+                general = models.Pole(nom="Général", is_global=True)
+                db.add(general)
+                db.commit()
+                db.refresh(general)
+                _log.info("Pôle 'Général' créé (id=%d)", general.id)
+
+            backfilled_kb = db.query(models.KnowledgeBase).filter(
+                models.KnowledgeBase.pole_id.is_(None),
+            ).update({"pole_id": general.id}, synchronize_session=False)
+
+            backfilled_users = db.query(models.Utilisateur).filter(
+                models.Utilisateur.pole_id.is_(None),
+                models.Utilisateur.id_role.in_(
+                    db.query(models.Role.id).filter(models.Role.nom_role.in_(["user", "sav"]))
+                ),
+            ).update({"pole_id": general.id}, synchronize_session=False)
+
+            db.commit()
+            if backfilled_kb or backfilled_users:
+                _log.info(
+                    "Backfill pôle 'Général' : %d ligne(s) knowledge_base, %d utilisateur(s) user/sav",
+                    backfilled_kb, backfilled_users,
+                )
+    except Exception as exc:
+        _log.error("Poles migration failed: %s", exc, exc_info=True)
+
+
 def run_migrations() -> None:
     # 1. Extension vector
     try:
@@ -171,6 +232,16 @@ def run_migrations() -> None:
             conn.execute(_text("ALTER TABLE knowledge_base ADD COLUMN IF NOT EXISTS source_user_id INTEGER REFERENCES utilisateur(id) ON DELETE CASCADE"))
             conn.execute(_text("ALTER TABLE knowledge_base ADD COLUMN IF NOT EXISTS source_session_id INTEGER REFERENCES chat_sessions(id) ON DELETE CASCADE"))
             conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_knowledge_base_source_user_id ON knowledge_base (source_user_id)"))
+
+            # pole_id : feature POLES_ENABLED (cloisonnement par service, cf. feature/poles).
+            # Colonnes posées inconditionnellement (nullable, aucun effet tant que rien ne les
+            # lit) -- seuls le backfill du pôle "Général" et son usage dans le filtre RAG sont
+            # gatés par POLES_ENABLED (cf. run_poles_migration ci-dessous). La table "poles"
+            # existe déjà à ce stade (create_all() plus haut, étape 2).
+            conn.execute(_text("ALTER TABLE utilisateur ADD COLUMN IF NOT EXISTS pole_id INTEGER REFERENCES poles(id) ON DELETE SET NULL"))
+            conn.execute(_text("ALTER TABLE knowledge_base ADD COLUMN IF NOT EXISTS pole_id INTEGER REFERENCES poles(id) ON DELETE SET NULL"))
+            conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_utilisateur_pole_id ON utilisateur (pole_id)"))
+            conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_knowledge_base_pole_id ON knowledge_base (pole_id)"))
 
             conn.commit()
     except Exception as exc:
@@ -258,6 +329,10 @@ def run_migrations() -> None:
                 session.commit()
     except Exception as exc:
         _log.error("Subscription status seed failed: %s", exc, exc_info=True)
+
+    # 6. Backfill du pôle "Général" (feature POLES_ENABLED, cf. feature/poles) — exécuté
+    # après l'étape 4 ci-dessus (les rôles doivent déjà exister pour filtrer user/sav).
+    run_poles_migration()
 
 
 def start_purge_scheduler():

@@ -22,6 +22,23 @@ INSERT INTO roles (nom_role) VALUES ('user'), ('ai'), ('sav'), ('superviseur'), 
 ON CONFLICT (nom_role) DO NOTHING;
 
 -- =========================================
+-- TABLE POLES
+-- =========================================
+-- Cloisonnement de données par service au sein d'une même entreprise cliente (feature
+-- POLES_ENABLED, cf. backend/main.py). Un seul pôle par instance a is_global=true : c'est
+-- à la fois le pôle "commun" (visible par tous) et le pôle "Général" de rattachement par
+-- défaut à la migration -- les deux notions sont fusionnées pour qu'aucune donnée
+-- pré-existante ne devienne invisible pour un utilisateur d'un autre pôle.
+CREATE TABLE poles (
+    id SERIAL PRIMARY KEY,
+    nom VARCHAR(100) UNIQUE NOT NULL,
+    is_global BOOLEAN NOT NULL DEFAULT FALSE,
+    tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX ON poles (tenant_id);
+
+-- =========================================
 -- TABLE UTILISATEUR
 -- =========================================
 -- Comptes applicatifs.
@@ -37,11 +54,13 @@ CREATE TABLE utilisateur (
     admin_setup_token VARCHAR(64),                           -- Amorçage admin flotte (jamais exposé en API)
     admin_setup_token_expires_at TIMESTAMP WITH TIME ZONE,
     admin_setup_token_used_at TIMESTAMP WITH TIME ZONE,
+    pole_id INTEGER REFERENCES poles(id) ON DELETE SET NULL, -- Pôle d'appartenance (user/sav) ; NULL pour admin (voit tout) tant que POLES_ENABLED=false
     tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001', -- Préparation multi-tenant (valeur fixe, une instance = un tenant aujourd'hui)
     date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP, -- Date de création
     deleted_at TIMESTAMP WITH TIME ZONE                      -- Soft-delete RGPD (NULL = compte actif)
 );
 CREATE INDEX ON utilisateur (tenant_id);
+CREATE INDEX ON utilisateur (pole_id);
 
 -- =========================================
 -- COMPTE ADMIN PAR DEFAUT (ENV DEV)
@@ -63,6 +82,21 @@ SELECT
 FROM roles r
 WHERE r.nom_role = 'admin'
 ON CONFLICT (email) DO NOTHING;
+
+-- =========================================
+-- TABLE MANAGER_POLES
+-- =========================================
+-- Liaison N..N manager<->pôles. "manager" n'est pas un rôle séparé : un superviseur
+-- (role.nom_role='superviseur') devient manager dès qu'il possède au moins une ligne ici ;
+-- un superviseur sans ligne garde son comportement actuel (pas de cloisonnement).
+CREATE TABLE manager_poles (
+    manager_id INTEGER NOT NULL REFERENCES utilisateur(id) ON DELETE CASCADE,
+    pole_id INTEGER NOT NULL REFERENCES poles(id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001',
+    date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (manager_id, pole_id)
+);
+CREATE INDEX ON manager_poles (tenant_id);
 
 -- =========================================
 -- TABLE CHAT_SESSIONS
@@ -130,6 +164,7 @@ CREATE TABLE knowledge_base (
     source VARCHAR(500),                                      -- Nom/fichier/source logique du document indexé
     source_user_id INTEGER REFERENCES utilisateur(id) ON DELETE CASCADE, -- Propriétaire si dérivé d'un ticket (RGPD, cf. INDEX_CLOSED_TICKETS) -- NULL pour un document ingéré normalement
     source_session_id INTEGER REFERENCES chat_sessions(id) ON DELETE CASCADE, -- Session source si dérivé d'un ticket
+    pole_id INTEGER REFERENCES poles(id) ON DELETE SET NULL,  -- Pôle propriétaire (feature POLES_ENABLED) ; NULL traité comme "Général" par le filtre RAG tant que l'ingestion ne le renseigne pas encore
     tenant_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000001', -- Préparation multi-tenant (table des chunks vectoriels — la plus sensible en cas de future bascule multi-tenant)
     date_creation TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP -- Date d'insertion
 );
@@ -138,6 +173,7 @@ CREATE TABLE knowledge_base (
 CREATE INDEX ON knowledge_base USING hnsw (embedding vector_cosine_ops);
 CREATE INDEX ON knowledge_base (tenant_id);
 CREATE INDEX ON knowledge_base (source_user_id);
+CREATE INDEX ON knowledge_base (pole_id);
 
 -- =========================================
 -- TABLE NOTIFICATIONS
