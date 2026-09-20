@@ -52,7 +52,7 @@ describe("SignUpPage", () => {
 
     expect(await screen.findByText(/vérifiez votre boîte mail/i)).toBeInTheDocument();
     const [, init] = fetchMock.mock.calls[0];
-    const payload = JSON.parse(init.body as string);
+    const payload = JSON.parse(init!.body as string);
     expect(payload.prenom).toBeNull();
     expect(payload.nom).toBeNull();
   });
