@@ -19,7 +19,7 @@ from sqlalchemy import text as _text
 
 import models
 from database import engine as _engine
-from dependencies import ADMIN_SETUP_TOKEN_EXPIRE_HOURS, GUEST_ACCOUNT_TTL_DAYS, GUEST_EMAIL_DOMAIN, limiter
+from dependencies import ADMIN_SETUP_TOKEN_EXPIRE_HOURS, GUEST_ACCOUNT_TTL_DAYS, GUEST_EMAIL_DOMAIN, POLES_ENABLED, limiter
 from routers import ai, analytics, auth, instance, knowledge, messages, notifications, sessions, tickets, users
 
 logging.basicConfig(
@@ -90,13 +90,6 @@ def purge_unclaimed_guests(ttl_days: int = GUEST_ACCOUNT_TTL_DAYS) -> None:
                 )
     except Exception as exc:
         _log.error("Guest purge failed: %s", exc, exc_info=True)
-
-
-# Cloisonnement des données par service (feature/poles). false par défaut : posé mais
-# non consommé ailleurs qu'ici en étape 1 (le filtre RAG, l'ingestion pole-aware et la
-# gestion manager arrivent aux étapes suivantes). À false, aucune ligne n'est jamais
-# créée/modifiée par run_poles_migration() -- comportement actuel strictement identique.
-POLES_ENABLED = os.getenv("POLES_ENABLED", "false").strip().lower() == "true"
 
 
 def run_poles_migration(enabled: bool | None = None) -> None:

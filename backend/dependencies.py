@@ -82,6 +82,13 @@ def rate_limit_key_by_user(request: Request) -> str:
 # (art. 17) ni isolées entre clients finaux — c'est exactement le trou que ce correctif bouche.
 INDEX_CLOSED_TICKETS = os.getenv("INDEX_CLOSED_TICKETS", "false").lower() == "true"
 
+# Cloisonnement des données par service au sein d'une entreprise cliente (feature/poles).
+# false par défaut : tant que ce flag n'est pas activé, ni le backfill (main.py::
+# run_poles_migration) ni le filtre RAG ci-dessous ne s'exécutent -- comportement actuel
+# strictement identique. Colonnes pole_id posées inconditionnellement en base (étape 1),
+# mais jamais lues/écrites nulle part tant que POLES_ENABLED=false.
+POLES_ENABLED = os.getenv("POLES_ENABLED", "false").strip().lower() == "true"
+
 # Chat anonyme B2B2C : un visiteur public peut discuter sans créer de compte au préalable
 # (POST /v1/sessions/guest crée un compte "fantôme" silencieusement, cf. routers/sessions.py).
 # Détecté par ce domaine d'email réservé plutôt qu'une colonne dédiée — pas de migration de
@@ -269,3 +276,11 @@ def is_admin_only(user: models.Utilisateur | None) -> bool:
     if not user or not user.role:
         return False
     return user.role.nom_role == "admin"
+
+
+def is_super_admin(user: models.Utilisateur | None) -> bool:
+    """"Super admin" du plan feature/poles = le rôle admin existant (décision A : pas de
+    6e rôle DB). Override le cloisonnement par pôle (règle 4) -- alias volontaire de
+    is_admin_only plutôt qu'un doublon de logique, pour que les deux notions ne puissent
+    jamais diverger silencieusement si l'une des deux évolue."""
+    return is_admin_only(user)

@@ -15,11 +15,13 @@ from dependencies import (
     KB_MAX_CONTEXT_CHARS,
     KB_TOP_K,
     MISTRAL_MODEL,
+    POLES_ENABLED,
     REQUEST_TIMEOUT,
     build_rag_prompt,
     get_current_user,
     get_user_by_email,
     is_admin_or_sav,
+    is_super_admin,
     limiter,
     rate_limit_key_by_user,
 )
@@ -116,6 +118,18 @@ def ask_question_stream(request: Request, payload: schemas.AskRequest, current_u
             candidates_query = candidates_query.filter(or_(
                 models.KnowledgeBase.source_user_id.is_(None),
                 models.KnowledgeBase.source_user_id == user.id,
+            ))
+        # Cloisonnement par pôle (feature/poles, règle 3+4) -- no-op tant que
+        # POLES_ENABLED=false (comportement RAG actuel strictement identique). Le super
+        # admin (rôle admin, décision A) n'est jamais filtré. pole_id IS NULL est traité
+        # comme visible par tous : couvre les lignes pas encore migrées/ingérées sans pôle
+        # (cf. models.KnowledgeBase.pole_id), pas seulement le pôle "Général" explicite.
+        if POLES_ENABLED and not is_super_admin(user):
+            global_pole_ids = db.query(models.Pole.id).filter(models.Pole.is_global.is_(True))
+            candidates_query = candidates_query.filter(or_(
+                models.KnowledgeBase.pole_id.is_(None),
+                models.KnowledgeBase.pole_id == user.pole_id,
+                models.KnowledgeBase.pole_id.in_(global_pole_ids),
             ))
         candidate_rows = candidates_query.order_by("distance").limit(KB_TOP_K * RERANK_FETCH_MULTIPLIER).all()
         candidates = [row[0] for row in candidate_rows]
