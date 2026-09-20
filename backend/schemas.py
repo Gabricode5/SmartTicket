@@ -147,6 +147,7 @@ class MessageFeedbackRequest(BaseModel):
 class KnowledgeIngestRequest(BaseModel):
     url: HttpUrl
     category: Optional[str] = None
+    pole_id: Optional[int] = None
 
 class KnowledgeIngestResponse(BaseModel):
     status: str

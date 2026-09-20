@@ -284,3 +284,93 @@ def is_super_admin(user: models.Utilisateur | None) -> bool:
     is_admin_only plutôt qu'un doublon de logique, pour que les deux notions ne puissent
     jamais diverger silencieusement si l'une des deux évolue."""
     return is_admin_only(user)
+
+
+def get_manager_pole_ids(db: Session, user: models.Utilisateur | None) -> list[int]:
+    """Pôles gérés par ce compte via manager_poles (option 3, décision B) -- "manager"
+    n'est pas un rôle DB séparé, c'est un superviseur possédant au moins une ligne ici.
+    Liste vide si le compte n'en a aucune, quel que soit son rôle."""
+    if not user:
+        return []
+    return [
+        row[0] for row in
+        db.query(models.ManagerPole.pole_id).filter(models.ManagerPole.manager_id == user.id).all()
+    ]
+
+
+def is_manager(db: Session, user: models.Utilisateur | None) -> bool:
+    return bool(get_manager_pole_ids(db, user))
+
+
+def is_pole_unrestricted(db: Session, user: models.Utilisateur | None) -> bool:
+    """Aucun cloisonnement par pôle ne s'applique à ce compte -- ni en lecture RAG
+    (routers/ai.py) ni en ingestion (routers/knowledge.py, ingest_postgres.py) :
+    - le super admin (règle 4) ;
+    - OU un superviseur qui n'est pas devenu manager (décision B -- "garde son
+      comportement actuel", c'est-à-dire la visibilité/capacité d'ingestion totale
+      qu'il avait déjà via is_admin_or_sav avant l'existence des pôles)."""
+    if is_super_admin(user):
+        return True
+    if not user or not user.role:
+        return False
+    return user.role.nom_role == "superviseur" and not is_manager(db, user)
+
+
+class PoleIngestionError(Exception):
+    """Le pole_id demandé n'est pas autorisé pour cet ingesteur (feature/poles)."""
+
+
+def resolve_ingestion_pole_id(db: Session, user: models.Utilisateur, requested_pole_id: int | None) -> int | None:
+    """Détermine le pole_id à écrire sur une KnowledgeBase ingérée par `user` via les
+    chemins URL/fichier (routers/knowledge.py) -- pas les transcripts de ticket clos, qui
+    suivent une règle différente (décision D, cf. routers/sessions.py::close_session).
+
+    Retourne None si POLES_ENABLED=false : comportement actuel strictement identique,
+    aucune colonne renseignée.
+
+    - is_pole_unrestricted (super admin, ou superviseur non-manager) : peut choisir
+      N'IMPORTE QUEL pôle existant, y compris le pôle global -- seul cas où le pôle
+      global est permis (décision E). Sans choix explicite, retombe sur le pôle global.
+    - manager (superviseur + manager_poles) : uniquement un de ses pôles gérés, JAMAIS
+      le pôle global (décision E), même s'il y figurait par erreur dans manager_poles.
+      Un seul pôle géré -> défaut implicite ; plusieurs -> le choix est obligatoire.
+    - tout autre compte scopé à un seul pôle (sav typiquement, jamais manager) :
+      uniquement son propre pole_id, jamais de choix.
+
+    Lève PoleIngestionError si le choix demandé n'est pas autorisé, ou si aucun pôle ne
+    peut être déterminé sans choix explicite -- à charge de l'appelant de la traduire en
+    HTTPException (403/400)."""
+    if not POLES_ENABLED:
+        return None
+
+    if is_pole_unrestricted(db, user):
+        if requested_pole_id is not None:
+            if not db.query(models.Pole.id).filter_by(id=requested_pole_id).first():
+                raise PoleIngestionError("Pôle introuvable.")
+            return requested_pole_id
+        general = db.query(models.Pole).filter_by(is_global=True).first()
+        if not general:
+            raise PoleIngestionError("Aucun pôle global configuré.")
+        return general.id
+
+    managed = set(get_manager_pole_ids(db, user))
+    if managed:
+        global_ids = {
+            row[0] for row in db.query(models.Pole.id).filter(models.Pole.is_global.is_(True)).all()
+        }
+        allowed = managed - global_ids
+        if requested_pole_id is not None:
+            if requested_pole_id not in allowed:
+                raise PoleIngestionError(
+                    "Vous ne pouvez ingérer que dans vos propres pôles (le pôle global est réservé à l'administrateur)."
+                )
+            return requested_pole_id
+        if len(allowed) == 1:
+            return next(iter(allowed))
+        raise PoleIngestionError("Précisez le pôle : vous en gérez plusieurs.")
+
+    if user.pole_id is None:
+        raise PoleIngestionError("Aucun pôle assigné à ce compte.")
+    if requested_pole_id is not None and requested_pole_id != user.pole_id:
+        raise PoleIngestionError("Vous ne pouvez ingérer que dans votre propre pôle.")
+    return user.pole_id

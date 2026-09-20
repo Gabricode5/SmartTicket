@@ -21,7 +21,7 @@ from dependencies import (
     get_current_user,
     get_user_by_email,
     is_admin_or_sav,
-    is_super_admin,
+    is_pole_unrestricted,
     limiter,
     rate_limit_key_by_user,
 )
@@ -120,11 +120,15 @@ def ask_question_stream(request: Request, payload: schemas.AskRequest, current_u
                 models.KnowledgeBase.source_user_id == user.id,
             ))
         # Cloisonnement par pôle (feature/poles, règle 3+4) -- no-op tant que
-        # POLES_ENABLED=false (comportement RAG actuel strictement identique). Le super
-        # admin (rôle admin, décision A) n'est jamais filtré. pole_id IS NULL est traité
-        # comme visible par tous : couvre les lignes pas encore migrées/ingérées sans pôle
-        # (cf. models.KnowledgeBase.pole_id), pas seulement le pôle "Général" explicite.
-        if POLES_ENABLED and not is_super_admin(user):
+        # POLES_ENABLED=false (comportement RAG actuel strictement identique).
+        # is_pole_unrestricted (pas is_super_admin seul) : un superviseur qui n'est pas
+        # devenu manager garde la visibilité totale qu'il avait déjà via is_admin_or_sav
+        # avant l'existence des pôles (décision B) -- sinon ce filtre lui retirerait de la
+        # visibilité qu'il a toujours eue, une régression que rien dans le plan ne demande.
+        # pole_id IS NULL est traité comme visible par tous : couvre les lignes pas encore
+        # migrées/ingérées sans pôle (cf. models.KnowledgeBase.pole_id), pas seulement le
+        # pôle "Général" explicite.
+        if POLES_ENABLED and not is_pole_unrestricted(db, user):
             global_pole_ids = db.query(models.Pole.id).filter(models.Pole.is_global.is_(True))
             candidates_query = candidates_query.filter(or_(
                 models.KnowledgeBase.pole_id.is_(None),

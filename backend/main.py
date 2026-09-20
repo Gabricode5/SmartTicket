@@ -99,12 +99,17 @@ def run_poles_migration(enabled: bool | None = None) -> None:
     existant sans pôle. No-op tant que POLES_ENABLED=false.
 
     Ordre STRICT, à ne jamais changer : créer "Général" -> backfill knowledge_base ->
-    backfill utilisateur (user/sav uniquement -- admin n'a pas de pôle, règle 4).
+    backfill utilisateur (user/sav uniquement -- admin n'a pas de pôle, règle 4) -> SET
+    NOT NULL sur knowledge_base.pole_id (étape 3 : les 3 chemins d'ingestion savent
+    désormais tous écrire pole_id, cf. resolve_ingestion_pole_id dans dependencies.py).
 
-    Ne pose PAS de contrainte NOT NULL : tant que les chemins d'ingestion et de création
-    d'utilisateur ne renseignent pas encore pole_id (étapes 3-4 du plan), l'imposer
-    casserait tout insert dès que POLES_ENABLED passe à true. Idempotent : ré-exécutable
-    à chaque démarrage sans dupliquer le pôle ni re-toucher les lignes déjà rattachées.
+    utilisateur.pole_id, lui, ne devient JAMAIS NOT NULL -- ce n'est pas une étape
+    intermédiaire mais une décision définitive : l'admin (règle 4) et un superviseur
+    non-manager (décision B) n'ont explicitement PAS de pôle. Poser NOT NULL dessus
+    casserait ces deux comptes en permanence, pas seulement pendant la migration.
+
+    Idempotent : ré-exécutable à chaque démarrage sans dupliquer le pôle, re-toucher
+    les lignes déjà rattachées, ni échouer sur une colonne déjà NOT NULL.
 
     `enabled` (par défaut POLES_ENABLED) permet aux tests de forcer true/false sans
     dépendre de la variable d'env figée au chargement du module, comme retention_days
@@ -136,6 +141,12 @@ def run_poles_migration(enabled: bool | None = None) -> None:
                 ),
             ).update({"pole_id": general.id}, synchronize_session=False)
 
+            db.commit()
+
+            # Toutes les lignes ont désormais un pole_id (backfill ci-dessus) et les 3
+            # chemins d'ingestion en écrivent un pour toute nouvelle ligne -- sûr de
+            # verrouiller la colonne. No-op si déjà NOT NULL.
+            db.execute(_text("ALTER TABLE knowledge_base ALTER COLUMN pole_id SET NOT NULL"))
             db.commit()
             if backfilled_kb or backfilled_users:
                 _log.info(

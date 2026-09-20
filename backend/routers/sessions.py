@@ -15,7 +15,7 @@ from constants import REASON_LABELS, VALID_REASONS
 from database import get_db
 from dependencies import (
     ACCESS_TOKEN_EXPIRE_MINUTES, EMBED_MODEL, GUEST_EMAIL_DOMAIN, GUEST_SESSION_RATE_LIMIT,
-    INDEX_CLOSED_TICKETS, MISTRAL_MODEL, REQUEST_TIMEOUT,
+    INDEX_CLOSED_TICKETS, MISTRAL_MODEL, POLES_ENABLED, REQUEST_TIMEOUT,
     SUMMARY_MAX_CHARS, SUMMARY_MAX_MESSAGES,
     TRANSCRIPT_CHUNK_OVERLAP, TRANSCRIPT_CHUNK_SIZE, TRANSCRIPT_MAX_CHARS,
     chunk_text, create_access_token, get_current_user, get_user_by_email,
@@ -220,6 +220,15 @@ def close_session(session_id: int, current_user: str = Depends(get_current_user)
     # futures questions de n'importe quel autre utilisateur — désactivé par défaut, cf.
     # INDEX_CLOSED_TICKETS dans dependencies.py.
     if INDEX_CLOSED_TICKETS:
+        # Pôle du CLIENT (session.id_utilisateur), jamais de l'agent qui ferme le ticket
+        # (décision D, feature/poles) : c'est sa conversation, elle doit rester cherchable
+        # par son pôle même si l'agent qui a fermé le ticket est ailleurs. None tant que
+        # POLES_ENABLED=false, ou si le propriétaire n'a pas (encore) de pôle assigné.
+        transcript_pole_id = None
+        if POLES_ENABLED:
+            owner = db.query(models.Utilisateur).filter_by(id=session.id_utilisateur).first()
+            transcript_pole_id = owner.pole_id if owner else None
+
         messages = db.query(models.ChatMessage).filter(models.ChatMessage.id_session == session_id).order_by(models.ChatMessage.date_creation.asc()).limit(SUMMARY_MAX_MESSAGES).all()
         transcript_parts = [sanitize_text(f"{m.type_envoyeur.upper()}: {m.contenu}") for m in messages if m.contenu]
         transcript = "\n".join(transcript_parts)[:TRANSCRIPT_MAX_CHARS]
@@ -240,7 +249,7 @@ def close_session(session_id: int, current_user: str = Depends(get_current_user)
 
         try:
             summary_embedding = embed_text(sanitize_text(summary_text), model=EMBED_MODEL, timeout=REQUEST_TIMEOUT)
-            db.add(models.KnowledgeBase(source_message_id=None, contenu=f"Résumé session #{session_id} (user_id={session.id_utilisateur})\n{summary_text}", embedding=summary_embedding, category="ticket_summary", source_user_id=session.id_utilisateur, source_session_id=session_id))
+            db.add(models.KnowledgeBase(source_message_id=None, contenu=f"Résumé session #{session_id} (user_id={session.id_utilisateur})\n{summary_text}", embedding=summary_embedding, category="ticket_summary", source_user_id=session.id_utilisateur, source_session_id=session_id, pole_id=transcript_pole_id))
         except Exception:
             pass
 
@@ -252,7 +261,7 @@ def close_session(session_id: int, current_user: str = Depends(get_current_user)
                     if not chunk:
                         continue
                     vector = embed_text(chunk, model=EMBED_MODEL, timeout=REQUEST_TIMEOUT)
-                    db.add(models.KnowledgeBase(source_message_id=None, contenu=f"Transcript session #{session_id} (user_id={session.id_utilisateur}) [{idx}/{len(chunks)}]\n{chunk}", embedding=vector, category="ticket_transcript", source_user_id=session.id_utilisateur, source_session_id=session_id))
+                    db.add(models.KnowledgeBase(source_message_id=None, contenu=f"Transcript session #{session_id} (user_id={session.id_utilisateur}) [{idx}/{len(chunks)}]\n{chunk}", embedding=vector, category="ticket_transcript", source_user_id=session.id_utilisateur, source_session_id=session_id, pole_id=transcript_pole_id))
             except Exception:
                 pass
 

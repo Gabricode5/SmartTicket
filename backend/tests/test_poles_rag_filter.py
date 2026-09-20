@@ -168,3 +168,27 @@ class TestPolesEnabledFiltering:
 
         assert "Procédure du pôle A quinquies" in text_a
         assert "Procédure du pôle B quinquies" in text_b
+
+    def test_unmanaged_superviseur_sees_documents_from_every_pole(self, client, mark_verified, db_session):
+        """Régression étape 3 : un superviseur sans ligne manager_poles doit garder la
+        visibilité totale qu'il avait déjà via is_admin_or_sav avant les pôles (décision
+        B). Le filtre ne doit exempter ni l'admin seul (is_super_admin) ni un superviseur
+        devenu manager -- seulement un superviseur qui n'a jamais reçu de manager_poles."""
+        pole_a = _make_pole(db_session, nom="Pôle A sexies")
+        pole_b = _make_pole(db_session, nom="Pôle B sexies")
+        _seed_kb(db_session, contenu="Procédure du pôle A sexies", seed=26, pole_id=pole_a.id)
+        _seed_kb(db_session, contenu="Procédure du pôle B sexies", seed=27, pole_id=pole_b.id)
+        _register_and_login(
+            client, mark_verified, db_session,
+            email="unmanaged-superviseur@example.com", role="superviseur",
+        )
+
+        with patch("routers.ai.embed_text", return_value=make_vector(seed=26)), \
+             patch("routers.ai.POLES_ENABLED", True):
+            text_a = _ask(client, "Procédure A ?")
+        with patch("routers.ai.embed_text", return_value=make_vector(seed=27)), \
+             patch("routers.ai.POLES_ENABLED", True):
+            text_b = _ask(client, "Procédure B ?")
+
+        assert "Procédure du pôle A sexies" in text_a
+        assert "Procédure du pôle B sexies" in text_b

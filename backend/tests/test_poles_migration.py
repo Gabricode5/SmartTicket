@@ -62,6 +62,7 @@ class TestPolesMigrationDisabled:
 
 class TestPolesMigrationEnabled:
     def test_creates_the_general_pole_as_global(self, db_session):
+        db_session.commit()  # ferme la transaction implicite laissée par refresh()/query, sinon deadlock avec l'ALTER TABLE de la migration
         run_poles_migration(enabled=True)
 
         general = db_session.query(models.Pole).filter_by(is_global=True).first()
@@ -69,8 +70,11 @@ class TestPolesMigrationEnabled:
         assert general.nom == "Général"
 
     def test_is_idempotent_across_repeated_runs(self, db_session):
+        db_session.commit()  # ferme la transaction implicite laissée par refresh()/query, sinon deadlock avec l'ALTER TABLE de la migration
         run_poles_migration(enabled=True)
+        db_session.commit()  # ferme la transaction implicite laissée par refresh()/query, sinon deadlock avec l'ALTER TABLE de la migration
         run_poles_migration(enabled=True)
+        db_session.commit()  # ferme la transaction implicite laissée par refresh()/query, sinon deadlock avec l'ALTER TABLE de la migration
         run_poles_migration(enabled=True)
 
         assert db_session.query(models.Pole).filter_by(is_global=True).count() == 1
@@ -78,6 +82,7 @@ class TestPolesMigrationEnabled:
     def test_backfills_knowledge_base_rows_without_a_pole(self, db_session):
         kb = _make_kb_row(db_session, contenu="doc pré-existant sans pôle")
 
+        db_session.commit()  # ferme la transaction implicite laissée par refresh()/query, sinon deadlock avec l'ALTER TABLE de la migration
         run_poles_migration(enabled=True)
 
         db_session.expire_all()
@@ -91,6 +96,7 @@ class TestPolesMigrationEnabled:
         db_session.refresh(other_pole)
         kb = _make_kb_row(db_session, contenu="doc déjà assigné", pole_id=other_pole.id)
 
+        db_session.commit()  # ferme la transaction implicite laissée par refresh()/query, sinon deadlock avec l'ALTER TABLE de la migration
         run_poles_migration(enabled=True)
 
         db_session.expire_all()
@@ -100,6 +106,7 @@ class TestPolesMigrationEnabled:
         user = _make_user(db_session, email="poles-on-user@example.com", role="user")
         sav = _make_user(db_session, email="poles-on-sav@example.com", role="sav")
 
+        db_session.commit()  # ferme la transaction implicite laissée par refresh()/query, sinon deadlock avec l'ALTER TABLE de la migration
         run_poles_migration(enabled=True)
 
         db_session.expire_all()
@@ -111,6 +118,7 @@ class TestPolesMigrationEnabled:
         """Règle 4 : le super admin (rôle admin existant) ne relève d'aucun pôle."""
         admin = _make_user(db_session, email="poles-on-admin@example.com", role="admin")
 
+        db_session.commit()  # ferme la transaction implicite laissée par refresh()/query, sinon deadlock avec l'ALTER TABLE de la migration
         run_poles_migration(enabled=True)
 
         db_session.expire_all()
@@ -122,6 +130,7 @@ class TestPolesMigrationEnabled:
         option 3 validée)."""
         superviseur = _make_user(db_session, email="poles-on-sup@example.com", role="superviseur")
 
+        db_session.commit()  # ferme la transaction implicite laissée par refresh()/query, sinon deadlock avec l'ALTER TABLE de la migration
         run_poles_migration(enabled=True)
 
         db_session.expire_all()

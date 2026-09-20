@@ -77,6 +77,13 @@ def clean_tables(setup_database):
     """Wipe user data before each test so tests are fully independent."""
     with engine.connect() as conn:
         conn.execute(_TRUNCATE_SQL)
+        # run_poles_migration() (feature/poles, étape 3) pose ALTER TABLE knowledge_base
+        # ALTER COLUMN pole_id SET NOT NULL quand POLES_ENABLED=true -- une mutation de
+        # SCHÉMA, que TRUNCATE (qui ne touche qu'aux données) ne défait pas. Sans ce reset,
+        # un test qui active la migration rendrait la colonne NOT NULL pour TOUT le reste
+        # de la suite, cassant les tests RAG qui insèrent des KnowledgeBase sans pole_id.
+        # No-op (pas d'erreur) si la colonne est déjà nullable.
+        conn.execute(text("ALTER TABLE knowledge_base ALTER COLUMN pole_id DROP NOT NULL"))
         conn.commit()
     yield
 

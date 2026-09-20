@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 import models
 import schemas
 from database import get_db
-from dependencies import INGEST_JOBS, get_current_user, get_user_by_email, is_admin_or_sav
+from dependencies import INGEST_JOBS, PoleIngestionError, get_current_user, get_user_by_email, is_admin_or_sav, resolve_ingestion_pole_id
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Base de connaissances"])
@@ -20,22 +20,26 @@ def ingest_knowledge_base(payload: schemas.KnowledgeIngestRequest, background_ta
     if not requester or not is_admin_or_sav(requester):
         raise HTTPException(status_code=403, detail="Accès refusé")
     try:
+        resolved_pole_id = resolve_ingestion_pole_id(db, requester, payload.pole_id)
+    except PoleIngestionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    try:
         from ingest_postgres import ingest_to_postgres
         job_id = str(uuid.uuid4())
         INGEST_JOBS[job_id] = {"status": "running", "started_at": datetime.utcnow().isoformat(),
                                "url": str(payload.url), "category": payload.category or "", "result": None, "error": None}
 
-        def _run(job_id_value: str, url_value: str, category_value: str | None):
+        def _run(job_id_value: str, url_value: str, category_value: str | None, pole_id_value: int | None):
             job_state = INGEST_JOBS[job_id_value]
             try:
-                result = ingest_to_postgres(url=url_value, category=category_value, job_state=job_state)
+                result = ingest_to_postgres(url=url_value, category=category_value, job_state=job_state, pole_id=pole_id_value)
                 INGEST_JOBS[job_id_value].update({"status": "completed", "result": result})
             except Exception as e:
                 INGEST_JOBS[job_id_value].update({"status": "failed", "error": str(e)})
             finally:
                 INGEST_JOBS[job_id_value]["finished_at"] = datetime.utcnow().isoformat()
 
-        background_tasks.add_task(_run, job_id, str(payload.url), payload.category)
+        background_tasks.add_task(_run, job_id, str(payload.url), payload.category, resolved_pole_id)
         return {"status": "started", "message": "Indexation lancée en arrière-plan.", "url": str(payload.url), "category": payload.category or "", "job_id": job_id}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erreur ingestion: {str(e)}")
@@ -91,10 +95,14 @@ def delete_knowledge_source(source: str, current_user: str = Depends(get_current
 
 
 @router.post("/knowledge-base/ingest-file", response_model=schemas.KnowledgeIngestResponse, summary="Indexer un fichier PDF, DOCX ou TXT")
-async def ingest_file(background_tasks: BackgroundTasks, file: UploadFile = File(...), category: str = Form(None), current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
+async def ingest_file(background_tasks: BackgroundTasks, file: UploadFile = File(...), category: str = Form(None), pole_id: int = Form(None), current_user: str = Depends(get_current_user), db: Session = Depends(get_db)):
     requester = get_user_by_email(db, current_user)
     if not requester or not is_admin_or_sav(requester):
         raise HTTPException(status_code=403, detail="Accès refusé")
+    try:
+        resolved_pole_id = resolve_ingestion_pole_id(db, requester, pole_id)
+    except PoleIngestionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
     filename = file.filename or ""
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     if ext not in ("txt", "docx", "pdf"):
@@ -105,14 +113,14 @@ async def ingest_file(background_tasks: BackgroundTasks, file: UploadFile = File
     INGEST_JOBS[job_id] = {"status": "running", "started_at": datetime.utcnow().isoformat(),
                            "filename": filename, "category": category or "", "result": None, "error": None}
 
-    def _run(job_id_value: str, bytes_value: bytes, name: str, cat: str | None):
+    def _run(job_id_value: str, bytes_value: bytes, name: str, cat: str | None, pole_id_value: int | None):
         try:
-            result = ingest_file_to_postgres(bytes_value, name, cat)
+            result = ingest_file_to_postgres(bytes_value, name, cat, pole_id=pole_id_value)
             INGEST_JOBS[job_id_value].update({"status": "completed", "result": result})
         except Exception as e:
             INGEST_JOBS[job_id_value].update({"status": "failed", "error": str(e)})
         finally:
             INGEST_JOBS[job_id_value]["finished_at"] = datetime.utcnow().isoformat()
 
-    background_tasks.add_task(_run, job_id, file_bytes, filename, category)
+    background_tasks.add_task(_run, job_id, file_bytes, filename, category, resolved_pole_id)
     return {"status": "started", "message": f"Indexation de '{filename}' lancée en arrière-plan.", "job_id": job_id}

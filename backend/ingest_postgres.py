@@ -259,7 +259,7 @@ def _load_documents_from_urls(urls: list[str], job_state: dict | None = None) ->
         job_state["current_url"] = None
     return docs
 
-def ingest_to_postgres(url: str | None = None, category: str | None = None, job_state: dict | None = None):
+def ingest_to_postgres(url: str | None = None, category: str | None = None, job_state: dict | None = None, pole_id: int | None = None):
     # 2. Préparer l'URL et la catégorie
     source_url = url or DEFAULT_URL
     category_value = (category or DEFAULT_CATEGORY).strip() or DEFAULT_CATEGORY
@@ -338,6 +338,7 @@ def ingest_to_postgres(url: str | None = None, category: str | None = None, job_
                     embedding=vector,
                     category=category_value,
                     source=source_url,
+                    pole_id=pole_id,
                 )
                 db.add(row)
                 inserted += 1
@@ -358,7 +359,7 @@ def ingest_to_postgres(url: str | None = None, category: str | None = None, job_
     finally:
         db.close()
 
-def ingest_file_to_postgres(file_bytes: bytes, filename: str, category: str | None = None):
+def ingest_file_to_postgres(file_bytes: bytes, filename: str, category: str | None = None, pole_id: int | None = None):
     import io
     category_value = (category or DEFAULT_CATEGORY).strip() or DEFAULT_CATEGORY
     ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
@@ -410,6 +411,7 @@ def ingest_file_to_postgres(file_bytes: bytes, filename: str, category: str | No
                     embedding=vector,
                     category=category_value,
                     source=filename,
+                    pole_id=pole_id,
                 )
                 db.add(row)
                 inserted += 1
