@@ -167,6 +167,17 @@ def run_migrations() -> None:
         _log.error("Extension vector: %s", exc, exc_info=True)
 
     # 2. Crée les tables manquantes (nouvelles installations)
+    #
+    # poles/manager_poles NE PEUVENT PAS être exclues ici même si POLES_ENABLED=false :
+    # utilisateur.pole_id et knowledge_base.pole_id portent une contrainte FK vers poles(id)
+    # dans le modèle SQLAlchemy -- create_all() émet le DDL complet de CHAQUE table, FK
+    # comprises, qu'on filtre ou non la liste `tables=`. Exclure "poles" ici fait échouer
+    # la création de utilisateur/knowledge_base elles-mêmes (testé : sur une base neuve,
+    # ça casse le tout premier boot ; sur une base existante déjà migrée, .pole_id étant un
+    # attribut mappé en Python, TOUTE requête ORM sur Utilisateur/KnowledgeBase l'inclut
+    # dans le SELECT et échoue si la colonne n'existe pas réellement en base). Ces 2 tables
+    # neuves et vides restent donc créées inconditionnellement -- opération instantanée,
+    # aucun verrou sur une table existante, contrairement au CREATE INDEX plus bas.
     try:
         from database import Base
         Base.metadata.create_all(bind=_engine)
@@ -238,14 +249,26 @@ def run_migrations() -> None:
             conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_knowledge_base_source_user_id ON knowledge_base (source_user_id)"))
 
             # pole_id : feature POLES_ENABLED (cloisonnement par service, cf. feature/poles).
-            # Colonnes posées inconditionnellement (nullable, aucun effet tant que rien ne les
-            # lit) -- seuls le backfill du pôle "Général" et son usage dans le filtre RAG sont
-            # gatés par POLES_ENABLED (cf. run_poles_migration ci-dessous). La table "poles"
-            # existe déjà à ce stade (create_all() plus haut, étape 2).
+            #
+            # La colonne reste posée INCONDITIONNELLEMENT, sur les deux tables -- ce n'est
+            # pas négociable avec l'architecture actuelle : pole_id est un attribut mappé du
+            # modèle SQLAlchemy (models.Utilisateur / models.KnowledgeBase), donc TOUTE requête
+            # ORM les touchant l'inclut dans son SELECT, que POLES_ENABLED soit vrai ou non. Si
+            # la colonne n'existe pas en base, la moindre requête (login, /me, chat, RAG...)
+            # échoue avec "column pole_id does not exist" -- testé, ça casse tout, pas juste
+            # les pôles. ADD COLUMN nullable sans défaut est en pratique un métadata-only rapide
+            # (PostgreSQL 11+), sans réécriture de table ni verrou long, même sur une grosse
+            # table -- ce n'est donc pas l'opération à risque.
+            #
+            # Le CREATE INDEX, lui, EST l'opération à risque (scan complet + verrou le temps du
+            # scan, potentiellement long sur knowledge_base en prod) -- et il est le seul des
+            # deux à être un pur optimisation : rien ne filtre par pole_id tant que
+            # POLES_ENABLED=false, donc rien n'a besoin de l'index. Gaté seul, ci-dessous.
             conn.execute(_text("ALTER TABLE utilisateur ADD COLUMN IF NOT EXISTS pole_id INTEGER REFERENCES poles(id) ON DELETE SET NULL"))
             conn.execute(_text("ALTER TABLE knowledge_base ADD COLUMN IF NOT EXISTS pole_id INTEGER REFERENCES poles(id) ON DELETE SET NULL"))
-            conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_utilisateur_pole_id ON utilisateur (pole_id)"))
-            conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_knowledge_base_pole_id ON knowledge_base (pole_id)"))
+            if POLES_ENABLED:
+                conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_utilisateur_pole_id ON utilisateur (pole_id)"))
+                conn.execute(_text("CREATE INDEX IF NOT EXISTS ix_knowledge_base_pole_id ON knowledge_base (pole_id)"))
 
             conn.commit()
     except Exception as exc:

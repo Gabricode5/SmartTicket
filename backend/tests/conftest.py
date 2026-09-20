@@ -84,6 +84,12 @@ def clean_tables(setup_database):
         # de la suite, cassant les tests RAG qui insèrent des KnowledgeBase sans pole_id.
         # No-op (pas d'erreur) si la colonne est déjà nullable.
         conn.execute(text("ALTER TABLE knowledge_base ALTER COLUMN pole_id DROP NOT NULL"))
+        # Même raison : les index ix_{utilisateur,knowledge_base}_pole_id ne sont posés par
+        # run_migrations() que si POLES_ENABLED=true (correctif prod -- cf. main.py) ; un
+        # test qui active le flag les laisserait sinon traîner pour tout le reste de la
+        # suite. DROP INDEX IF EXISTS : no-op s'ils n'existent pas.
+        conn.execute(text("DROP INDEX IF EXISTS ix_utilisateur_pole_id"))
+        conn.execute(text("DROP INDEX IF EXISTS ix_knowledge_base_pole_id"))
         conn.commit()
     yield
 

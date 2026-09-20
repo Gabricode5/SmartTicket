@@ -6,8 +6,11 @@ suivantes du plan. Ce fichier vérifie uniquement : la migration elle-même, et 
 que POLES_ENABLED=false laisse le comportement actuel strictement identique.
 """
 import secrets
+from unittest.mock import patch
 
 import models
+from sqlalchemy import text
+import main
 from main import run_poles_migration
 
 _TEST_PASSWORD = secrets.token_urlsafe(16)
@@ -180,3 +183,68 @@ class TestManagerPoleLink:
 
         db_session.expire_all()
         assert db_session.query(models.Utilisateur).filter_by(id=user.id).first().pole_id is None
+
+
+class TestSchemaChangesGatedButOrmSafe:
+    """Correctif post-livraison (feature/poles) : les 3 tables/colonnes pôles
+    (poles, manager_poles, pole_id sur utilisateur/knowledge_base) sont posées par
+    run_migrations() -- pas run_poles_migration() -- et NE PEUVENT PAS être entièrement
+    gatées derrière POLES_ENABLED sans casser l'application :
+
+    - pole_id est un attribut mappé des modèles SQLAlchemy Utilisateur/KnowledgeBase :
+      TOUTE requête ORM les touchant (login, /me, chat, RAG...) inclut cette colonne
+      dans son SELECT, flag ou pas. Si la colonne n'existe pas réellement en base, ces
+      requêtes échouent avec "column pole_id does not exist" -- testé empiriquement,
+      ça casse tout, pas seulement les pôles.
+    - poles/manager_poles ne peuvent pas non plus être exclues de create_all() : la FK
+      ForeignKey("poles.id") est déclarée dans le DDL de utilisateur/knowledge_base
+      eux-mêmes -- les exclure fait échouer la création de CES tables (testé sur une
+      base neuve : le tout premier boot casse entièrement, avant même d'arriver aux
+      pôles).
+
+    Seule l'opération réellement coûteuse et évitable est gatée : le CREATE INDEX sur
+    utilisateur/knowledge_base (scan complet + verrou le temps du scan -- risque réel
+    sur une grosse table vectorielle en prod). Table/colonne sont des opérations
+    rapides de métadonnées (PostgreSQL 11+, ADD COLUMN nullable sans défaut ; CREATE
+    TABLE sur une table neuve et vide), sans réécriture ni verrou long.
+    """
+
+    def _index_exists(self, db_session, name: str) -> bool:
+        row = db_session.execute(
+            text("SELECT 1 FROM pg_indexes WHERE indexname = :name"), {"name": name}
+        ).first()
+        return row is not None
+
+    def test_pole_index_is_not_created_when_flag_off(self, db_session):
+        with patch("main.POLES_ENABLED", False):
+            main.run_migrations()
+
+        assert not self._index_exists(db_session, "ix_utilisateur_pole_id")
+        assert not self._index_exists(db_session, "ix_knowledge_base_pole_id")
+
+    def test_pole_column_exists_even_when_flag_off_so_orm_queries_do_not_crash(self, db_session):
+        """C'est le point clé du correctif : la colonne DOIT exister (sinon toute
+        requête ORM plante), même si son index -- lui -- reste absent."""
+        with patch("main.POLES_ENABLED", False):
+            main.run_migrations()
+
+        # Ces requêtes échoueraient avec un ProgrammingError si pole_id n'existait pas.
+        db_session.query(models.Utilisateur).count()
+        db_session.query(models.KnowledgeBase).count()
+
+    def test_activating_the_flag_creates_the_index_and_runs_the_migration_without_loss(self, db_session):
+        """Bascule V1 -> pôles activés, au même boot : l'existant (une donnée déjà en
+        base avant activation) doit être backfillé, pas perdu ni planté."""
+        pre_existing_kb = _make_kb_row(db_session, contenu="doc déjà présent avant activation")
+
+        db_session.commit()  # ferme la transaction implicite laissée par refresh(), sinon deadlock avec le DDL de run_migrations()
+        with patch("main.POLES_ENABLED", True):
+            main.run_migrations()
+
+        assert self._index_exists(db_session, "ix_utilisateur_pole_id")
+        assert self._index_exists(db_session, "ix_knowledge_base_pole_id")
+
+        db_session.expire_all()
+        general = db_session.query(models.Pole).filter_by(is_global=True).first()
+        assert general is not None
+        assert db_session.query(models.KnowledgeBase).filter_by(id=pre_existing_kb.id).first().pole_id == general.id
