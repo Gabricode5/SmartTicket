@@ -9,7 +9,7 @@ export default function CgvContent() {
         <>
             <div>
                 <h1 className="text-2xl font-bold text-slate-900">{c.title}</h1>
-                <p className="text-xs text-slate-400 mt-1">{t.legal.lastUpdated}</p>
+                <p className="text-xs text-slate-500 mt-1">{t.legal.lastUpdated}</p>
             </div>
 
             <section className="space-y-2">
