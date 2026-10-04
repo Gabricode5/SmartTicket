@@ -154,6 +154,29 @@ export default function LandingPage() {
                 </div>
             </section>
 
+            {/* ── Démo vidéo ── */}
+            <section className="py-24 px-6">
+                <div className="max-w-3xl mx-auto text-center">
+                    <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
+                        {t.landing.demo.title}
+                    </h2>
+                    <p className="text-anthracite/80 text-lg mb-10">
+                        {t.landing.demo.subtitle}
+                    </p>
+                    <div className="rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-brand/15 overflow-hidden">
+                        <video
+                            className="w-full aspect-video"
+                            controls
+                            preload="none"
+                            poster="/tiqia-vsl-poster.jpg"
+                            playsInline
+                        >
+                            <source src="/tiqia-vsl.mp4" type="video/mp4" />
+                        </video>
+                    </div>
+                </div>
+            </section>
+
             {/* ── Stats ── */}
             <section className="border-y border-slate-100 bg-slate-50/50 py-12 px-6">
                 <div className="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 text-center">

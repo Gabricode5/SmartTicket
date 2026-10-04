@@ -30,6 +30,10 @@ const fr = {
             { value: "24/7", label: "Disponibilité" },
             { value: "RAG", label: "Contexte métier intégré" },
         ],
+        demo: {
+            title: "Découvrez Tiqia en 44 secondes",
+            subtitle: "Le principe, en une minute chrono.",
+        },
         features: {
             title: "Tout ce qu'il faut pour un support client moderne",
             subtitle: "Une plateforme complète qui combine IA générative, base de connaissances et gestion humaine des cas complexes.",
@@ -228,6 +232,10 @@ const en: typeof fr = {
             { value: "24/7", label: "Availability" },
             { value: "RAG", label: "Built-in business context" },
         ],
+        demo: {
+            title: "See Tiqia in 44 seconds",
+            subtitle: "The idea, in one minute flat.",
+        },
         features: {
             title: "Everything you need for modern customer support",
             subtitle: "A complete platform combining generative AI, a knowledge base, and human handling of complex cases.",
