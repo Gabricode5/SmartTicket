@@ -1,0 +1,20 @@
+[
+  {
+    "id": 12,
+    "name": "Imprimante du 2e étage hors service",
+    "content": "<p>L'imprimante partagée du 2e étage ne s'allume plus depuis ce matin.</p>",
+    "status": 1
+  },
+  {
+    "id": 13,
+    "name": "Demande d'accès au dossier partagé Compta",
+    "content": "<p>Bonjour, je n'ai plus accès au dossier réseau Compta depuis la migration.</p>",
+    "status": 1
+  },
+  {
+    "id": 14,
+    "name": "Ticket déjà pris en charge par un agent",
+    "content": "<p>En cours de traitement.</p>",
+    "status": 2
+  }
+]

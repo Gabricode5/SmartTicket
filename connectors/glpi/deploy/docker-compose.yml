@@ -1,0 +1,68 @@
+# Paquet d'installation autonome : pgvector + passerelle GLPI (web + worker).
+# `docker compose up -d --build` suffit -- rien à installer/configurer à côté.
+#
+# Base Postgres UNIQUE partagée entre rag_core (table knowledge_chunk) et l'état du
+# connecteur (table processed_tickets) -- même choix que connectors/glpi/render.yaml,
+# les deux tables ne se chevauchent pas. Les URLs internes (service pgvector) sont
+# construites ici, jamais saisies par le client (cf. .env.example).
+#
+# pgvector/pgvector:pg16 -- version alignée sur celle utilisée pour valider les tests
+# (cf. conteneur de dev tiqia-pgvector), pas la pg18 du docker-compose.yml racine :
+# la cohérence test/déploiement prime ici.
+services:
+  pgvector:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-glpi_gateway}
+      POSTGRES_USER: ${POSTGRES_USER:-glpi_gateway}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Définis POSTGRES_PASSWORD dans .env (copie .env.example)}
+    volumes:
+      - pgvector-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-glpi_gateway} -d ${POSTGRES_DB:-glpi_gateway}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  gateway-web:
+    build:
+      context: ../../..
+      dockerfile: connectors/glpi/Dockerfile
+    env_file: .env
+    environment:
+      RAG_DATABASE_URL: postgresql://${POSTGRES_USER:-glpi_gateway}:${POSTGRES_PASSWORD}@pgvector:5432/${POSTGRES_DB:-glpi_gateway}
+      CONNECTOR_DATABASE_URL: postgresql://${POSTGRES_USER:-glpi_gateway}:${POSTGRES_PASSWORD}@pgvector:5432/${POSTGRES_DB:-glpi_gateway}
+    ports:
+      - "8000:8000"
+    extra_hosts:
+      # GLPI tourne HORS de ce compose, sur l'hôte (ex: localhost:8080). Depuis un
+      # conteneur, "localhost" ne pointe pas vers l'hôte -- host.docker.internal si.
+      # Natif sur Mac/Windows ; sur Linux (Docker Engine >=20.10) cette ligne le mappe
+      # vers la passerelle réseau de l'hôte. Même mécanisme pour gateway-worker.
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ./faq:/app/faq:ro
+    depends_on:
+      pgvector:
+        condition: service_healthy
+    restart: unless-stopped
+
+  gateway-worker:
+    build:
+      context: ../../..
+      dockerfile: connectors/glpi/Dockerfile
+    command: python -m glpi_connector.worker
+    env_file: .env
+    environment:
+      RAG_DATABASE_URL: postgresql://${POSTGRES_USER:-glpi_gateway}:${POSTGRES_PASSWORD}@pgvector:5432/${POSTGRES_DB:-glpi_gateway}
+      CONNECTOR_DATABASE_URL: postgresql://${POSTGRES_USER:-glpi_gateway}:${POSTGRES_PASSWORD}@pgvector:5432/${POSTGRES_DB:-glpi_gateway}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      pgvector:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  pgvector-data:

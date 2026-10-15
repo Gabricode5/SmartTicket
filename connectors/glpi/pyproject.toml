@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "glpi-connector"
+version = "0.1.0"
+description = "Passerelle GLPI <-> rag_core : polling des tickets, suggestion IA postée en suivi (jamais en autonomie). Consomme rag_core par dépendance, jamais par copie."
+requires-python = ">=3.11"
+dependencies = [
+  "rag-core",                 # paquet local : pip install ../../rag_core (ou -e) avant, ou pip install ./rag_core ./connectors/glpi
+  "fastapi==0.139.0",
+  "uvicorn==0.50.2",
+  "requests==2.34.2",
+  "sqlalchemy==2.0.51",
+  "psycopg2-binary==2.9.12",
+  "python-dotenv==1.2.2",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest==9.1.1",
+  "pytest-cov==7.1.0",
+  "httpx==0.28.1",
+  "ruff==0.6.9",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+# rag_core est consommé par dépendance ; en dev/test on l'expose via PYTHONPATH plutôt
+# que de l'installer, mais `pip install ./rag_core ./connectors/glpi` reste la voie CI/Docker.
+pythonpath = ["src", "../../rag_core/src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I"]
+ignore = ["E501"]

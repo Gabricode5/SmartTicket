@@ -1,0 +1,9 @@
+{
+  "id": 12,
+  "name": "Imprimante du 2e étage hors service",
+  "content": "<p>Bonjour,</p><p>L'imprimante partagée du 2e étage ne s'allume plus depuis ce matin. Le voyant reste éteint même en changeant de prise.</p><p>Merci d'avance.</p>",
+  "status": 1,
+  "date_creation": "2026-09-06 08:14:22",
+  "itilcategories_id": 4,
+  "entities_id": 0
+}

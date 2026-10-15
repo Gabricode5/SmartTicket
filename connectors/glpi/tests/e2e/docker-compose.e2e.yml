@@ -1,0 +1,35 @@
+# GLPI réel pour le bout-en-bout (voir tests/e2e/README.md).
+#   docker compose -f tests/e2e/docker-compose.e2e.yml up -d
+# Puis : installer GLPI (assistant web sur http://localhost:8088), activer l'API REST,
+# créer un App-Token + un user_token, exporter les GLPI_E2E_* et lancer `pytest tests/e2e`.
+# Mot de passe de ce MariaDB jetable (local, non exposé) : variable obligatoire plutôt
+# qu'une valeur en dur, pour qu'aucun scanner de secrets (GitGuardian...) ne la signale.
+services:
+  glpi-e2e-db:
+    image: mariadb:10.11
+    environment:
+      MARIADB_ROOT_PASSWORD: "${GLPI_E2E_DB_PASSWORD:?Variable GLPI_E2E_DB_PASSWORD manquante}"
+      MARIADB_DATABASE: glpi
+      MARIADB_USER: glpi
+      MARIADB_PASSWORD: "${GLPI_E2E_DB_PASSWORD:?Variable GLPI_E2E_DB_PASSWORD manquante}"
+    command: --transaction-isolation=READ-COMMITTED --log-bin --binlog-format=ROW
+    volumes:
+      - glpi-e2e-db:/var/lib/mysql
+
+  glpi-e2e:
+    image: glpi/glpi:10.0.18
+    ports:
+      - "8088:80"
+    environment:
+      GLPI_DB_HOST: glpi-e2e-db
+      GLPI_DB_NAME: glpi
+      GLPI_DB_USER: glpi
+      GLPI_DB_PASSWORD: "${GLPI_E2E_DB_PASSWORD:?Variable GLPI_E2E_DB_PASSWORD manquante}"
+    depends_on:
+      - glpi-e2e-db
+    volumes:
+      - glpi-e2e-files:/var/www/html/glpi/files
+
+volumes:
+  glpi-e2e-db:
+  glpi-e2e-files:
