@@ -8,10 +8,10 @@ services:
   glpi-e2e-db:
     image: mariadb:10.11
     environment:
-      MARIADB_ROOT_PASSWORD: "${GLPI_E2E_DB_PASSWORD:?Definis GLPI_E2E_DB_PASSWORD (export GLPI_E2E_DB_PASSWORD=glpi)}"
+      MARIADB_ROOT_PASSWORD: "${GLPI_E2E_DB_PASSWORD:?Variable GLPI_E2E_DB_PASSWORD manquante}"
       MARIADB_DATABASE: glpi
       MARIADB_USER: glpi
-      MARIADB_PASSWORD: "${GLPI_E2E_DB_PASSWORD:?Definis GLPI_E2E_DB_PASSWORD (export GLPI_E2E_DB_PASSWORD=glpi)}"
+      MARIADB_PASSWORD: "${GLPI_E2E_DB_PASSWORD:?Variable GLPI_E2E_DB_PASSWORD manquante}"
     command: --transaction-isolation=READ-COMMITTED --log-bin --binlog-format=ROW
     volumes:
       - glpi-e2e-db:/var/lib/mysql
@@ -24,7 +24,7 @@ services:
       GLPI_DB_HOST: glpi-e2e-db
       GLPI_DB_NAME: glpi
       GLPI_DB_USER: glpi
-      GLPI_DB_PASSWORD: "${GLPI_E2E_DB_PASSWORD:?Definis GLPI_E2E_DB_PASSWORD (export GLPI_E2E_DB_PASSWORD=glpi)}"
+      GLPI_DB_PASSWORD: "${GLPI_E2E_DB_PASSWORD:?Variable GLPI_E2E_DB_PASSWORD manquante}"
     depends_on:
       - glpi-e2e-db
     volumes:

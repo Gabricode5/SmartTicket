@@ -12,7 +12,7 @@ seule chose que le stub ne peut pas prouver : **que GLPI lui-même accepte notre
 
 ```bash
 # 1. Démarrer GLPI + MariaDB (mot de passe MariaDB jetable, local, à ta convenance)
-export GLPI_E2E_DB_PASSWORD=glpi
+export GLPI_E2E_DB_PASSWORD=<choisis-une-valeur>
 docker compose -f tests/e2e/docker-compose.e2e.yml up -d
 
 # 2. Installer GLPI : http://localhost:8088  → assistant d'installation
