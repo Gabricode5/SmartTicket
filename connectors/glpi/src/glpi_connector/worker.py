@@ -6,6 +6,7 @@ import logging
 import time
 
 from glpi_connector import config
+from glpi_connector.bootstrap import init_schema
 from glpi_connector.db import SessionLocal
 from glpi_connector.glpi_client import GlpiClient
 from glpi_connector.poller import run_once
@@ -40,4 +41,5 @@ def run_forever(*, _max_iterations: int | None = None, _sleep=time.sleep) -> Non
 
 
 if __name__ == "__main__":  # pragma: no cover
+    init_schema()
     run_forever()

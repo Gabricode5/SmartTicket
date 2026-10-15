@@ -5,18 +5,30 @@
   POST /admin/poll     -> déclenche UN passage run_once (respecte DRY_RUN)
 """
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
 from sqlalchemy.orm import Session
 
 from glpi_connector import config, store
+from glpi_connector.bootstrap import init_schema
 from glpi_connector.db import get_session
 from glpi_connector.glpi_client import GlpiClient
 from glpi_connector.poller import run_once
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Connecteur GLPI ↔ rag_core", version="0.1.0")
+
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    # Hors de l'import du module : TestClient(app) sans `with` ne déclenche pas le
+    # lifespan ASGI, donc /health (et les tests) restent utilisables sans base réelle.
+    init_schema()
+    yield
+
+
+app = FastAPI(title="Connecteur GLPI ↔ rag_core", version="0.1.0", lifespan=_lifespan)
 
 
 @app.get("/health")
