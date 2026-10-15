@@ -18,12 +18,21 @@ from rag_core.llm.catalogue import (
     ModelKind,
     resolve,
 )
+from rag_core.llm.claude import ClaudeProvider
 from rag_core.llm.errors import EmbeddingDimensionMismatch, UnknownProviderError
+from rag_core.llm.gemini import GeminiProvider
 from rag_core.llm.mistral import MistralProvider
+from rag_core.llm.openai_compatible import OllamaProvider, OpenAIProvider
 
-# Fournisseur -> implementation. Ajouter OpenAI/local = une ligne ici + une entree catalogue.
+# Fournisseur -> implementation. Ajouter un fournisseur de plus = une ligne ici + une
+# entree catalogue (ou juste une entree catalogue si le fournisseur existe deja, ex: un
+# autre modele Ollama).
 _PROVIDERS: dict[str, type[LLMProvider]] = {
     "mistral": MistralProvider,
+    "gemini": GeminiProvider,
+    "claude": ClaudeProvider,
+    "openai": OpenAIProvider,
+    "ollama": OllamaProvider,
 }
 
 

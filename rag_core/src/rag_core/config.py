@@ -63,8 +63,38 @@ INGEST_DEFAULT_CATEGORY = os.getenv("RAG_INGEST_DEFAULT_CATEGORY", "documentatio
 # la sanitisation. Vide par defaut = comportement generique.
 CLIENT_PROMPT_OVERLAY = os.getenv("RAG_CLIENT_PROMPT_OVERLAY", "").strip()
 
-# --- Fournisseur Mistral (seule implementation LLMProvider pour l'instant) --------------
+# --- Fournisseur Mistral -----------------------------------------------------------
 MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 MISTRAL_API_URL = os.getenv("MISTRAL_API_URL", "https://api.mistral.ai/v1").rstrip("/")
 MISTRAL_MAX_RETRIES = int(os.getenv("MISTRAL_MAX_RETRIES", "5"))
 MISTRAL_BACKOFF_SECONDS = float(os.getenv("MISTRAL_BACKOFF_SECONDS", "2"))
+
+# --- Fournisseur Gemini (Google) ----------------------------------------------------
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_URL = os.getenv(
+    "GEMINI_API_URL", "https://generativelanguage.googleapis.com/v1beta"
+).rstrip("/")
+GEMINI_MAX_RETRIES = int(os.getenv("GEMINI_MAX_RETRIES", "5"))
+GEMINI_BACKOFF_SECONDS = float(os.getenv("GEMINI_BACKOFF_SECONDS", "2"))
+
+# --- Fournisseur Claude (Anthropic) -- generation uniquement, pas d'API d'embeddings ----
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+ANTHROPIC_API_URL = os.getenv("ANTHROPIC_API_URL", "https://api.anthropic.com/v1").rstrip("/")
+ANTHROPIC_VERSION = os.getenv("ANTHROPIC_VERSION", "2023-06-01")
+ANTHROPIC_MAX_RETRIES = int(os.getenv("ANTHROPIC_MAX_RETRIES", "5"))
+ANTHROPIC_BACKOFF_SECONDS = float(os.getenv("ANTHROPIC_BACKOFF_SECONDS", "2"))
+
+# --- Fournisseur OpenAI ------------------------------------------------------------
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+OPENAI_API_URL = os.getenv("OPENAI_API_URL", "https://api.openai.com/v1").rstrip("/")
+OPENAI_MAX_RETRIES = int(os.getenv("OPENAI_MAX_RETRIES", "5"))
+OPENAI_BACKOFF_SECONDS = float(os.getenv("OPENAI_BACKOFF_SECONDS", "2"))
+
+# --- Fournisseur local (Ollama par defaut -- meme API compatible OpenAI que ci-dessus,
+# repointer OLLAMA_API_URL suffit pour viser un autre serveur local : vLLM, LM Studio...) --
+OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434/v1").rstrip("/")
+# Ollama ignore la cle mais le client HTTP (et certains proxys) exigent un Authorization
+# non vide -- defaut factice volontairement non secret.
+OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY", "ollama")
+OLLAMA_MAX_RETRIES = int(os.getenv("OLLAMA_MAX_RETRIES", "3"))
+OLLAMA_BACKOFF_SECONDS = float(os.getenv("OLLAMA_BACKOFF_SECONDS", "1"))
