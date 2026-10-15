@@ -11,11 +11,13 @@ seule chose que le stub ne peut pas prouver : **que GLPI lui-même accepte notre
 ## Mise en route
 
 ```bash
-# 1. Démarrer GLPI + MariaDB
+# 1. Démarrer GLPI + MariaDB (mot de passe MariaDB jetable, local, à ta convenance)
+export GLPI_E2E_DB_PASSWORD=glpi
 docker compose -f tests/e2e/docker-compose.e2e.yml up -d
 
 # 2. Installer GLPI : http://localhost:8088  → assistant d'installation
-#    (BDD : hôte glpi-e2e-db, base/user/pass = glpi). Se connecter en glpi/glpi.
+#    (BDD : hôte glpi-e2e-db, base/user = glpi, mot de passe = $GLPI_E2E_DB_PASSWORD).
+#    Se connecter en glpi/glpi.
 
 # 3. Activer l'API REST : Configuration → Générale → API
 #    - « Activer l'API REST » = Oui
